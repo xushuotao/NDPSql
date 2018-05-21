@@ -89,7 +89,7 @@ As a result of such a in-storage accelerator architecture, 1) the total IOs betw
 
 \section{SQL Operators}
 
-In this section, we investigate seven most commonly used operators in a database qualitatively and discusses whether they are amenable to near-data computing (\cref{sec:analysis}). Then, we discuss how each individual operators can be performed using NDP from Section~\ref{sec:xxx} to \ref{sec:xxx}.
+In this section, we investigate seven most commonly used operators in a database qualitatively and discusses whether they are amenable to near-data computing (\cref{sec:analysis}). Then, we discuss how each individual operators can be performed using NDP from Section~\ref{sec:join} to \ref{sec:index}.
 
 \subsection{Qualitative Analysis of Operators} \label{sec:analysis}
 
@@ -117,10 +117,11 @@ For the \textit{Group By} operator, $K$ is the number of groups. For the \textit
 Among the seven operators, some are very amenable to NDP (i.e., \filter and \projection) as they can be performed at wire speed as the data is loaded from the storage device. It is more difficult to implement some other operators (i.e., \join, \groupby, \indexing, \topk) using NDP as they require considerable computation and intermediate states which the current-generation near-storage processors do not readily support. We will investigate how these operators can be broken down into smaller operators that are more amenable to NDP. 
 Finally, the operator \sort is not amenable to NDP as it requires too much computation and storage such that it is more appropriate to execute it at the host. 
 
-For the rest of this section, we will discuss our proposed implementation for \filter, \projection, \join, \groupby, \indexing, and \topk.
+For the rest of this section, we will discuss our proposed implementation for \filter, \projection, \join, \groupby, \indexing, and \topk. We will first describe \join and \topk, which we have the most significant research contribution.
 
 
 \subsection{Join}
+\label{sec:join}
 
 An SQL JOIN operation combines columns from one or more tables in a relational database.
 A popular implementation of JOIN operations uses the hash join algorithm.
@@ -159,11 +160,6 @@ By offloading \topk operator to SSD, one can reduce the disk IO by k/N, where N 
 We can implement an FPGA-based parallel sorting network for 2K tuples, and throw away the bottle K tuples.
 Such fast sorting network has been explored by work such as ~\cite{fpga-sort}.
 
-\subsection{Index Probing}
-\indexing are used in SQL queries to pinpoint row data locations when a certain column has a index.
-Probing a b-tree index typically requires $\log{N}$ reads from SSDs, and the read latencies are additive.
-If we offload  the index probing on in-storage processors, the latencys of \indexing operations can be greatly improved, because the slow storage network access is avoided.
-
 \subsection{Filter and Projection}
 
 A filter operator will filter out database rows based on the predicate.
@@ -177,6 +173,14 @@ Such a work has been extensively explored by work such as IBM Nettezza~\cite{net
 Aggregate functions are often used with \groupby database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
 When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
 Previous work, Ibex~\cite{ibex} has investigated how aggregate group-by works on FPGA.
+
+\subsection{Index Probing}
+\label{sec:index}
+\indexing are used in SQL queries to pinpoint row data locations when a certain column has a index.
+Probing a b-tree index typically requires $\log{N}$ reads from SSDs, and the read latencies are additive.
+If we offload  the index probing on in-storage processors, the latencys of \indexing operations can be greatly improved, because the slow storage network access is avoided.
+
+
 
 
 %% \subsection{Sort Accelerator}
