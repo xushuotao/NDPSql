@@ -36,7 +36,7 @@ In this research, we want to investigate how to use such in-storage computation 
 We propose to investigate 5 important SQL operators for the benefits of in-storage processing: \emph{GROUP-BY AGGREGATE}, \emph{JOIN}, \emph{TopK}, \emph{INDEX PROBING} and \emph{SORT}.
 We will devise new techniques to implement those operators on inside storage due to limited computation and DRAM size.
 We assume that the IO-intensive operators such as GROUP-BY AGGREGATE, JOIN, TopK, INDEX PROBING will benefit the most from in-storage processing.
-Operators, such as SORT, is compute-bound, which we assume will not benefit from in-storage computing.
+Operators, such as SORT, are compute-bound, which we assume will not benefit from in-storage computing.
 
 Please note that this MIT internal collaboration between Computer Structure Group and Database Group has been started prior to the Samsung Internship. And we are interested in pursuing this research in an open-source domain.
 
@@ -66,9 +66,11 @@ As a result of such a in-storage accelerator architecture, 1) the total IOs betw
   \caption{DBMS Query Processing Architectures}
 \end{figure}
 
+\section{Operators}
+
 In particular, we propose to offload two important IO-intensive SQL functions inside the in-storage accelerators, Aggregate and JOIN.
 
-\subsection{Wire-speed Aggregate Accelerator}
+\subsection{Group-By Aggregate Accelerator}
 Aggregate functions are often used with GROUPBY database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
 When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
 
@@ -119,6 +121,12 @@ If the bloom-filter selectivity is high, i.e., only a relatively few rows need t
   \label{fig:try}
   \caption{Hash-join Operations}
 \end{figure}
+
+\subsection{TopK Accelerator}
+
+\subsection{Index Probing Accelerator}
+
+%% \subsection{Sort Accelerator}
 
 
 \section{Evaluation Benchmarks}
