@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015/Debian) (preloaded format=pdflatex 2017.8.22)  20 MAY 2018 17:14
+This is pdfTeX, Version 3.14159265-2.6-1.40.16 (TeX Live 2015/Debian) (preloaded format=pdflatex 2017.8.23)  21 MAY 2018 14:45
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -623,20 +623,20 @@ LaTeX Warning: Label `fig:try' multiply defined.
 )
 \openout1 = `proposal.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 17.
-LaTeX Font Info:    ... okay on input line 17.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 19.
+LaTeX Font Info:    ... okay on input line 19.
  (/usr/share/texlive/texmf-dist/tex/context/base/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
 \scratchcounter=\count115
@@ -666,7 +666,7 @@ File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
 \AtBeginShipoutBox=\box29
-Package hyperref Info: Link coloring ON on input line 17.
+Package hyperref Info: Link coloring ON on input line 19.
 
 (/usr/share/texlive/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2012/10/27 v2.43 Cross-referencing by name of section
@@ -676,9 +676,9 @@ Package: gettitlestring 2010/12/03 v1.4 Cleanup title references (HO)
 )
 \c@section@level=\count121
 )
-LaTeX Info: Redefining \ref on input line 17.
-LaTeX Info: Redefining \pageref on input line 17.
-LaTeX Info: Redefining \nameref on input line 17.
+LaTeX Info: Redefining \ref on input line 19.
+LaTeX Info: Redefining \pageref on input line 19.
+LaTeX Info: Redefining \nameref on input line 19.
 
 (obj/proposal.out) (obj/proposal.out)
 \@outlinefile=\write3
@@ -686,56 +686,49 @@ LaTeX Info: Redefining \nameref on input line 17.
 
 Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: End \AtBeginDocument code.
-LaTeX Font Info:    Try loading font information for OMS+cmr on input line 37.
-
-(/usr/share/texlive/texmf-dist/tex/latex/base/omscmr.fd
-File: omscmr.fd 2014/09/29 v2.5h Standard LaTeX font definitions
-)
-LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <10> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 37.
  [1
 
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
-<figures/software-stack-crop.pdf, id=45, 474.77374pt x 433.62pt>
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] <figures/software-stack-cr
+op.pdf, id=44, 474.77374pt x 433.62pt>
 File: figures/software-stack-crop.pdf Graphic file (type pdf)
 
 <use figures/software-stack-crop.pdf>
-Package pdftex.def Info: figures/software-stack-crop.pdf used on input line 65.
+Package pdftex.def Info: figures/software-stack-crop.pdf used on input line 56.
 
 (pdftex.def)             Requested size: 187.89914pt x 171.61215pt.
 
-<figures/accelerator-stack-crop.pdf, id=46, 474.77374pt x 433.62pt>
+<figures/accelerator-stack-crop.pdf, id=45, 474.77374pt x 433.62pt>
 File: figures/accelerator-stack-crop.pdf Graphic file (type pdf)
 
 <use figures/accelerator-stack-crop.pdf>
 Package pdftex.def Info: figures/accelerator-stack-crop.pdf used on input line 
-70.
+61.
 (pdftex.def)             Requested size: 187.89914pt x 171.61215pt.
 
-<figures/figures-crop.pdf, id=48, page=1, 520.94624pt x 290.08376pt>
+<figures/figures-crop.pdf, id=47, page=1, 520.94624pt x 290.08376pt>
 File: figures/figures-crop.pdf Graphic file (type pdf)
 
 <use figures/figures-crop.pdf, page 1>
-Package pdftex.def Info: figures/figures-crop.pdf, page1 used on input line 96.
+Package pdftex.def Info: figures/figures-crop.pdf, page1 used on input line 87.
 
 (pdftex.def)             Requested size: 234.8775pt x 130.78877pt.
  [2 <./figures/software-stack-crop.pdf> <./figures/accelerator-stack-crop.pdf
 
 pdfTeX warning: pdflatex (file ./figures/accelerator-stack-crop.pdf): PDF inclu
 sion: multiple pdfs with page group included in a single page
->] <figures/hash-join-crop.pdf, id=162, 673.51625pt x 398.48875pt>
+>] <figures/hash-join-crop.pdf, id=161, 673.51625pt x 398.48875pt>
 File: figures/hash-join-crop.pdf Graphic file (type pdf)
 
 <use figures/hash-join-crop.pdf>
-Package pdftex.def Info: figures/hash-join-crop.pdf used on input line 119.
+Package pdftex.def Info: figures/hash-join-crop.pdf used on input line 110.
 (pdftex.def)             Requested size: 225.4804pt x 133.40486pt.
 
-<figures/filter-hash-join-crop.pdf, id=163, 664.4825pt x 398.48875pt>
+<figures/filter-hash-join-crop.pdf, id=162, 664.4825pt x 398.48875pt>
 File: figures/filter-hash-join-crop.pdf Graphic file (type pdf)
 
 <use figures/filter-hash-join-crop.pdf>
 Package pdftex.def Info: figures/filter-hash-join-crop.pdf used on input line 1
-24.
+15.
 (pdftex.def)             Requested size: 225.4804pt x 135.21684pt.
  [3 <./figures/figures-crop.pdf> <./figures/hash-join-crop.pdf
 
@@ -745,35 +738,45 @@ ltiple pdfs with page group included in a single page
 
 pdfTeX warning: pdflatex (file ./figures/filter-hash-join-crop.pdf): PDF inclus
 ion: multiple pdfs with page group included in a single page
->] [4] <figures/milestone-crop.pdf, id=327, 457.71pt x 145.54375pt>
+>]
+LaTeX Font Info:    Try loading font information for OMS+cmr on input line 164.
+
+ (/usr/share/texlive/texmf-dist/tex/latex/base/omscmr.fd
+File: omscmr.fd 2014/09/29 v2.5h Standard LaTeX font definitions
+)
+LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <10> not available
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 164.
+
+<figures/milestone-crop.pdf, id=318, 457.71pt x 145.54375pt>
 File: figures/milestone-crop.pdf Graphic file (type pdf)
 
 <use figures/milestone-crop.pdf>
-Package pdftex.def Info: figures/milestone-crop.pdf used on input line 207.
+Package pdftex.def Info: figures/milestone-crop.pdf used on input line 198.
 (pdftex.def)             Requested size: 450.96797pt x 143.40472pt.
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 213.
+ [4]
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 204.
  [5 <./figures/milestone-crop.pdf>]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 213.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 204.
 
 (obj/proposal.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 213.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 213.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 204.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 204.
 Package rerunfilecheck Info: File `proposal.out' has not changed.
 (rerunfilecheck)             Checksum: <no file>.
 
 
 LaTeX Warning: There were multiply-defined labels.
 
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 213.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 204.
  ) 
 Here is how much of TeX's memory you used:
  7724 strings out of 493029
  113359 string characters out of 6136234
- 212331 words of memory out of 5000000
+ 212358 words of memory out of 5000000
  11141 multiletter control sequences out of 15000+600000
  9528 words of font info for 35 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 42i,8n,40p,274b,472s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 42i,8n,40p,274b,539s stack positions out of 5000i,500n,10000p,200000b,80000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share
 /texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texliv
@@ -782,7 +785,7 @@ e/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texlive/texmf
 nts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/ty
 pe1/public/amsfonts/cm/cmti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/pu
 blic/amsfonts/cm/cmtt10.pfb>
-Output written on obj/proposal.pdf (5 pages, 1098755 bytes).
+Output written on obj/proposal.pdf (5 pages, 1102858 bytes).
 PDF statistics:
  385 PDF objects out of 1000 (max. 8388607)
  317 compressed objects within 4 object streams

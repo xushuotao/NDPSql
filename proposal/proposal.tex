@@ -11,7 +11,9 @@
 \usepackage[table]{xcolor}
 \usepackage{multirow}
 
-\title{Near Storage SQL Processing\\ \large MIT CSAIL Research Proposal} \author{Shuotao Xu, Xiangyao Yu\\
+\title{In-Storage SQL Processing\\
+  \large MIT CSAIL Joint Research Proposal} \author{Shuotao Xu, Xiangyao Yu\\
+  CSG Group, DB Group\\
   (shuotao@csail.mit.edu), (yxy@csail.mit.edu)}
 
 \begin{document}
@@ -19,36 +21,25 @@
 \section{Introduction}
 With the ever-growing data collected and available, technology for fast and efficient data storage is becoming increasingly crucial for supporting complex queries on large datasets.
 For big-data applications, a large number of analytic platforms rely on relational database systems, such as MySQL and Postgres, to store large datasets and running complex SQL queries.
-An SQL database system brings data from flash drive via PCIe bus to CPU cache to perform analysis of the fetched data.
+An SQL database system brings data from the flash disks via the interconnecting storage network to the CPU cache to perform analysis of the fetched data.
 
-One can improve database system by adding in-storage accelerators in the datapath for processing data-intensive SQL operations. 
-Such a bump-in-the-wire accelerator architecture has two advantages: 1) it reduces the amount of disk IOs, and 2) it can fully utilize internal storage bandwidth.
-For lots of SQL queries, a large data set is scanned and only a small set of results is produced.
-Therefore, disk IOs can be reduced dramatically by offloading SQL operations to the secondary storage.
-The second benefit comes from the imbalance between the storage network I/O bandwidth and the SSD IO bandwidth.
-With storage technology advancements, such as 3D NAND flash, the internal bandwidth of flash drives can exceed the PCIe and the network bandwidth.
-For some advanced flash drives, the internal aggregate bandwidth can be 10X higher than the PCIe bandwidth.
-Therefore, by offloading IO-intensive SQL operations, one could boost query performance by fully utilizing all the flash bandwidth.
+With today's technology advancement, the storage network I/O bandwidth can be imbalanced with the aggregate secondary storage bandwidth, and become a bottleneck for fast SQL processing.
+Such a scenario can be true for both a single server and a cluster of servers for SQL processing.
+On a single server node, a flash disk is typically connected via 4 lanes of PCIe gen3 bus, which provide 4GB/s of bandwidth.
+The flash chips inside a flash disk can provide a internal aggregate bandwidth which is much greater than the PCIe gen3 bus, if they are organized in a parallel architecture.
+Therefore, SQL processing on a single node can be bottlenecked by the PCIe bus bandwidth.
+On the other hand, on the cluster of servers performing distributed SQL analysis, compute and storage components are typically separated on different physical servers, such as the Amazon cloud.
+With such a compute and storage separation in a cloud, the distributed SQL processing performance can be also held up by the slow server network speed.
 
-In this proposal, we focus on using in-storage accelerators to improve SQL query processing by offloading \emph{aggregate} and \emph{join} operations, which are both IO-intensive, to the flash drives.
+In today's flash storage technology development, industry as well as academia are trying to enable some in-storage computational capabilities, such as ARM processors and FPGAs, to application developers.
+In this research, we want to investigate how to use such in-storage computation hardware to offload some of the SQL operators inside flash drives to boost SQL query performance.
+We propose to investigate 5 important SQL operators for the benefits of in-storage processing: \emph{GROUP-BY AGGREGATE}, \emph{JOIN}, \emph{TopK}, \emph{INDEX PROBING} and \emph{SORT}.
+We will devise new techniques to implement those operators on inside storage due to limited computation and DRAM size.
+We assume that the IO-intensive operators such as GROUP-BY AGGREGATE, JOIN, TopK, INDEX PROBING will benefit the most from in-storage processing.
+Operators, such as SORT, is compute-bound, which we assume will not benefit from in-storage computing.
 
-\begin{itemize}
+Please note that this MIT internal collaboration between Computer Structure Group and Database Group has been started prior to the Samsung Internship. And we are interested in pursuing this research in a open-source domain.
 
-\item Aggregate Accelerator:
-  There are five aggregate functions in SQL: AVG, COUNT,  MIN, MAX and SUM.
-  Aggregate functions are often used with GROUPBY operation, where rows are grouped based on column values, and each group of rows is summarized by applying the aggregate functions.
-  In order to fully saturate IO, we propose to use a wire-speed accelerator capable of aggregating multiple rows per clock cycle.
-
-\item JOIN Accelerator:
-  An SQL JOIN operation combines columns from one or more tables in a relational database.
-  A popular implementation of JOIN operation use the hash join algorithm.
-  To hash join table A and B, a hash table is first constructed with values of a column in table A.
-  Then the values of a column in table B are read to find a match in the hash table.
-  In order to reduce the amount of IOs from flash to CPU, we propose an in-storage accelerator in the data path.
-  The accelerator 1) constructs an in-storage bloom-filter when data from table A is read, 2) uses the constructed bloom filter to reduce the amount of data from table B needed to be sent to CPU for the hash-join.
-\end{itemize}
-
-Other IO-intensive operations, such as filtering, are also beneficial for offloading, but we are not focusing on them since they have been fairly well studied.
 
 \section{System Architecture}
 
