@@ -38,13 +38,23 @@ We will devise new techniques to implement those operators on inside storage due
 We assume that the IO-intensive operators such as GROUP-BY AGGREGATE, JOIN, TopK, INDEX PROBING will benefit the most from in-storage processing.
 Operators, such as SORT, are compute-bound, which we assume will not benefit from in-storage computing.
 
+Specifically, the proposed research will make the following contributions.
+
+\begin{itemize}
+\item We extensively study the widely used operators in SQL-based relational databases. For each operator, we conduct a qualitative analysis of whether it can benefit from near-storage computing. 
+
+\item We design and optimize these operators in a near-storage computing platform and demonstrate a significant reduction in IO traffic and CPU computation time. 
+
+\item We incorporate the design into an open-source database, SQLite, and evaluate the performance advantage of each optimization we propose. 
+\end{itemize}
+
 Please note that this MIT internal collaboration between Computer Structure Group and Database Group has been started prior to the Samsung Internship. And we are interested in pursuing this research in an open-source domain.
 
 
 \section{System Architecture}
 
 A relational query processor takes a declarative SQL statement, validates it, optimizes it into a procedural dataflow execution plan, and execute that dataflow program on behalf of a client.
-A relational query processor typically have four major software components 1) Query Parser, 2) Query Rewriter, 3) Query Optimizer and 4)Plan Executor.
+A relational query processor typically have four major software components 1) Query Parser, 2) Query Rewriter, 3) Query Optimizer and 4) Plan Executor.
 The first three components generate a query plan, and the Plan Executor then issues disk IOs to the storage device, and execute the plan as shown in Figure~\ref{fig:software}.
 In this proposal, we want to modify the Plan Executor such that it adds a side channel to the storage device.
 Via this side channel, IO-intensive operations can be offloaded to the accelerators in the flash drive, as shown in Figure~\ref{fig:accelerator}.
@@ -70,7 +80,30 @@ As a result of such a in-storage accelerator architecture, 1) the total IOs betw
 
 In particular, we propose to offload two important IO-intensive SQL functions inside the in-storage accelerators, Aggregate and JOIN.
 
+
+
+\begin{table}
+\centering 
+\begin{tabular}{ |c|c|c|c| } 
+ \hline
+ Operator       & Time Complexity & Space Complexity  & Amenable to NDP \\ \hline
+ Filter         & $\Theta$(N)     & $\Theta$(1)       & Yes             \\ \hline
+ Projection     & $\Theta$(N)     & $\Theta$(1)       & Yes             \\ \hline
+ Join           & $\Theta$(M + N) & $\Theta$(N)       & Yes (Partial)   \\ \hline
+ Group By       & $\Theta$(N)     & $\Theta$(K)       & Yes (Partial)   \\ \hline
+ Index Probing  & $\Theta$($\log{N}$) & $\Theta$(N)   & Yes             \\ \hline
+ TopK           & $\Theta$(N$\log{K}$) & $\Theta$(K)  & Yes             \\ \hline
+ Sort           & $\Theta$(N$\log{N}$) & $\Theta$()   & \\
+
+ \hline
+\end{tabular}
+\caption{Table}
+\end{table}
+
+
 \subsection{Group-By Aggregate Accelerator}
+\subsection{Wire-speed Aggregate Accelerator}
+
 Aggregate functions are often used with GROUPBY database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
 When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
 
