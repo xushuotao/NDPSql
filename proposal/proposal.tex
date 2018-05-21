@@ -10,6 +10,17 @@
 \usepackage{subcaption}
 \usepackage[table]{xcolor}
 \usepackage{multirow}
+\usepackage{cleveref}
+\usepackage{xspace}
+
+\newcommand{\filter}{\textit{Filter}\xspace}
+\newcommand{\projection}{\textit{Projection}\xspace}
+\newcommand{\join}{\textit{Join}\xspace}
+\newcommand{\sort}{\textit{Sort}\xspace}
+\newcommand{\indexing}{\textit{Indexing}\xspace}
+\newcommand{\groupby}{\textit{Group By}\xspace}
+\newcommand{\topk}{\textit{TopK}\xspace}
+
 
 \title{In-Storage SQL Processing\\
   \large MIT CSAIL Joint Research Proposal} \author{Shuotao Xu, Xiangyao Yu\\
@@ -76,27 +87,32 @@ As a result of such a in-storage accelerator architecture, 1) the total IOs betw
   \caption{DBMS Query Processing Architectures}
 \end{figure}
 
-In particular, we propose to offload two important IO-intensive SQL functions inside the in-storage accelerators, Aggregate and JOIN.
+\section{SQL Operators}
+
+In this section, we analyze the most commonly used operators in a database qualitatively and discusses whether they are amenable to near-data computing (\cref{sec:analysis}). Then, we discuss how each individual operators can be performed using NDP from Section~\ref{sec:xxx} to \ref{sec:xxx}. 
+
+\subsection{Qualitative Analysis of Operators} \label{sec:analysis}
+
+Table~\ref{tab:operators} presents seven operators that are commonly used in a database. For each operator, we present the average time complexity for a typical implementation, the worse case space complexity, and whether the operator is amenable to NDP. If the operator is on a single table, $N$ represents the size of that table; if the operator is on two tables, $N$ ($M$) represents the size of the smaller (bigger) table. For the \textit{Group By} operator, $K$ is the number of groups. For the \textit{TopK} operator, $K$ is the number of records selected. 
 
 \begin{table}
 \centering 
 \begin{tabular}{ |c|c|c|c| } 
  \hline
  Operator       & Time Complexity & Space Complexity  & Amenable to NDP \\ \hline
- Filter         & $\Theta$(N)     & $\Theta$(1)       & Yes             \\ \hline
- Projection     & $\Theta$(N)     & $\Theta$(1)       & Yes             \\ \hline
- Join           & $\Theta$(M + N) & $\Theta$(N)       & Yes (Partial)   \\ \hline
- Group By       & $\Theta$(N)     & $\Theta$(K)       & Yes (Partial)   \\ \hline
- Index Probing  & $\Theta$($\log{N}$) & $\Theta$(N)   & Yes             \\ \hline
- TopK           & $\Theta$(N$\log{K}$) & $\Theta$(K)  & Yes             \\ \hline
- Sort           & $\Theta$(N$\log{N}$) & $\Theta$()   & \\
-
- \hline
+ \filter        & $\Theta(N)$     & $\Theta(1)$       & Yes             \\ \hline
+ \projection    & $\Theta(N)$     & $\Theta(1)$       & Yes             \\ \hline
+ \join          & $\Theta(M + N)$ & $\Theta(N)$       & Yes (Partial)   \\ \hline
+ \groupby       & $\Theta(N)$     & $\Theta(K)$       & Yes (Partial)   \\ \hline
+ \indexing      & $\Theta(\log{N})$ & $\Theta(N)$     & Yes             \\ \hline
+ \topk          & $\Theta(N\log{K})$ & $\Theta(K)$    & Yes (Partial)   \\ \hline
+ \sort          & $\Theta(N\log{N})$ & $\Theta(\log{N})$ & No           \\ \hline
 \end{tabular}
-\caption{Table}
+\caption{Comparison of common SQL operators.}
+\label{tab:operators}
 \end{table}
 
-
+\filter and \projection are two operators that are very amenable to NDP. 
 
 \subsection{Wire-speed Aggregate Accelerator}
 Aggregate functions are often used with GROUPBY database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
