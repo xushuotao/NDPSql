@@ -76,7 +76,7 @@ As a result of such a in-storage accelerator architecture, 1) the total IOs betw
   \caption{DBMS Query Processing Architectures}
 \end{figure}
 
-\section{Operators}
+
 
 In particular, we propose to offload two important IO-intensive SQL functions inside the in-storage accelerators, Aggregate and JOIN.
 
@@ -100,32 +100,17 @@ In particular, we propose to offload two important IO-intensive SQL functions in
 \caption{Table}
 \end{table}
 
+\section{Operators}
+We want to investigate 7 operators for their amenability for near-data processing.
+\subsection{Filter}
+A filter operator will filter out database rows based on predicated.
+The computation of the filter operator only need one pass of the data and has little DRAM requirement.
+Thus, it is straightforward to implement on in-storage processing unit.
+Such a work has been extensively explored by work such as IBM Nettezza~\cite{netezza}.
 
-\subsection{Group-By Aggregate Accelerator}
-\subsection{Wire-speed Aggregate Accelerator}
-
-Aggregate functions are often used with GROUPBY database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
-When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
-
-Due to the large bandwidth of the internal flash drive, multiple rows of data can arrive at the same clock cycle.
-Previous work on aggregate accelerators typically uses a binary tree to aggregate results, in which case only a row can be processed per clock cycle.
-
-We propose a novel wire-speed aggregate accelerator on wide datapath, in a bump-in-the-wire fashion (See Figure~\ref{fig:arch-overview}).
-This is achieved by first striping the wide input across an array of single-aggregators, each of which can perform aggregations on a pair of elements every cycle.
-The resulting streams of aggregated elements are merged together using a hierarchy of multi-aggregators, which use sorting network-based high-throughput merge sorters and an sorting-network-like
-aggregator network that operate on the duplicate keys that may exist between the streams.
-All components in the accelerator are pipelined, so that high performance can be achieved without requiring significant on-chip buffers.
-The details of the accelerator work can be found in the submitted FPL paper attached.
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[page=1, width=0.50\textwidth]{figures/figures-crop.pdf}
-    \caption{Accelerator architecture overview}
-    \label{fig:arch-overview}
-	\vspace{-10pt}
-\end{figure}
-
-\subsection{Hash-Join Accelerator}
+\subsection{Projection}
+A projection operator will take a database rows and output the projected column. 
+\subsection{Join}
 An SQL JOIN operation combines columns from one or more tables in a relational database.
 A popular implementation of JOIN operations uses the hash join algorithm.
 JOIN is typically IO-intensive operations because all rows of the joining tables have to be read from the secondary storage.
@@ -154,6 +139,28 @@ If the bloom-filter selectivity is high, i.e., only a relatively few rows need t
   \label{fig:try}
   \caption{Hash-join Operations}
 \end{figure}
+
+\subsection{Group By Aggregate}
+Aggregate functions are often used with GROUPBY database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
+When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
+
+Due to the large bandwidth of the internal flash drive, multiple rows of data can arrive at the same clock cycle.
+Previous work on aggregate accelerators typically uses a binary tree to aggregate results, in which case only a row can be processed per clock cycle.
+
+%% We propose a novel wire-speed aggregate accelerator on wide datapath, in a bump-in-the-wire fashion (See Figure~\ref{fig:arch-overview}).
+%% This is achieved by first striping the wide input across an array of single-aggregators, each of which can perform aggregations on a pair of elements every cycle.
+%% The resulting streams of aggregated elements are merged together using a hierarchy of multi-aggregators, which use sorting network-based high-throughput merge sorters and an sorting-network-like
+%% aggregator network that operate on the duplicate keys that may exist between the streams.
+%% All components in the accelerator are pipelined, so that high performance can be achieved without requiring significant on-chip buffers.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=1, width=0.50\textwidth]{figures/figures-crop.pdf}
+    \caption{Accelerator architecture overview}
+    \label{fig:arch-overview}
+	\vspace{-10pt}
+\end{figure}
+
 
 \subsection{TopK Accelerator}
 
@@ -199,48 +206,8 @@ ORDER BY dt.d year, ext price DESC, brand id
 \end{verbatim}
 \end{enumerate}
 
-
-\section{Development Environment Requirement}
-\begin{itemize}
-\item Bluespec: HLS Compiler to generate hardware specifcations. \url{bluespec.com/}
-\item Connectal: software/hardware co-design library which enables RPC-like
-  interfaces between host and
-  FPGA. \url{https://github.com/cambridgehackers/connectal}
-\item Vivado: Synthesis and implementation tools for Xilinx FPGAs
-\end{itemize}
-
-\section{Milestone}
-In this project, we need to implement hardware and software components, as well as integrating those system components as a SQL database system.
-For the hardware component development, I have a fairly clear grasp of the required domain-specific knowledge and expertise.
-For software component development, especially regarding to the integration with hardware accelerators, help from the experts in the database domain in Samsung will be greatly appreciated.
-
-Also, please note that the entire work of the proposed project might not be able to fit in the 3-month internship period.
-So continuing collaboration with Samsung after the internship is expected.
-
-The tasks of the internship can be broken into four phases:
-
-\begin{enumerate}
-\item In the first phase, we will need to set up Bluespec, and the software/hardware codesign library, connectal, on Samsung's development
-  platform.
-  Knowledge and help about the development platform from the Samsung Semiconductor will be needed.
-\item In second phase, I will implement the standalone aggregate accelerator.
-  And a hand-coded Query A from Section~\ref{sec:eval} will be used to evaluate to accelerator.
-\item In third phase, I will implement the standalone hash-join accelerator.
-  And a hand-coded Query B from Section~\ref{sec:eval} will be used to evaluate to accelerator.
-\item In final phase, the accelerators needed to be integrated with software query processor.
-  Query C from Section~\ref{sec:eval} will used to evaluate the overall system.
-  For this phase, help from experts from the software domain will be of great help.
-\end{enumerate}
-
-Below is the detailed timeline of the project.
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.96\textwidth]{figures/milestone-crop.pdf}
-    \caption{Project Timeline}
-    \label{fig:milestone}
-    \vspace{-10pt}
-\end{figure}
+\bibliographystyle{abbrv}
+\bibliography{reference}
 
 \end{document}
 
