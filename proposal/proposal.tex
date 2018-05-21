@@ -44,10 +44,10 @@ With such a compute and storage separation in a cloud, the distributed SQL proce
 
 In today's flash storage technology development, industry as well as academia are trying to enable some in-storage computational capabilities, such as ARM processors and FPGAs, to application developers.
 In this research, we want to investigate how to use such in-storage computation hardware to offload some of the SQL operators inside flash drives to boost SQL query performance.
-We propose to investigate 5 important SQL operators for the benefits of in-storage processing: \emph{GROUP-BY AGGREGATE}, \emph{JOIN}, \emph{TopK}, \emph{INDEX PROBING} and \emph{SORT}.
+We propose to investigate 7 important SQL operators for the benefits of in-storage processing: \filter, \projection, \join, \sort, \indexing, \groupby, and \topk.
 We will devise new techniques to implement those operators on inside storage due to limited computation and DRAM size.
-We assume that the IO-intensive operators such as GROUP-BY AGGREGATE, JOIN, TopK, INDEX PROBING will benefit the most from in-storage processing.
-Operators, such as SORT, are compute-bound, which we assume will not benefit from in-storage computing.
+We assume that the IO-intensive operators such as \filter, \projection, \join, \sort, \groupby and \topk  will benefit the most from in-storage processing.
+Operators, such as \sort, are compute-bound, which we assume will not benefit from in-storage computing.
 
 Specifically, the proposed research will make the following contributions.
 
@@ -117,15 +117,13 @@ Table~\ref{tab:operators} presents seven operators that are commonly used in a d
 In particular, we propose to offload two important IO-intensive SQL functions inside the in-storage accelerators, Aggregate and JOIN.
 
 
-\subsection{Filter}
+\subsection{Filter and Projection}
 
-A filter operator will filter out database rows based on predicated.
-The computation of the filter operator only need one pass of the data and has little DRAM requirement.
+A filter operator will filter out database rows based on the predicate.
+Likewise a projection operator will take the selected columns from database rows.
+The computation of the filter and projection operators only needs one pass of the data and has little DRAM requirement.
 Thus, it is straightforward to implement on in-storage processing unit.
 Such a work has been extensively explored by work such as IBM Nettezza~\cite{netezza}.
-
-\subsection{Projection}
-A projection operator will take a database rows and output the projected column. 
 
 \subsection{Join}
 
@@ -158,28 +156,11 @@ If the bloom-filter selectivity is high, i.e., only a relatively few rows need t
   \caption{Hash-join Operations}
 \end{figure}
 
-\subsection{Group By Aggregate}
+\subsection{Group-By Aggregate}
 
-Aggregate functions are often used with GROUPBY database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
+Aggregate functions are often used with \groupby database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
 When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
-
-Due to the large bandwidth of the internal flash drive, multiple rows of data can arrive at the same clock cycle.
-Previous work on aggregate accelerators typically uses a binary tree to aggregate results, in which case only a row can be processed per clock cycle.
-
-%% We propose a novel wire-speed aggregate accelerator on wide datapath, in a bump-in-the-wire fashion (See Figure~\ref{fig:arch-overview}).
-%% This is achieved by first striping the wide input across an array of single-aggregators, each of which can perform aggregations on a pair of elements every cycle.
-%% The resulting streams of aggregated elements are merged together using a hierarchy of multi-aggregators, which use sorting network-based high-throughput merge sorters and an sorting-network-like
-%% aggregator network that operate on the duplicate keys that may exist between the streams.
-%% All components in the accelerator are pipelined, so that high performance can be achieved without requiring significant on-chip buffers.
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[page=1, width=0.50\textwidth]{figures/figures-crop.pdf}
-    \caption{Accelerator architecture overview}
-    \label{fig:arch-overview}
-	\vspace{-10pt}
-\end{figure}
-
+Previous work, Ibex~\cite{ibex} has investigated how aggregate group-by works on FPGA.
 
 \subsection{TopK Accelerator}
 
