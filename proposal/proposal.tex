@@ -99,16 +99,16 @@ For the \textit{Group By} operator, $K$ is the number of groups. For the \textit
 
 \begin{table}
 \centering 
-\begin{tabular}{ |c|c|c|c| } 
+\begin{tabular}{ |c|c|c|c|c| } 
  \hline
- Operator       & Time Complexity & Space Complexity  & Amenable to NDP \\ \hline
- \filter        & $\Theta(N)$     & $\Theta(1)$       & Yes             \\ \hline
- \projection    & $\Theta(N)$     & $\Theta(1)$       & Yes             \\ \hline
- \indexing      & $\Theta(\log{N})$ & $\Theta(N)$     & Yes             \\ \hline
- \join          & $\Theta(M + N)$ & $\Theta(N)$       & Yes (Partial)   \\ \hline
- \groupby       & $\Theta(N)$     & $\Theta(K)$       & Yes (Partial)   \\ \hline
- \topk          & $\Theta(N\log{K})$ & $\Theta(K)$    & Yes (Partial)   \\ \hline
- \sort          & $\Theta(N\log{N})$ & $\Theta(\log{N})$ & No           \\ \hline
+ Operator       & Time Complexity & Space Complexity  & Amenable to NDP & Previous NDP Work \\ \hline
+ \filter        & $\Theta(N)$     & $\Theta(1)$       & Yes             & \cite{netezza, exadata} \\ \hline
+ \projection    & $\Theta(N)$     & $\Theta(1)$       & Yes             & \cite{netezza, exadata} \\\hline
+ \indexing      & $\Theta(\log{N})$ & $\Theta(N)$     & Yes             & \\ \hline
+ \join          & $\Theta(M + N)$ & $\Theta(N)$       & Yes (Partial)   & \cite{} \\ \hline
+ \groupby       & $\Theta(N)$     & $\Theta(K)$       & Yes (Partial)   & \cite{ibex, jafar} \\ \hline
+ \topk          & $\Theta(N\log{K})$ & $\Theta(K)$    & Yes (Partial)   & \\ \hline
+ \sort          & $\Theta(N\log{N})$ & $\Theta(\log{N})$ & No           & \\ \hline
 \end{tabular}
 \caption{Comparison of common SQL operators.}
 \label{tab:operators}
@@ -173,10 +173,12 @@ Previous work, Ibex~\cite{ibex} has investigated how aggregate group-by works on
 
 \section{Evaluation Benchmarks}
 \label{sec:eval}
-To evaluate the work, we propose to run some synthetic SQL queries with aggregate functions and join, as well as some queries from TPC-H, and TPC-DS.
-By comparing the same query on the same dataset running on the traditional relational database systems, such as MySQL and Postgres, we can illustrate the performance benefits of the new architecture with accelerators.
 
-Below are examples of SQL queries we plan to evaluate.
+We will conduct the performance evaluation on top of BlueDBM~\cite{bluedbm}, an FPGA-based NDP framework previously developed in our research group at MIT. On the host server, we plan to run a traditional relational database like MySQL, PostgreSQL, or SQLite. Both the storage-side FPGAs and the host-side database will be modified to implement the functionality of the operators. For performance evaluation, we will run synthetic queries, as well as a subset of queries from the TPC-H and TPC-DS workloads. Examples of such queries are shown below:
+
+%some synthetic SQL queries with aggregate functions and join, as well as some queries from TPC-H, and TPC-DS.
+%By comparing the same query on the same dataset running on the traditional relational database systems, such as MySQL and Postgres, we can illustrate the performance benefits of the new architecture with accelerators.
+%Below are examples of SQL queries we plan to evaluate.
 
 \begin{enumerate}
 
