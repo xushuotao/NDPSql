@@ -89,13 +89,13 @@ As a result of such a in-storage accelerator architecture, 1) the total IOs betw
 
 \section{SQL Operators}
 
-We want to investigate 7 operators for their amenability for near-data processing.
-
-In this section, we analyze the most commonly used operators in a database qualitatively and discusses whether they are amenable to near-data computing (\cref{sec:analysis}). Then, we discuss how each individual operators can be performed using NDP from Section~\ref{sec:xxx} to \ref{sec:xxx}. 
+In this section, we investigate seven most commonly used operators in a database qualitatively and discusses whether they are amenable to near-data computing (\cref{sec:analysis}). Then, we discuss how each individual operators can be performed using NDP from Section~\ref{sec:xxx} to \ref{sec:xxx}.
 
 \subsection{Qualitative Analysis of Operators} \label{sec:analysis}
 
-Table~\ref{tab:operators} presents seven operators that are commonly used in a database. For each operator, we present the average time complexity for a typical implementation, the worse case space complexity, and whether the operator is amenable to NDP. If the operator is on a single table, $N$ represents the size of that table; if the operator is on two tables, $N$ ($M$) represents the size of the smaller (bigger) table. For the \textit{Group By} operator, $K$ is the number of groups. For the \textit{TopK} operator, $K$ is the number of records selected. 
+Table~\ref{tab:operators} presents the seven operators that we focus on. For each operator, we present the average time complexity for a typical implementation, the worse case space complexity, and whether the operator is amenable to NDP.
+If the operator is on a single table, $N$ represents the size of that table; if the operator is on two tables, $N$ ($M$) represents the size of the smaller (bigger) table. 
+For the \textit{Group By} operator, $K$ is the number of groups. For the \textit{TopK} operator, $K$ is the number of records selected. 
 
 \begin{table}
 \centering 
@@ -104,9 +104,9 @@ Table~\ref{tab:operators} presents seven operators that are commonly used in a d
  Operator       & Time Complexity & Space Complexity  & Amenable to NDP \\ \hline
  \filter        & $\Theta(N)$     & $\Theta(1)$       & Yes             \\ \hline
  \projection    & $\Theta(N)$     & $\Theta(1)$       & Yes             \\ \hline
+ \indexing      & $\Theta(\log{N})$ & $\Theta(N)$     & Yes             \\ \hline
  \join          & $\Theta(M + N)$ & $\Theta(N)$       & Yes (Partial)   \\ \hline
  \groupby       & $\Theta(N)$     & $\Theta(K)$       & Yes (Partial)   \\ \hline
- \indexing      & $\Theta(\log{N})$ & $\Theta(N)$     & Yes             \\ \hline
  \topk          & $\Theta(N\log{K})$ & $\Theta(K)$    & Yes (Partial)   \\ \hline
  \sort          & $\Theta(N\log{N})$ & $\Theta(\log{N})$ & No           \\ \hline
 \end{tabular}
@@ -114,8 +114,10 @@ Table~\ref{tab:operators} presents seven operators that are commonly used in a d
 \label{tab:operators}
 \end{table}
 
-In particular, we propose to offload two important IO-intensive SQL functions inside the in-storage accelerators, Aggregate and JOIN.
+Among the seven operators, some are very amenable to NDP (i.e., \filter and \projection) as they can be performed at wire speed as the data is loaded from the storage device. It is more difficult to implement some other operators (i.e., \join, \groupby, \indexing, \topk) using NDP as they require considerable computation and intermediate states which the current-generation near-storage processors do not readily support. We will investigate how these operators can be broken down into smaller operators that are more amenable to NDP. 
+Finally, the operator \sort is not amenable to NDP as it requires too much computation and storage such that it is more appropriate to execute it at the host. 
 
+For the rest of this section, we will discuss our proposed implementation for \filter, \projection, \join, \groupby, \indexing, and \topk.
 
 \subsection{Filter}
 
