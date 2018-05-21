@@ -119,13 +119,6 @@ Finally, the operator \sort is not amenable to NDP as it requires too much compu
 
 For the rest of this section, we will discuss our proposed implementation for \filter, \projection, \join, \groupby, \indexing, and \topk.
 
-\subsection{Filter and Projection}
-
-A filter operator will filter out database rows based on the predicate.
-Likewise a projection operator will take the selected columns from database rows.
-The computation of the filter and projection operators only needs one pass of the data and has little DRAM requirement.
-Thus, it is straightforward to implement on in-storage processing unit.
-Such a work has been extensively explored by work such as IBM Nettezza~\cite{netezza}.
 
 \subsection{Join}
 
@@ -158,15 +151,33 @@ If the bloom-filter selectivity is high, i.e., only a relatively few rows need t
   \caption{Hash-join Operations}
 \end{figure}
 
+\subsection{TopK}
+
+\topk selects the top K-th attributes from the table.
+One can dramatically reduce the IO from SSD from CPU by processing \topk operator in storage.
+By offloading \topk operator to SSD, one can reduce the disk IO by k/N, where N the total number of rows of a table.
+We can implement an FPGA-based parallel sorting network for 2K tuples, and throw away the bottle K tuples.
+Such fast sorting network has been explored by work such as ~\cite{fpga-sort}.
+
+\subsection{Index Probing}
+\indexing are used in SQL queries to pinpoint row data locations when a certain column has a index.
+Probing a b-tree index typically requires $\log{N}$ reads from SSDs, and the read latencies are additive.
+If we offload  the index probing on in-storage processors, the latencys of \indexing operations can be greatly improved, because the slow storage network access is avoided.
+
+\subsection{Filter and Projection}
+
+A filter operator will filter out database rows based on the predicate.
+Likewise a projection operator will take the selected columns from database rows.
+The computation of the filter and projection operators only needs one pass of the data and has little DRAM requirement.
+Thus, it is straightforward to implement on in-storage processing unit.
+Such a work has been extensively explored by work such as IBM Nettezza~\cite{netezza}.
+
 \subsection{Group-By Aggregate}
 
 Aggregate functions are often used with \groupby database operations, where rows are grouped based on column values and each group of rows is summarized by applying the aggregate functions.
 When number of groups are much smaller than total number of rows in a table, storage IO can be greatly reduced by offloading aggregate functions with GROUPBY to the flash drive.
 Previous work, Ibex~\cite{ibex} has investigated how aggregate group-by works on FPGA.
 
-\subsection{TopK Accelerator}
-
-\subsection{Index Probing Accelerator}
 
 %% \subsection{Sort Accelerator}
 
