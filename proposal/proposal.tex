@@ -68,20 +68,24 @@ Please note that this MIT internal collaboration between Computer Structure Grou
 A relational query processor takes a declarative SQL statement, validates it, optimizes it into a procedural dataflow execution plan, and execute that dataflow program on behalf of a client.
 A relational query processor typically have four major software components 1) Query Parser, 2) Query Rewriter, 3) Query Optimizer and 4) Plan Executor.
 The first three components generate a query plan, and the Plan Executor then issues disk IOs to the storage device, and execute the plan as shown in Figure~\ref{fig:software}.
-In this proposal, we want to modify the Plan Executor such that it adds a side channel to the storage device.
-Via this side channel, IO-intensive operations can be offloaded to the accelerators in the flash drive, as shown in Figure~\ref{fig:accelerator}.
-As a result of such a in-storage accelerator architecture, 1) the total IOs between the processor and storage are dramatically reduced, and 2) accelerators can utilize the entire aggregate internal NAND flash bandwidth.
+
+
+In this proposal, we want to modify the Plan Executor such that it adds a side channel to the storage device via the storage network.
+The channel connects the plan executor and the near data processor in the form of ARM processors and FPGAs over the storage network.
+This channel is implemented using RPCs and DMAs over PCIe or Ethernet.
+Via this side channel, IO-intensive operations can be sent to the near-data processor on the flash drive, as shown in Figure~\ref{fig:accelerator}.
+As a result of such a near-storage architecture, 1) the total I/Os between the compute and storage are dramatically reduced, and 2) the near-data processor can utilize the entire aggregate internal NAND flash bandwidth.
 
 \begin{figure}[!htb]
   \centering
     \begin{subfigure}[t]{0.40\textwidth}
       \includegraphics[width=\textwidth]{figures/software-stack-crop.pdf}
-      \caption{Traditional Query processing stack}
+      \caption{Traditional SQL Query processing stack}
       \label{fig:software}
-  \end{subfigure}\hspace{5pt}
+  \end{subfigure}\hspace{50pt}
   \begin{subfigure}[t]{0.40\textwidth}
     \includegraphics[width=\textwidth]{figures/accelerator-stack-crop.pdf}
-    \caption{Query processing stack with In-storage Accelerators}
+    \caption{SQL Query processing stack with near-storage processor}
     \label{fig:accelerator}
   \end{subfigure}
   \label{fig:try}
