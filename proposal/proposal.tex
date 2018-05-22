@@ -40,7 +40,7 @@ With the separation of storage and compute in the cloud, the storage network I/O
 The I/O imbalance of network and flash disks due to the separation of compute and storage can also exist for SQL processing on a single node server.
 Like distributed SQL processing, data needs bringing from flash disks via PCIe bus to the CPU cache to perform SQL analysis on a single node.
 On a single server node, a flash disk is typically connected via 4 lanes of PCIe gen3 bus, which provide 4GB/s of bandwidth.
-The flash chips inside a flash disk can provide a internal aggregate bandwidth that is much greater than the PCIe gen3 bus, if they are organized in a parallel architecture~\cite{biscuit}.
+The flash chips inside a flash disk can provide internal aggregate bandwidth that is much greater than the PCIe gen3 bus, if they are organized in a parallel architecture~\cite{biscuit, guz-systor17}.
 Therefore, SQL processing on a single node can be also bottlenecked by the PCIe bus bandwidth.
 
 In today's flash storage technology development, industry as well as academia are trying to enable near-storage computational capabilities, such as ARM processors and FPGAs, to application developers~\cite{biscuit, ibex, bluedbm, netezza, exadata, jafar, do2013query, sukhwani2012database, fpga-sort}.
