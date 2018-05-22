@@ -34,7 +34,7 @@ With the ever-growing data collected and available, technology for fast and effi
 For big-data applications, a large number of analytic platforms rely on relational database systems, such as MySQL and Postgres, to store large datasets and running complex SQL queries.
 
 In today's cloud, storage and compute nodes are typically decoupled on different physical servers, such as Amazon's AWS Cloud~\cite{aws} and Microsoft's Azure Cloud~\cite{azure}.
-To perform SQL queries on such clouds, an SQL database system needs to bring flash disk pages from the storage node via the interconnecting network to the CPU cache of the compute node to perform analysis of the fetched data.
+To perform SQL queries on such clouds, an SQL database system needs to bring flash disk pages of the storage node via the interconnecting network to the CPU cache of the compute node to perform analysis of the fetched data.
 With the separation of storage and compute in the cloud, the storage network I/O can become a significant bottleneck for SQL query processing, since the network I/O bandwidth can be much slower than aggregate bandwidth of the flash disks on storage node.
 
 The I/O imbalance of network and flash disks due to the separation of compute and storage can also exist for SQL processing on a single node server.
@@ -57,7 +57,7 @@ Specifically, the proposed research will make the following contributions.
 
 \item We design and optimize these operators in a near-storage computing platform and demonstrate a significant reduction in IO traffic and CPU computation time. 
 
-\item We incorporate the design into an open-source database, SQLite, and evaluate the performance advantage of each optimization we propose. 
+\item We incorporate the design into an open-source database, MySQL or SQLite, and evaluate the performance advantage of each optimization we propose. 
 \end{itemize}
 
 Please note that this MIT internal collaboration between Computer Structure Group and Database Group has been started prior to the Samsung Internship. And we are interested in pursuing this research in an open-source domain.
