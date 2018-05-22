@@ -37,12 +37,12 @@ An SQL database system brings data from the flash disks via the interconnecting 
 With today's technology advancement, the storage network I/O bandwidth can be imbalanced with the aggregate secondary storage bandwidth, and become a bottleneck for fast SQL processing.
 Such a scenario can be true for both a single server and a cluster of servers for SQL processing.
 On a single server node, a flash disk is typically connected via 4 lanes of PCIe gen3 bus, which provide 4GB/s of bandwidth.
-The flash chips inside a flash disk can provide a internal aggregate bandwidth which is much greater than the PCIe gen3 bus, if they are organized in a parallel architecture.
+The flash chips inside a flash disk can provide a internal aggregate bandwidth which is much greater than the PCIe gen3 bus, if they are organized in a parallel architecture~\cite{biscuit}.
 Therefore, SQL processing on a single node can be bottlenecked by the PCIe bus bandwidth.
-On the other hand, on the cluster of servers performing distributed SQL analysis, compute and storage components are typically separated on different physical servers, such as the Amazon cloud.
+On the other hand, on the cluster of servers performing distributed SQL analysis, compute and storage components are typically separated on different physical servers, such as the Amazon's AWS Cloud~\cite{aws} and Microsoft's Azure Cloud~\cite{azure}.
 With such a compute and storage separation in a cloud, the distributed SQL processing performance can be also held up by the slow server network speed.
 
-In today's flash storage technology development, industry as well as academia are trying to enable some in-storage computational capabilities, such as ARM processors and FPGAs, to application developers.
+In today's flash storage technology development, industry as well as academia are trying to enable in-storage computational capabilities, such as ARM processors and FPGAs, to application developers~\cite{biscuit, ibex, bluedbm, netezza, exadata, jafar, do2013query, sukhwani2012database, fpga-sort}.
 In this research, we want to investigate how to use such in-storage computation hardware to offload some of the SQL operators inside flash drives to boost SQL query performance.
 We propose to investigate 7 important SQL operators for the benefits of in-storage processing: \filter, \projection, \join, \sort, \indexing, \groupby, and \topk.
 We will devise new techniques to implement those operators on inside storage due to limited computation and DRAM size.
