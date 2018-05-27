@@ -198,6 +198,7 @@ bool handle_query(THD *thd, LEX *lex, Query_result *result,
     if (single_query) {
       select->join->exec();
       unit->set_executed();
+      // fprintf(stderr, "select exe here\n");
       if (thd->is_error()) goto err;
     } else {
       if (unit->execute(thd)) goto err;

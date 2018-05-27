@@ -6044,6 +6044,8 @@ int ha_innobase::open(const char *name, int, uint open_flags,
   char *is_part = NULL;
   bool cached = false;
 
+  // fprintf(stderr, "ha_innobase::open tablename = %s\n", name);
+
   DBUG_ENTER("ha_innobase::open");
   DBUG_ASSERT(table_share == table->s);
 
