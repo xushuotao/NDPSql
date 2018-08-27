@@ -7,3 +7,9 @@
 [submodule "buildcache"]
 	path = buildtools/buildcache
 	url = git://github.com/cambridgehackers/buildcache
+[submodule "orgin"]
+	path = orgin
+	url = git@github.mit.edu:shuotao/MonetDB.git
+[submodule "MonetDB"]
+	path = MonetDB
+	url = git@github.mit.edu:shuotao/MonetDB.git
