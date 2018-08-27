@@ -1,0 +1,6 @@
+[submodule "buildtools/connectal"]
+	path = buildtools/connectal
+	url = https://github.com/cambridgehackers/connectal.git
+[submodule "buildtools/fpgamake"]
+	path = buildtools/fpgamake
+	url = git://github.com/cambridgehackers/fpgamake
