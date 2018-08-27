@@ -4,3 +4,6 @@
 [submodule "buildtools/fpgamake"]
 	path = buildtools/fpgamake
 	url = git://github.com/cambridgehackers/fpgamake
+[submodule "buildcache"]
+	path = buildcache
+	url = git://github.com/cambridgehackers/buildcache
