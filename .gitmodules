@@ -1,6 +1,3 @@
-[submodule "platform/build_tools/connectal"]
-	path = platform/build_tools/connectal
-	url = https://github.com/cambridgehackers/connectal.git
 [submodule "platform/build_tools/fpgamake"]
 	path = platform/build_tools/fpgamake
 	url = git://github.com/cambridgehackers/fpgamake
@@ -10,3 +7,6 @@
 [submodule "MonetDB"]
 	path = MonetDB
 	url = git@github.mit.edu:shuotao/MonetDB.git
+[submodule "platform/build_tools/connectal"]
+	path = platform/build_tools/connectal
+	url = https://github.com/xushuotao/connectal.git
