@@ -95,33 +95,35 @@ do
     SFDDIR=$DDIR/sf-$SF/
     # if not, generate
     if [ ! -f $SFDDIR/lineitem.tbl ] ; then
-	# TPC-H dbgen installer
-	if [ ! -f $IDIR/dbgen/dbgen ] ; then
-	    rm -rf $IDIR/dbgen/
-	    wget https://github.com/electrum/tpch-dbgen/archive/master.zip -O $SDIR/tpch_gh.zip
-	    unzip $SDIR/tpch_*.zip -d $SDIR
-	    cd $SDIR/tpch-dbgen-master
-	    sed -e 's/DATABASE\s*=/DATABASE=DB2/' -e 's/MACHINE\s*=/MACHINE=LINUX/' -e 's/WORKLOAD\s*=/WORKLOAD=TPCH/' -e 's/CC\s*=/CC=gcc/' makefile.suite > Makefile
-	    make
-	    mkdir -p $IDIR/dbgen/
-	    cp dbgen dists.dss $IDIR/dbgen/
-	    rm -rf $SDIR/tpch_*
-	fi
-	if [ ! -f $IDIR/dbgen/dbgen ] ; then
-	    echo "Failed to install TPCH dbgen"
-	    exit -1
-	fi
+        # TPC-H dbgen installer
+        if [ ! -f $IDIR/dbgen/dbgen ] ; then
+            rm -rf $IDIR/dbgen/
+            wget https://github.com/electrum/tpch-dbgen/archive/master.zip -O $SDIR/tpch_gh.zip
+            unzip $SDIR/tpch_*.zip -d $SDIR
+            cd $SDIR/tpch-dbgen-master
+            sed -e 's/DATABASE\s*=/DATABASE=DB2/' -e 's/MACHINE\s*=/MACHINE=LINUX/' -e 's/WORKLOAD\s*=/WORKLOAD=TPCH/' -e 's/CC\s*=/CC=gcc/' makefile.suite > Makefile
+            make
+            mkdir -p $IDIR/dbgen/
+            cp dbgen dists.dss $IDIR/dbgen/
+            rm -rf $SDIR/tpch_*
+        fi
+        if [ ! -f $IDIR/dbgen/dbgen ] ; then
+            echo "Failed to install TPCH dbgen"
+            exit -1
+        fi
 
 	cd $IDIR/dbgen/
 	./dbgen -vf -s $SF
+        chown +rw *.tbl
 	mkdir -p $SFDDIR
 	# clean up stupid line endings
 	for i in *.tbl; do
             # sed -i 's/.$//' $i ;
+            # doing sed in parallel
             parallel -a $i -k --block 30M --pipe-part 'sed -r "s/.$//"' > $i.new
             mv $i.new $i
         done
-        # doing sed in parallel
+
         
 	mv *.tbl $SFDDIR
     fi
