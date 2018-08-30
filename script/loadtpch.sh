@@ -93,7 +93,7 @@ for SF in $s
 do
     # check if we have data
     SFDDIR=$DDIR/sf-$SF/
-    # if not, generate
+    if not, generate
     if [ ! -f $SFDDIR/lineitem.tbl ] ; then
         # TPC-H dbgen installer
         if [ ! -f $IDIR/dbgen/dbgen ] ; then
@@ -113,8 +113,8 @@ do
         fi
 
 	cd $IDIR/dbgen/
-	./dbgen -vf -s $SF
-        chown +rw *.tbl
+	# ./dbgen -vf -s $SF
+        chmod +rw *.tbl
 	mkdir -p $SFDDIR
 	# clean up stupid line endings
 	for i in *.tbl; do
