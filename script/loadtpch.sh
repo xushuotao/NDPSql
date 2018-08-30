@@ -51,7 +51,7 @@ echo "Using prefix directory $p"
 
 
 
-ln -sf .monetdb ~/.monetdb
+ln -sf $(realpath ./.monetdb) ~/.monetdb
 
 DIR=$p
 IDIR=$DIR/.install
@@ -78,7 +78,7 @@ touch $RESFL;
 FARM=$DIR/.farms
 
 PORT=51337
-mkdir -p $DDIRp
+mkdir -p $DDIR
 mkdir -p $FARM
 BMARK="tpch"
 
@@ -163,6 +163,7 @@ do
         eval "$INITFCMD$DBFARM"
 
         # start db server
+        echo "$SERVERCMD$DBFARM > /dev/null &"
         eval "$SERVERCMD$DBFARM > /dev/null &"
         PID=$!
         
