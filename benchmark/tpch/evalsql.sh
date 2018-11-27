@@ -56,35 +56,47 @@ fi
 
 PORT=51337
 
-MINS=$(realpath ../../MonetDB-install)
+MINS=$(realpath ../../MonetDB-install-3)
 
-SERVERCMD="$MINS/bin/mserver5 --set mapi_port=$PORT --daemon=yes --dbpath="
-CLIENTCMD="$MINS/bin/mclient -fcsv -p $PORT "
+SERVERCMD="$MINS/bin/mserver5 --set mapi_port=$PORT --daemon=yes --set gdk_nr_threads=0 --dbpath="
+# CLIENTCMD="$MINS/bin/mclient -fcsv -p $PORT "
+CLIENTCMD="$MINS/bin/mclient -p $PORT "
 INITFCMD="echo "
 CREATEDBCMD="echo createdb"
 
 TIMINGCMD="/usr/bin/time -o $DIR/.time -f %e "
 TIMEOUTCMD="timeout -k 35m 30m "
 
+PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d monetdb-sf300 "
+
+
 
 
 shutdown() {
     kill $!
-    sleep 10
-    kill -9 $!
+    # sleep 10
+    # kill -9 $!
 }
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install/lib/)
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install-3/lib/)
 
-echo "$SERVERCMD$DBFARM > /dev/null &"
-eval "$SERVERCMD$DBFARM > /dev/null &"
+echo "$SERVERCMD$DBFARM &"
+eval "$SERVERCMD$DBFARM &"
 
-sleep 5
+PID=$!
+
+sleep 1
     
+# echo "$PROFILECMD"
+# eval "$PROFILECMD &"
 
 
-eval "$TIMEOUTCMD$TIMINGCMD$CLIENTCMD$QFILE" > monetdb-SF$SF-coldrun-$qn.out
+eval "$TIMEOUTCMD$TIMINGCMD$CLIENTCMD$QFILE"
+# echo "$CLIENTCMD\"$(cat $QFILE)\""
+# eval "$CLIENTCMD\"$(cat $QFILE)\""
+#> monetdb-SF$SF-coldrun-$qn.out
 
-shutdown()
+kill $(pidof tomograph)
+kill $(pidof mserver5)
 
 

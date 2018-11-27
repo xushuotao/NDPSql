@@ -109,10 +109,12 @@ module mkFlashBusModel(FlashBusModelIfc);
 
 	rule checkWriteReqFull if (!writeReqQ.notFull);
 		$display("**ERROR: FlashBusModel: Write data request buffer should never be full");
+       $finish;
 	endrule
 
 	rule checkWriteBufferFull if (!writeBuffer.notFull);
 		$display("**ERROR: FlashBusModel: Write buffer should never be full");
+       $finish;
 	endrule
 
 	rule chipSelIncr;
@@ -238,11 +240,12 @@ module mkFlashBusModel(FlashBusModelIfc);
 
 		//write request for data; when selected and have enough page buffers
 		rule chipWriteDataReq if (chipSt==ST_WRITE_REQ && chipSel==fromInteger(c) 
-											&& (writeDataReqIssued - writeDataReqProcessed) < 2);
+											&& (writeDataReqIssued - writeDataReqProcessed) < 1);
 			let cmd = flashChipCmdQs[c].first;
 			writeReqQ.enq(cmd.tag);
 			chipSt <= ST_WRITE_BUS_RESERVE;
 			writeDataReqIssued <= writeDataReqIssued + 1;
+           // $display("%m writeDatReqIss
 			$display("@%d %m FlashBus chip[%d] writeDataReq issued, tag=%d", cycleCnt, c, cmd.tag);
 		endrule
 
@@ -330,6 +333,7 @@ module mkFlashBusModel(FlashBusModelIfc);
 
 		rule errorState if (chipSt==ST_ERROR);
 			$display("**ERROR: FlashBusModel chip[%d] in error state", c);
+           $finish;
 		endrule
 	end //chipsPerBus
 

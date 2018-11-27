@@ -1,6 +1,6 @@
 sql.init();
-x_18:int := sql.mvc();
 BARRIER X_122:= language.dataflow();
+x_18:int := sql.mvc();
 x_203:bat[:date] := sql.bind(x_18, "sys":str, "lineitem":str, "l_shipdate":str, 0:int, 0:int, 3:int);
 C_181:bat[:oid] := sql.tid(x_18, "sys":str, "lineitem":str, 0:int, 3:int);
 C_229:bat[:oid] := algebra.select(x_203, C_181, "1995-09-01":date, "1995-10-01":date, true:bit, false:bit, false:bit);

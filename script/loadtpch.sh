@@ -57,8 +57,8 @@ DIR=$p
 IDIR=$DIR/.install
 SDIR=$DIR/.sources
 
-MSRC=$(realpath ../MonetDB)
-MINS=$(realpath ../MonetDB-install/)
+MSRC=$(realpath ../MonetDB-11.27.9)
+MINS=$(realpath ../MonetDB-install-3/)
 
 
 mkdir -p $SDIR
@@ -130,7 +130,7 @@ do
 
     if [ ! -f $MINS/bin/mserver5 ] ; then
         cd $MSRC
-        ./bootstrap
+        # ./bootstrap
         mkdir build
         cd build
         ../configure --prefix=$MINS --enable-rubygem=no --enable-python3=no --enable-python2=no --enable-perl=no --enable-geos=no --enable-python=no --enable-geom=no --enable-fits=no --enable-jaql=no --enable-gsl=no --enable-odbc=no --enable-jdbc=no --enable-merocontrol=no

@@ -184,7 +184,7 @@ typedef enum {
 	WRITE_PAGE,
 	ERASE_BLOCK,
 	INVALID
-} FlashOp deriving (Bits, Eq);
+} FlashOp deriving (Bits, Eq, FShow);
 
 typedef struct {
 	TagT tag;
@@ -193,14 +193,14 @@ typedef struct {
 	ChipT chip;
 	Bit#(16) block;
 	Bit#(8) page;
-} FlashCmd deriving (Bits, Eq);
+} FlashCmd deriving (Bits, Eq, FShow);
 
 typedef struct {
 	Bit#(8) page;
 	Bit#(16) block;
 	ChipT chip;
 	BusT bus;
-} FlashAddr deriving (Bits, Eq);
+} FlashAddr deriving (Bits, Eq, FShow);
 
 
 // Flash Controller User Ifc
