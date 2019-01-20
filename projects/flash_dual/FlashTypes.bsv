@@ -47,8 +47,10 @@ typedef struct{
    Bit#(1) cardId;
    FlashCmd cmd;
    } MultiFlashCmd deriving (Eq, Bits, FShow);
+
+// typedef 2 NUM
    
-typedef NUM_BUSES NUM_ENG_PORTS;
+typedef 8 NUM_ENG_PORTS;
 typedef TDiv#(NumTags, NUM_ENG_PORTS) TAGS_PER_PORT;
 
 Integer num_eng_ports = valueOf(NUM_ENG_PORTS);

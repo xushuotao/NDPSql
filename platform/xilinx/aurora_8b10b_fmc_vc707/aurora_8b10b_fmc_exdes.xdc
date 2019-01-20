@@ -86,7 +86,7 @@ set_clock_groups -asynchronous -group {auroraI_user_clk_i_fmc2} -group $portal_u
 set_clock_groups -asynchronous -group $auroraI_init_clk_i -group {auroraI_user_clk_i_fmc1}
 set_clock_groups -asynchronous -group $auroraI_init_clk_i -group {auroraI_user_clk_i_fmc2}
 #set_max_delay -from [get_clocks auroraI_init_clk_i] -to [get_clocks auroraI_user_clk_i_fmc1] -datapath_only 9.091
-#set_max_delay -from [get_clocks auroraI_init_clk_i -to [get_clocks auroraI_user_clk_i_fmc2] -datapath_only 9.091	 
+#set_max_delay -from [get_clocks auroraI_init_clk_i] -to [get_clocks auroraI_user_clk_i_fmc2] -datapath_only 9.091	 
 
 ############################### GT LOC ###################################
 #get_cells -hierarchical -regexp {.*aurora_8b10b_fmc1_i/inst/gt_wrapper_i/aurora_8b10b_fmc1_multi_gt_i/gt0_aurora_8b10b_fmc1_i/gtxe2_i}

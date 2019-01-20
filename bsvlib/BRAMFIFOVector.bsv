@@ -21,9 +21,9 @@ endinterface
 
 module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts) (BRAMFIFOVectorIfc#(vlog, fifosize, fifotype))
    provisos (
-      //	Literal#(fifotype), 
-             Bits#(fifotype, fifotypesz)
-             );
+             //	Literal#(fifotype), 
+      Bits#(fifotype, fifotypesz)
+      );
    
    Integer fifoSize = valueOf(fifosize);
    Integer numReadys = (burstsPerIdx + padBursts) / thresh;
@@ -78,7 +78,7 @@ module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts
    FIFO#(Bit#(vlog)) enqIdxQ <- mkFIFO();
    FIFO#(fifotype) enqInQ <- mkFIFO();
    FIFO#(Bit#(vlog)) enqInIdxQ <- mkFIFO();
-   FIFO#(Bit#(vlog)) deqQ <- mkSizedFIFO(16);
+   FIFO#(Bit#(vlog)) deqQ <- mkSizedFIFO(valueOf(TExp#(vlog))*numReadys);
 
 
 
@@ -89,14 +89,15 @@ module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts
       enqInIdxQ.deq;
       enqQ.enq(data);
       enqIdxQ.enq(idx);
+      $display("%m, enqueing index = %d enqTotal = %d @ %t, {nChanels, fifosize, fifotype_sz, thresh, burstsPerIdx, padBursts} = {%d, %d, %d, %d, %d, %d}", idx, enqTotal[idx], $time, valueOf(TExp#(vlog)), valueOf(fifosize), valueOf(SizeOf#(fifotype)), thresh, burstsPerIdx, padBursts);
       if (enqTotal[idx] == fromInteger(burstsPerIdx-1)) begin
-	 padCnt <= fromInteger(padBursts);
-	 padIdx <= idx;
-	 padData <= data;
-	 enqTotal[idx] <= 0;
+	     padCnt <= fromInteger(padBursts);
+	     padIdx <= idx;
+	     padData <= data;
+	     enqTotal[idx] <= 0;
       end
       else begin
-	 enqTotal[idx] <= enqTotal[idx] + 1;
+	     enqTotal[idx] <= enqTotal[idx] + 1;
       end
    endrule
 
@@ -109,28 +110,30 @@ module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts
    rule applyenq;
       let data = enqQ.first;
       let idx = enqIdxQ.first;
+      $display("%m isFull (%d) = %d, headpointer[idx] = %d, tailpointer[idx] = %d fifoSize = %d (@ %t)", idx, isFull(idx), headpointer[idx], tailpointer[idx], fifoSize, $time);
       if ( !isFull( idx ) ) begin
-	 enqQ.deq;
-	 enqIdxQ.deq;
-	 let head1 = headpointer[idx]+1;
-	 if ( head1 >= fromInteger(fifoSize) ) head1 = 0;
-	 headpointer[idx] <= head1;
+	     enqQ.deq;
+	     enqIdxQ.deq;
+	     let head1 = headpointer[idx]+1;
+	     if ( head1 >= fromInteger(fifoSize) ) head1 = 0;
+	     headpointer[idx] <= head1;
 
-	 fifoBuffer.portB.request.put(BRAMRequest{write:True, responseOnWrite:False, address:zeroExtend(idx)*fromInteger(fifoSize)+zeroExtend(headpointer[idx]), datain:data});
-	 //send a ready message every threshold bursts
-	 if (enqCnt[idx] == fromInteger(thresh-1)) begin
-	    readyIdxQ.enq(tuple2(idx, rdyCnt[idx]));
-	    if (rdyCnt[idx] >= fromInteger(numReadys - 1)) begin
-	       rdyCnt[idx] <= 0;
-	    end
-	    else begin
-	       rdyCnt[idx] <= rdyCnt[idx] + 1;
-	    end
-	    enqCnt[idx] <= 0;
-	 end
-	 else begin
-	    enqCnt[idx] <= enqCnt[idx] + 1;
-	 end
+	     fifoBuffer.portB.request.put(BRAMRequest{write:True, responseOnWrite:False, address:zeroExtend(idx)*fromInteger(fifoSize)+zeroExtend(headpointer[idx]), datain:data});
+	     //send a ready message every threshold bursts
+	     if (enqCnt[idx] == fromInteger(thresh-1)) begin
+            $display("(%t) %m readyIdxQ.enq(%d,  %d), numReadys = %d", $time, idx, rdyCnt[idx], numReadys);
+	        readyIdxQ.enq(tuple2(idx, rdyCnt[idx]));
+	        if (rdyCnt[idx] >= fromInteger(numReadys - 1)) begin
+	           rdyCnt[idx] <= 0;
+	        end
+	        else begin
+	           rdyCnt[idx] <= rdyCnt[idx] + 1;
+	        end
+	        enqCnt[idx] <= 0;
+	     end
+	     else begin
+	        enqCnt[idx] <= enqCnt[idx] + 1;
+	     end
 
       end
    endrule
@@ -140,11 +143,11 @@ module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts
    rule applydeq;
       let idx = deqQ.first;
       if (deqCnt[idx]==fromInteger(thresh-1)) begin
-	 deqQ.deq;
-	 deqCnt[idx] <= 0;
+	     deqQ.deq;
+	     deqCnt[idx] <= 0;
       end 
       else begin
-	 deqCnt[idx] <= deqCnt[idx] + 1;
+	     deqCnt[idx] <= deqCnt[idx] + 1;
       end
 
       let tail1 = tailpointer[idx]+1;
@@ -152,11 +155,11 @@ module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts
       tailpointer[idx] <= tail1;
 
       fifoBuffer.portA.request.put(
-                                   BRAMRequest{
-                                      write:False, 
-                                      responseOnWrite:?, 
-                                      address:zeroExtend(idx)*fromInteger(fifoSize)+zeroExtend(tailpointer[idx]), 
-                                      datain:?});
+         BRAMRequest{
+                     write:False, 
+                     responseOnWrite:?, 
+                     address:zeroExtend(idx)*fromInteger(fifoSize)+zeroExtend(tailpointer[idx]), 
+                     datain:?});
    endrule
 
 
@@ -169,6 +172,7 @@ module mkBRAMFIFOVector#(Integer thresh, Integer burstsPerIdx, Integer padBursts
    
    method Action reqDeq(Bit#(vlog) idx);
       deqQ.enq(idx);
+      $display("(%t) %m reqDeq %d", $time, idx);
    endmethod
 
    method ActionValue#(fifotype) respDeq;

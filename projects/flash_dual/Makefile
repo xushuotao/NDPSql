@@ -11,13 +11,13 @@ MEM_READ_INTERFACES = lFlashTop.dmaReadClient
 MEM_WRITE_INTERFACES = lFlashTop.dmaWriteClient
 
 
-CONNECTALFLAGS += -D IMPORT_HOSTIF -D XILINX_SYS_CLK --mainclockperiod=8 --derivedclockperiod=9.091 -D DataBusWidth=128
-#CONNECTALFLAGS += -D IMPORT_HOSTIF -D XILINX_SYS_CLK --derivedclockperiod=9.091 -D DataBusWidth=128
+CONNECTALFLAGS += -D IMPORT_HOSTIF -D XILINX_SYS_CLK --mainclockperiod=8 --derivedclockperiod=9.091 -D DataBusWidth=256 -D USE_WIDE_WIDTH
+# CONNECTALFLAGS += -D IMPORT_HOSTIF -D XILINX_SYS_CLK --derivedclockperiod=9.091 -D DataBusWidth=128
 
 CONNECTALFLAGS += --bsvpath $(BSVDIR)
 
 ifneq ($(BOARD), vc707g2)
-CONNECTALFLAGS += --bscflags="-D BSIM"
+CONNECTALFLAGS += --bscflags="-D BSIM -D SIM_DMA_WRITE_LATENCY=1"
 endif
 
 BSVFILES = FlashTop.bsv
