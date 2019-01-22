@@ -63,7 +63,7 @@ import BRAM::*;
 
 import Clocks::*;
 
-`define EmptyFlash
+// `define EmptyFlash
 
 `ifdef EmptyFlash
 import EmptyFlash::*;
@@ -113,7 +113,7 @@ endinterface
 typedef 8 CmdQDepth;
 
 // typedef TMul#(CmdQDepth, 8) FIFODepth;
-typedef 256 FIFODepth;
+typedef 24 FIFODepth;
 
 // NumDmaChannels each for flash i/o and emualted i/o
 //typedef TAdd#(NumDmaChannels, NumDmaChannels) NumObjectClients;
@@ -214,8 +214,9 @@ module mkFlashTop#(HostInterface host, FlashIndication indication)(FlashTop);
       let dst = v.dstNode;
       let cardId = v.cardId;
       let newTag <- reqTb[cardId].writeEntry(tuple2(v.cmd.tag, v.cmd.bus));
+      $display(fshow(v.cmd.op));
+      $display("Flash Cmd to (%d, %d, %d, %d, %d), orTag = %d, newTag = %d", v.cardId, v.cmd.bus, v.cmd.chip, v.cmd.block, v.cmd.page, v.cmd.tag, newTag);
       v.cmd.tag = newTag;
-      $display(fshow(v));
       flashCtrls[cardId].user.sendCmd(v.cmd);
    endrule
    
@@ -415,7 +416,7 @@ module mkFlashTop#(HostInterface host, FlashIndication indication)(FlashTop);
 		 TagT tag <- flashCtrls[i].user.writeDataReq();
          reqTb[i].readEntry(tag);
          flashWrReqQs[i].enq(tuple3(fromInteger(i), ?, tag));
-         $display("[%d] FlashTop.bsv: writeDataReq received from controller tag=%d", myNodeId,tag);
+         $display("[%d] FlashTop.bsv: writeDataReq received from controller card=%d, tag=%d", myNodeId,i,tag);
 		 // WdReqT req = WdReqT{origTag: ?, reTag: tag, src: ?, dst: ?};
 		 // flashSplit.locFlashCli.writeDataReq.put(req);
 	  endrule
@@ -493,8 +494,8 @@ module mkFlashTop#(HostInterface host, FlashIndication indication)(FlashTop);
 		 let {retag, dst} = dmaRdReq2RespQ[p].first;
 		 if (dmaReadBurstCount[p] < fromInteger(pageWords)) begin
 			writeWordPipe.enq(tuple3(outData, retag, dst));
-			$display("[%d] FlashTop.bsv: forwarded dma read data [%d]: retag=%d, data=%x", 
-			         myNodeId, dmaReadBurstCount[p], retag, outData);
+			$display("[%d] FlashTop.bsv: forwarded dma read data [%d]: retag=%d, dst=%d, data=%x", 
+			         myNodeId, dmaReadBurstCount[p], retag, dst, outData);
 		 end
 		 else begin 
 			//drop the data because it's just 0 padded

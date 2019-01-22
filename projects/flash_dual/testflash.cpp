@@ -10,15 +10,15 @@
 
 #if defined(SIMULATION)
 #define BLOCKS_PER_CHIP 1 
-#define CHIPS_PER_BUS 1
-#define NUM_BUSES 1
+#define CHIPS_PER_BUS 8
+#define NUM_BUSES 8
 #define NUM_CARDS 2
 
 #else
 #define BLOCKS_PER_CHIP 1
 #define CHIPS_PER_BUS 8
 #define NUM_BUSES 8
-#define NUM_CARDS 1
+#define NUM_CARDS 2
 #endif
 
 
@@ -65,7 +65,7 @@ unsigned int* writeBuffers[NUM_TAGS];
 TagTableEntry readTagTable[NUM_TAGS]; 
 TagTableEntry writeTagTable[NUM_TAGS]; 
 TagTableEntry eraseTagTable[NUM_TAGS]; 
-FlashStatusT flashStatus[2][NUM_BUSES][CHIPS_PER_BUS][BLOCKS_PER_CHIP];
+FlashStatusT flashStatus[NUM_CARDS][NUM_BUSES][CHIPS_PER_BUS][BLOCKS_PER_CHIP];
 
 int testPass = 1;
 bool verbose = true;
@@ -81,7 +81,7 @@ double timespec_diff_sec( timespec start, timespec end ) {
 
 
 unsigned int hashAddrToData(int card, int bus, int chip, int blk, int word) {
-  return ((card<<27) + (bus<<24) + (chip<<20) + (blk<<16) + word);
+  return ((card<<28) + (bus<<24) + (chip<<20) + (blk<<16) + word);
 }
 
 
@@ -93,7 +93,8 @@ void checkReadData(int tag) {
     for (unsigned int word=0; word<PAGE_SIZE_VALID/sizeof(unsigned int); word++) {
       goldenData = hashAddrToData(e.card, e.bus, e.chip, e.block, word);
       if (goldenData != readBuffers[tag][word]) {
-        DEBUG_PRINT( "LOG: **ERROR: read data mismatch! Expected: %x, read: %x\n", goldenData, readBuffers[tag][word]);
+        // DEBUG_PRINT( "LOG: **ERROR: read data mismatch! Expected: %x, read: %x\n", goldenData, readBuffers[tag][word]);
+        fprintf(stderr, "LOG: **ERROR: read data mismatch! tag = %d, (card, bus, chip, block, word) = (%d, %d, %d, %d, %d), Expected: %x, read: %x\n", tag, e.card, e.bus, e.chip, e.block, word, goldenData, readBuffers[tag][word]);
         numErrors++; 
         testPass = 0;
       }
@@ -156,7 +157,7 @@ public:
   }
 
   virtual void writeDone(unsigned int tag, uint64_t cycles) {
-    printf("LOG: writedone, tag=%d, FPGA cycles = %lu\n", tag, cycles); fflush(stdout);
+    DEBUG_PRINT("LOG: writedone, tag=%d, FPGA cycles = %lu\n", tag, cycles); 
     //TODO probably should use a diff lock
     pthread_mutex_lock(&flashReqMutex);
     curWritesInFlight--;
@@ -173,9 +174,9 @@ public:
   }
 
   virtual void eraseDone(unsigned int tag, unsigned int status, uint64_t cycles) {
-    printf("LOG: eraseDone, tag=%d, status=%d, FPGA cycles = %lu\n", tag, status, cycles); fflush(stdout);
+    DEBUG_PRINT("LOG: eraseDone, tag=%d, status=%d, FPGA cycles = %lu\n", tag, status, cycles);
     if (status != 0) {
-      printf("LOG: detected bad block with tag = %d\n", tag);
+      DEBUG_PRINT("LOG: detected bad block with tag = %d\n", tag);
     }
 
     pthread_mutex_lock(&flashReqMutex);
@@ -315,6 +316,7 @@ void writePage(int card, int bus, int chip, int block, int page, int tag) {
   pthread_mutex_unlock(&flashReqMutex);
 
   if ( verbose ) DEBUG_PRINT( "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
+  //fprintf(stderr, "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
   device->writePage(card, bus,chip,block,page,tag);
 }
 
@@ -328,6 +330,7 @@ void readPage(int card, int bus, int chip, int block, int page, int tag) {
   pthread_mutex_unlock(&flashReqMutex);
 
   if ( verbose ) DEBUG_PRINT( "LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
+  //fprintf(stderr,"LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
   device->readPage(card, bus,chip,block,page,tag);
 }
 
@@ -407,7 +410,10 @@ int main(int argc, const char **argv){
   
   fprintf(stderr, "FPGA starts\n");
   device->start(0);
-  /*
+  fprintf(stderr, "LOG: Starting Correctness TEST...\n");
+  timespec start, now;
+  clock_gettime(CLOCK_REALTIME, & start);
+  
   for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
     for (int chip = 0; chip < CHIPS_PER_BUS; chip++){
       for (int bus = 0; bus < NUM_BUSES; bus++){
@@ -418,11 +424,16 @@ int main(int argc, const char **argv){
     }
   }
 
+  
   while (true) {
     usleep(100);
     if ( getNumErasesInFlight() == 0 ) break;
   }
-	
+
+  clock_gettime(CLOCK_REALTIME, & now);
+  fprintf(stderr, "LOG: finished erasing to flash! %f\n", timespec_diff_sec(start, now) );
+  double total = 256*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
+  fprintf(stderr, "LOG: erase %.4lf MB,  bw = %.4lf MB/s\n", total, total/timespec_diff_sec(start, now) );
 	
   //read back erased pages
   for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
@@ -440,14 +451,15 @@ int main(int argc, const char **argv){
     if ( getNumReadsInFlight() == 0 ) break;
   }
 
-
   //write pages
   //FIXME: in old xbsv, simulatneous DMA reads using multiple readers cause kernel panic
   //Issue each bus separately for now
-  for (int card = 0; card < NUM_CARDS; card++ ){
-    for (int bus = 0; bus < NUM_BUSES; bus++){
-      for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
-        for (int chip = 0; chip < CHIPS_PER_BUS; chip++){
+  clock_gettime(CLOCK_REALTIME, & start);
+
+  for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
+    for (int chip = 0; chip < CHIPS_PER_BUS; chip++){
+      for (int bus = 0; bus < NUM_BUSES; bus++){
+        for (int card = 0; card < NUM_CARDS; card++ ){
           int page = 0;
           //get free tag
           int freeTag = waitIdleWriteBuffer();
@@ -458,21 +470,86 @@ int main(int argc, const char **argv){
           //send request
           writePage(card, bus, chip, blk, page, freeTag);
         }
-        while (true) {
-          usleep(100);
-          if ( getNumWritesInFlight() == 0 ) break;
-        }
       }
     } //each bus
-  } 
-  */	
+  }
+  
+  while (true) {
+    usleep(100);
+    if ( getNumWritesInFlight() == 0 ) break;
+  }
+  	
+  clock_gettime(CLOCK_REALTIME, & now);
+  fprintf(stderr, "LOG: finished writing to flash! %f\n", timespec_diff_sec(start, now) );
+  total = BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
+  fprintf(stderr, "LOG: write %.4lf MB,  bw = %.4lf MB/s (this data is not accurate since it includes time for data generation)\n", total, total/timespec_diff_sec(start, now) );
+  
 
 #if defined(SIMULATION)
   int num_repeats = 1;
 #else
   int num_repeats = 2000;
 #endif
-  timespec start, now;
+  clock_gettime(CLOCK_REALTIME, & start);
+
+
+  // check card 0::
+  for (int repeat = 0; repeat < num_repeats; repeat++){
+    for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
+      for (int chip = 0; chip < CHIPS_PER_BUS; chip++){
+        for (int bus = 0; bus < NUM_BUSES; bus++){
+          for (int card = 0; card < NUM_CARDS; card++){
+
+            //int blk = rand() % 1024;
+            //int chip = rand() % 8;
+            //int bus = rand() % 8;
+            int page = 0;
+            readPage(0, bus, chip, blk, page, waitIdleReadBuffer());
+          }
+        }
+      }
+    }
+  }
+
+  while (true) {
+    usleep(100);
+    if ( getNumWritesInFlight() == 0 ) break;
+  }
+
+
+  clock_gettime(CLOCK_REALTIME, & now);
+  fprintf(stderr, "LOG: finished reading from page! %f\n", timespec_diff_sec(start, now) );
+  total = num_repeats*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
+  fprintf(stderr, "LOG: read %.4lf MB,  bw = %.4lf MB/s (this data is not accurate since it includes time for data generation)\n", total, total/timespec_diff_sec(start, now) );
+
+  for ( int t = 0; t < NUM_TAGS; t++ ) {
+    for ( unsigned int i = 0; i < PAGE_SIZE/sizeof(unsigned int); i++ ) {
+      //fprintf(stderr,  "%x %x %x\n", t, i, readBuffers[t][i] );
+    }
+  }
+  if (testPass==1) {
+    fprintf(stderr, "LOG: Correctness TEST PASSED!\n");
+  }
+  else {
+    fprintf(stderr, "LOG: **ERROR: Correctness TEST FAILED!\n");
+  }
+
+
+  // read performance check:
+  fprintf(stderr, "LOG: Starting read performance TEST...\n");
+  // this following makes no data checking on data read
+  for (int blk=0; blk<BLOCKS_PER_CHIP; blk++) {
+    for (int c=0; c<CHIPS_PER_BUS; c++) {
+      for (int bus=0; bus< CHIPS_PER_BUS; bus++) {
+        for (int card=0; card < NUM_CARDS; card++) {
+          // fprintf(stderr,"flashStatus[%d][%d][%d][%d] = UNINIT\n",card,bus,c,blk);
+          flashStatus[card][bus][c][blk] = UNINIT;
+        }
+      }
+    }
+  }
+
+  // start read benchmark
   clock_gettime(CLOCK_REALTIME, & start);
 
   for (int repeat = 0; repeat < num_repeats; repeat++){
@@ -485,47 +562,29 @@ int main(int argc, const char **argv){
             //int chip = rand() % 8;
             //int bus = rand() % 8;
             int page = 0;
-            readPage(card, bus, chip, blk, page, waitIdleReadBuffer());
+            readPage(0, bus, chip, blk, page, waitIdleReadBuffer());
           }
         }
       }
     }
   }
-	
-  int elapsed = 0;
+
   while (true) {
     usleep(100);
-    if (elapsed == 0) {
-      elapsed=10000;
-      device->debugDumpReq(0);
-    }
-    else {
-      elapsed--;
-    }
-    if ( getNumReadsInFlight() == 0 ) break;
+    if ( getNumWritesInFlight() == 0 ) break;
   }
-  device->debugDumpReq(0);
+
 
   clock_gettime(CLOCK_REALTIME, & now);
   fprintf(stderr, "LOG: finished reading from page! %f\n", timespec_diff_sec(start, now) );
-  double total = num_repeats*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
+  total = num_repeats*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
   fprintf(stderr, "LOG: read %.4lf MB,  bw = %.4lf MB/s\n", total, total/timespec_diff_sec(start, now) );
 
-  for ( int t = 0; t < NUM_TAGS; t++ ) {
-    for ( unsigned int i = 0; i < PAGE_SIZE/sizeof(unsigned int); i++ ) {
-      //fprintf(stderr,  "%x %x %x\n", t, i, readBuffers[t][i] );
-    }
-  }
-  if (testPass==1) {
-    fprintf(stderr, "LOG: TEST PASSED!\n");
-  }
-  else {
-    fprintf(stderr, "LOG: **ERROR: TEST FAILED!\n");
-  }
 
-  platformStatistics();
+  // usleep(100);
+  // platformStatistics();
 
   
-  //  while (true);
-
+  // while (true);
+  return 0;
 }
