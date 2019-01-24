@@ -10,8 +10,8 @@
 
 #if defined(SIMULATION)
 #define BLOCKS_PER_CHIP 1 
-#define CHIPS_PER_BUS 8
-#define NUM_BUSES 8
+#define CHIPS_PER_BUS 1
+#define NUM_BUSES 1
 #define NUM_CARDS 2
 
 #else
