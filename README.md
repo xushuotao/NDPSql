@@ -56,6 +56,10 @@ target | Function
 verilator | compile for verilog simulation
 vc707g2| compile for vc707 fpga board with pcie gen2 core
 
+If you target is verilator, you can just run the simulation by running
+
+   ./verilator/bin/ubuntu.exe
+
 
 Building ONLY the software NDPSql projects from source
 -----------------------------
@@ -75,10 +79,10 @@ and you can just build the software and skipping the time-consuming fpga compila
 Running NDPSql
 ======
 
-The below is assumming build server and run server are separate
+The below is assumming build server and run server are separate.
 
 
-Preparing the Running Environment
+Preparing the FPGA Running Environment
 -------------------------
 
 1. Setup the server and FPGA boards as Section 5 in the BlueDBM paper (ISCA'15)
@@ -92,7 +96,7 @@ Preparing the Running Environment
 
 4. Source setup.sh for setting up the environment variable by appending the bash.sh
 
-    echo "source ~/setup.sh" >> ~/.bashrc
+       echo "source ~/setup.sh" >> ~/.bashrc
 
 
 Running NDPSql projects
@@ -100,22 +104,22 @@ Running NDPSql projects
 
 0. Copy your project target folder to the running machine
 
-    scp -r projects/<project>/vc707g2 <server_url>:.
+       scp -r projects/<project>/vc707g2 <server_url>:.
 
 1. Program FPGAs by running:
 
-    ./program.sh
+       ./program.sh
 
    You might have to change the program-valid-all.tcl file to point to the correct fpga bit file.
 
 2. Rescan the portals by running:
 
-    pciescanportal
+       pciescanportal
 
 
 3. Run the software binary by running:
 
-   NOPROGRAM=1 ./vc707g2/bin/ubuntu.exe
+       NOPROGRAM=1 ./vc707g2/bin/ubuntu.exe
 
 
-
+You can just repeat step 3 if not fpga is not reprogrammed.
