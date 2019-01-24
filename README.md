@@ -13,20 +13,20 @@ Building NDPSql
 Preparing the NDPSql Building Environment
 -------------------------  
 
-    1. Checkout out the following from github:
-        git clone git://github.com/xushuotao/NDPSql --recursive
-       
-    2. Install the bluespec compiler. Make sure the BLUESPECDIR environment variable
-       is set appropriately:
+1. Checkout out the following from github:
+    git clone git://github.com/xushuotao/NDPSql --recursive
+   
+2. Install the bluespec compiler. Make sure the BLUESPECDIR environment variable
+   is set appropriately:
 
-        export BLUESPECDIR=~/bluespec/Bluespec-2014.07.A/lib
+    export BLUESPECDIR=~/bluespec/Bluespec-2014.07.A/lib
 
-    3. Install Vivado 2018.1
+3. Install Vivado 2018.1
 
-    4. Install Connectal
-        sudo add-apt-repository -y ppa:jamey-hicks/connectal;
-        sudo apt-get update;
-        sudo apt-get -y install connectal
+4. Install Connectal
+    sudo add-apt-repository -y ppa:jamey-hicks/connectal;
+    sudo apt-get update;
+    sudo apt-get -y install connectal
             
 
 Current NDPSql projects
@@ -44,7 +44,7 @@ fakeflash_dual | Test the PCIE gen2 transfer speed using fake flash card traffic
 Building NDPSql projects from source
 -----------------------------
 
-    cd to the NDPSql directory, then type
+ cd to the NDPSql directory, then type
 
     cd projects/<project>
     make build.<target> -j
@@ -61,9 +61,11 @@ Building ONLY the software NDPSql projects from source
 -----------------------------
 
 To save time, the pre-compiled bit files of the projects are in
+
     projects/<project>/fpgaimage/vc707g2.bit
 
 and you can just build the software and skipping the time-consuming fpga compilation by
+
     cd projects/<project>
     make gen.<target>
     cd <target>
@@ -79,36 +81,36 @@ The below is assumming build server and run server are separate
 Preparing the Running Environment
 -------------------------
 
-    1. Setup the server and FPGA boards as Section 5 in the BlueDBM paper (ISCA'15)
-       [http://livinglab.mit.edu/wp-content/uploads/2016/01/ISCA15_Sang-Woo_Jun.pdf]
+1. Setup the server and FPGA boards as Section 5 in the BlueDBM paper (ISCA'15)
+   [http://livinglab.mit.edu/wp-content/uploads/2016/01/ISCA15_Sang-Woo_Jun.pdf]
 
-    2. Install Vivado 2018.1
+2. Install Vivado 2018.1
 
-    3. Copy running scripts and relevant FPGA bit images to the server with the Xilinx FPGA by running:
-        scp scripts/running_scripts/* <server_url>:
+3. Copy running scripts and relevant FPGA bit images to the server with the Xilinx FPGA by running:
+    scp scripts/running_scripts/* <server_url>:
 
-    4. Source setup.sh for setting up the environment variable by appending the bash.sh
-        echo "source ~/setup.sh" >> ~/.bashrc
+4. Source setup.sh for setting up the environment variable by appending the bash.sh
+    echo "source ~/setup.sh" >> ~/.bashrc
 
 
 Running NDPSql projects
 -------------------------
 
-    0. Copy your project target folder to the running machine
-        scp -r projects/<project>/vc707g2 <server_url>:.
+0. Copy your project target folder to the running machine
+    scp -r projects/<project>/vc707g2 <server_url>:.
 
-    1. Program FPGAs by running:
-        ./program.sh
+1. Program FPGAs by running:
+    ./program.sh
 
-       You might have to change the program-valid-all.tcl file to point to the correct fpga bit file.
-
-
-    2. Rescan the portals by running:
-        pciescanportal
+   You might have to change the program-valid-all.tcl file to point to the correct fpga bit file.
 
 
-    3. Run the software binary by running:
-       NOPROGRAM=1 ./vc707g2/bin/ubuntu.exe
+2. Rescan the portals by running:
+    pciescanportal
+
+
+3. Run the software binary by running:
+   NOPROGRAM=1 ./vc707g2/bin/ubuntu.exe
 
 
 
