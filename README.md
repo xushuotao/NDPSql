@@ -23,10 +23,6 @@ Preparing the NDPSql Building Environment
 
 3. Install Vivado 2018.1
 
-4. Install Connectal
-    sudo add-apt-repository -y ppa:jamey-hicks/connectal;
-    sudo apt-get update;
-    sudo apt-get -y install connectal
             
 
 Current NDPSql projects
@@ -90,11 +86,17 @@ Preparing the FPGA Running Environment
 
 2. Install Vivado 2018.1
 
-3. Copy running scripts and relevant FPGA bit images to the server with the Xilinx FPGA by running:
+3. Install Connectal Drivers
+
+       sudo add-apt-repository -y ppa:jamey-hicks/connectal
+       sudo apt-get update
+       sudo apt-get -y install connectal
+
+4. Copy running scripts and FPGA bit images to the server with the Xilinx FPGA by running:
 
        scp scripts/running_scripts/* <server_url>:
 
-4. Source setup.sh for setting up the environment variable by appending the bash.sh
+5. Source setup.sh for setting up the environment variable by appending the bash.sh
 
        echo "source ~/setup.sh" >> ~/.bashrc
 
