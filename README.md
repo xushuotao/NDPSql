@@ -87,7 +87,6 @@ Preparing the Running Environment
 2. Install Vivado 2018.1
 
 3. Copy running scripts and relevant FPGA bit images to the server with the Xilinx FPGA by running:
-
         scp scripts/running_scripts/* <server_url>:
 
 4. Source setup.sh for setting up the environment variable by appending the bash.sh
