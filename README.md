@@ -14,12 +14,13 @@ Preparing the NDPSql Building Environment
 -------------------------  
 
 1. Checkout out the following from github:
-    git clone git://github.com/xushuotao/NDPSql --recursive
+
+       git clone git://github.com/xushuotao/NDPSql --recursive
    
 2. Install the bluespec compiler. Make sure the BLUESPECDIR environment variable
    is set appropriately:
 
-    export BLUESPECDIR=~/bluespec/Bluespec-2014.07.A/lib
+       export BLUESPECDIR=~/bluespec/Bluespec-2014.07.A/lib
 
 3. Install Vivado 2018.1
 
@@ -62,7 +63,7 @@ Building ONLY the software NDPSql projects from source
 
 To save time, the pre-compiled bit files of the projects are in
 
-    projects/<project>/fpgaimage/vc707g2.bit
+    projects/<project>/hw/mkTop.bit
 
 and you can just build the software and skipping the time-consuming fpga compilation by
 
