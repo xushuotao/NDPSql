@@ -55,7 +55,7 @@ vc707g2| compile for vc707 fpga board with pcie gen2 core
 
 If you target is verilator, you can just run the simulation by running
 
-   ./verilator/bin/ubuntu.exe
+    ./verilator/bin/ubuntu.exe
 
 
 Building ONLY the software NDPSql projects from source
