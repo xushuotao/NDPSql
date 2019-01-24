@@ -129,13 +129,13 @@ public:
   virtual void readDone(unsigned int tag, uint64_t cycles) {
 
     if ( verbose ) {
-      //printf( "%s received read page buffer: %d %d\n", log_prefix, rbuf, curReadsInFlight );
+      // printf( "%s received read page buffer: %d %d\n", log_prefix, rbuf, curReadsInFlight );
       //DEBUG_PRINT( "LOG: pagedone: tag=%d; inflight=%d, FPGA cycles = %lu\n", tag, curReadsInFlight, cycles );
 
-#if defined(SIMULATION)
+      #if defined(SIMULATION)
       fprintf(stderr, "LOG: pagedone: tag=%d; inflight=%d, FPGA cycles = %lu\n", tag, curReadsInFlight, cycles );
-#endif
-      fflush(stdout);
+      #endif
+      // fflush(stdout);
     }
 
     //check 
@@ -571,7 +571,7 @@ int main(int argc, const char **argv){
 
   while (true) {
     usleep(100);
-    if ( getNumWritesInFlight() == 0 ) break;
+    if ( getNumReadsInFlight() == 0 ) break;
   }
 
 
@@ -582,9 +582,9 @@ int main(int argc, const char **argv){
 
 
   // usleep(100);
-  // platformStatistics();
+  platformStatistics();
 
   
   // while (true);
-  return 0;
+  //return 0;
 }
