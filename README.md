@@ -87,9 +87,11 @@ Preparing the Running Environment
 2. Install Vivado 2018.1
 
 3. Copy running scripts and relevant FPGA bit images to the server with the Xilinx FPGA by running:
+
     scp scripts/running_scripts/* <server_url>:
 
 4. Source setup.sh for setting up the environment variable by appending the bash.sh
+
     echo "source ~/setup.sh" >> ~/.bashrc
 
 
@@ -97,19 +99,22 @@ Running NDPSql projects
 -------------------------
 
 0. Copy your project target folder to the running machine
+
     scp -r projects/<project>/vc707g2 <server_url>:.
 
 1. Program FPGAs by running:
+
     ./program.sh
 
    You might have to change the program-valid-all.tcl file to point to the correct fpga bit file.
 
-
 2. Rescan the portals by running:
+
     pciescanportal
 
 
 3. Run the software binary by running:
+
    NOPROGRAM=1 ./vc707g2/bin/ubuntu.exe
 
 
