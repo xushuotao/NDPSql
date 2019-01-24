@@ -73,6 +73,8 @@ int curReadsInFlight = 0;
 int curWritesInFlight = 0;
 int curErasesInFlight = 0;
 
+int blockBase = 0; // so that we are not erasing the same block;
+
 double timespec_diff_sec( timespec start, timespec end ) {
   double t = end.tv_sec - start.tv_sec;
   t += ((double)(end.tv_nsec - start.tv_nsec)/1000000000L);
@@ -304,7 +306,7 @@ void eraseBlock(int card, int bus, int chip, int block, int tag) {
 
   // DEBUG_PRINT( "I g'dd here line = %d\n", __LINE__);
   if ( verbose ) DEBUG_PRINT( "LOG: sending erase block request with tag=%d @%d %d %d %d 0\n", tag, card, bus, chip, block );
-  device->eraseBlock(card, bus,chip,block,tag);
+  device->eraseBlock(card,bus,chip,(blockBase+block)%4096,tag);
 }
 
 
@@ -317,7 +319,7 @@ void writePage(int card, int bus, int chip, int block, int page, int tag) {
 
   if ( verbose ) DEBUG_PRINT( "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
   //fprintf(stderr, "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
-  device->writePage(card, bus,chip,block,page,tag);
+  device->writePage(card,bus,chip,(blockBase+block)%4096,page,tag);
 }
 
 void readPage(int card, int bus, int chip, int block, int page, int tag) {
@@ -331,7 +333,7 @@ void readPage(int card, int bus, int chip, int block, int page, int tag) {
 
   if ( verbose ) DEBUG_PRINT( "LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
   //fprintf(stderr,"LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
-  device->readPage(card, bus,chip,block,page,tag);
+  device->readPage(card,bus,chip,(blockBase+block)%4096,page,tag);
 }
 
 
@@ -407,6 +409,13 @@ int main(int argc, const char **argv){
   fprintf(stderr, "Done initializing buffers\n");
   // device->auroraStatus();
   // sem_wait(&sem);
+
+#if not defined(SIMULATION)
+  srand(time(NULL));
+  blockBase=rand()%4096;
+#endif
+
+  fprintf(stderr, "Done initializing blockBase = %u\n", blockBase);
   
   fprintf(stderr, "FPGA starts\n");
   device->start(0);
@@ -504,7 +513,7 @@ int main(int argc, const char **argv){
             //int chip = rand() % 8;
             //int bus = rand() % 8;
             int page = 0;
-            readPage(0, bus, chip, blk, page, waitIdleReadBuffer());
+            readPage(card, bus, chip, blk, page, waitIdleReadBuffer());
           }
         }
       }
@@ -513,7 +522,7 @@ int main(int argc, const char **argv){
 
   while (true) {
     usleep(100);
-    if ( getNumWritesInFlight() == 0 ) break;
+    if ( getNumReadsInFlight() == 0 ) break;
   }
 
 
@@ -562,7 +571,7 @@ int main(int argc, const char **argv){
             //int chip = rand() % 8;
             //int bus = rand() % 8;
             int page = 0;
-            readPage(0, bus, chip, blk, page, waitIdleReadBuffer());
+            readPage(card, bus, chip, blk, page, waitIdleReadBuffer());
           }
         }
       }
