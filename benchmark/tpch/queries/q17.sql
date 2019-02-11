@@ -9,7 +9,7 @@ where
 	and p_container = 'MED BOX'
 	and l_quantity < (
 		select
-			0.2 * avg(l_quantity)
+			avg(l_quantity) * 0.2
 		from
 			lineitem
 		where

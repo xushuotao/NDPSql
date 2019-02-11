@@ -21,7 +21,7 @@ where
 			)
 			and ps_availqty > (
 				select
-					0.5 * sum(l_quantity)
+					sum(l_quantity) * 0.5
 				from
 					lineitem
 				where
