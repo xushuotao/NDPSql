@@ -1,0 +1,50 @@
+sql.init();
+x_12 := sql.mvc();
+x_152:bat[:int] := sql.bind(x_12, "sys", "lineitem", "l_quantity", 0:int, 0:int, 3:int);
+x_158:bat[:lng] := sql.bind(x_12, "sys", "lineitem", "l_discount", 0:int, 0:int, 3:int);
+x_161:bat[:date] := sql.bind(x_12, "sys", "lineitem", "l_shipdate", 0:int, 0:int, 3:int);
+C_147:bat[:oid] := sql.tid(x_12, "sys", "lineitem", 0:int, 3:int);
+x_50:date := mtime.addmonths("1994-01-01":date, 12:int);
+C_165 := algebra.select(x_161, C_147, "1994-01-01":date, x_50, true, false, false);
+C_168 := algebra.select(x_158, C_165, 5:lng, 7:lng, true, true, false);
+C_171 := algebra.thetaselect(x_152, C_168, 24:int, "<");
+x_155:bat[:lng] := sql.bind(x_12, "sys", "lineitem", "l_extendedprice", 0:int, 0:int, 3:int);
+x_177 := algebra.projection(C_171, x_155);
+x_180 := algebra.projection(C_171, x_158);
+x_189 := batcalc.*(x_177, x_180);
+x_193 := aggr.sum(x_189);
+
+
+x_153:bat[:int] := sql.bind(x_12, "sys", "lineitem", "l_quantity", 0:int, 1:int, 3:int);
+x_159:bat[:lng] := sql.bind(x_12, "sys", "lineitem", "l_discount", 0:int, 1:int, 3:int);
+x_162:bat[:date] := sql.bind(x_12, "sys", "lineitem", "l_shipdate", 0:int, 1:int, 3:int);
+C_149:bat[:oid] := sql.tid(x_12, "sys", "lineitem", 1:int, 3:int);
+C_166 := algebra.select(x_162, C_149, "1994-01-01":date, x_50, true, false, false);
+C_169 := algebra.select(x_159, C_166, 5:lng, 7:lng, true, true, false);
+C_172 := algebra.thetaselect(x_153, C_169, 24:int, "<");
+x_156:bat[:lng] := sql.bind(x_12, "sys", "lineitem", "l_extendedprice", 0:int, 1:int, 3:int);
+x_178 := algebra.projection(C_172, x_156);
+x_181 := algebra.projection(C_172, x_159);
+x_190 := batcalc.*(x_178, x_181);
+x_194 := aggr.sum(x_190);
+
+x_154:bat[:int] := sql.bind(x_12, "sys", "lineitem", "l_quantity", 0:int, 2:int, 3:int);
+x_160:bat[:lng] := sql.bind(x_12, "sys", "lineitem", "l_discount", 0:int, 2:int, 3:int);
+x_163:bat[:date] := sql.bind(x_12, "sys", "lineitem", "l_shipdate", 0:int, 2:int, 3:int);
+C_151:bat[:oid] := sql.tid(x_12, "sys", "lineitem", 2:int, 3:int);
+C_167 := algebra.select(x_163, C_151, "1994-01-01":date, x_50, true, false, false);
+C_170 := algebra.select(x_160, C_167, 5:lng, 7:lng, true, true, false);
+C_173 := algebra.thetaselect(x_154, C_170, 24:int, "<");
+x_157:bat[:lng] := sql.bind(x_12, "sys", "lineitem", "l_extendedprice", 0:int, 2:int, 3:int);
+x_179 := algebra.projection(C_173, x_157);
+x_182 := algebra.projection(C_173, x_160);
+x_191 := batcalc.*(x_179, x_182);
+x_195 := aggr.sum(x_191);
+
+     
+x_192 := mat.pack(x_193, x_194, x_195);
+x_196 := algebra.selectNotNil(x_192);
+x_80 := aggr.sum(x_196);
+
+sql.resultSet("sys.L4", "revenue", "double", 38:int, 4:int, 10:int, x_80);
+
