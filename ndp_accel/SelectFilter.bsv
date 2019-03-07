@@ -2,6 +2,8 @@ import PECommon::*;
 import Vector::*;
 import FIFO::*;
 import GetPut::*;
+import AlgFuncs::*;
+
 
 function Bool unsignedTest(Bit#(64) in,  Bit#(64) lv, Bit#(64) hv);
    return in >= lv && in <= hv;
@@ -9,19 +11,6 @@ endfunction
    
 function Bool signedTest(Bit#(64) in,  Bit#(64) lv, Bit#(64) hv);
    return signedLE(lv,in) && signedLE(in,hv);
-endfunction
-
-
-function Bit#(w) add2(Bit#(w) a, Bit#(w) b);
-   return a + b;
-endfunction
-
-function Bit#(w) and2(Bit#(w) a, Bit#(w) b);
-   return a&b;
-endfunction
-
-function Bool booland2(Bool a, Bool b);
-   return a&&b;
 endfunction
 
 

@@ -26,6 +26,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stdio.h>
 #include <stdint.h>
 #include <vector>
+#include <algorithm>
 
 extern "C"
 {
@@ -65,7 +66,6 @@ extern "C"
 
 
   void inject_test(uint64_t x0, uint8_t mask){
-    
     if ( x0 >= lbound && x0 <= hbound && mask == 1){
       pos.push_back(base);
     }
@@ -88,5 +88,48 @@ extern "C"
   bool check_count(uint64_t v){
     fprintf(stderr, "count = %lu, mycount = %lu\n", pos.size(), v);
     return pos.size() == v;
+  }
+
+
+  // aggregator related tests
+  uint64_t min[8];
+  uint64_t max[8];
+  uint64_t sum[8];
+  uint64_t cnt[8];
+  bool isSigned;
+
+  void init_test_aggr(bool s){
+    for (int i = 0; i < 8; i++){
+      min[i] = s ? INT64_MAX: UINT64_MAX;
+      max[i] = s ? INT64_MIN: 0;
+      sum[i] = 0;
+      cnt[i] = 0;
+    }
+    isSigned = s;
+  }
+
+  void inject_test_aggr(uint64_t x0, uint8_t mask, uint64_t g){
+    if ( mask > 0 ) {
+      cnt[g]++;
+      sum[g]+=x0;
+      min[g]=isSigned? (uint64_t) std::min((int64_t)x0, (int64_t)(min[g])):std::min(x0, min[g]);
+      max[g]=isSigned? (uint64_t) std::max((int64_t)x0, (int64_t)(max[g])):std::max(x0, max[g]);
+    }
+  }
+
+  bool check_test_aggr(uint64_t my_min, uint64_t my_max, uint64_t my_sum, uint64_t my_cnt, uint64_t g, bool valid){
+    fprintf(stderr, "my_valid for %lu group is %s\n", g, valid?"valid":"invalid");
+    // if ( isSigned ){
+    //   fprintf(stderr, "my_min = %ld <---> min[%lu] = %l\n", my_min, g, min[g]);
+    //   fprintf(stderr, "my_max = %ld <---> max[%lu] = %l\n", my_max, g, max[g]);
+    // } 
+    // else 
+      {
+      fprintf(stderr, "my_min = %lu <---> min[%lu] = %lu\n", my_min, g, min[g]);
+      fprintf(stderr, "my_max = %lu <---> max[%lu] = %lu\n", my_max, g, max[g]);
+    }
+    fprintf(stderr, "my_sum = %lu <---> sum[%lu] = %lu\n", my_sum, g, sum[g]);
+    fprintf(stderr, "my_cnt = %lu <---> cnt[%lu] = %lu\n", my_cnt, g, cnt[g]);
+    return (my_min == min[g] && my_max == max[g] && my_cnt == cnt[g] && my_sum == sum[g] && valid) || (!valid && cnt[g] == 0);
   }
 }

@@ -14,12 +14,18 @@ interface NDPInterface;
    method ActionValue#(BusDta) get();
 endinterface
 
+typedef 8 MaxGroups;
+typedef Bit#(TLog#(MaxGroups)) GroupIdT;
 
 typedef struct{
    Vector#(8, Bit#(64)) data;
+   Vector#(8, GroupIdT) groupIds;
    Bit#(8) mask;
    Bool last;
+   // ContextT context;
    } FlitT deriving (Bits, Eq, FShow);
+
+
 
 interface SingleStreamIfc;
    method Action configure(Vector#(8, Bit#(64)) para);
@@ -28,10 +34,33 @@ interface SingleStreamIfc;
 endinterface
 
 
+typedef struct{
+   Vector#(8, Bit#(64)) data;
+   Bit#(8) mask;
+   Bool isSigned;
+   } AggrReq deriving (Bits, Eq, FShow);
+
+typedef struct {
+   Bit#(64) min;
+   Bit#(64) max;
+   Bit#(64) sum;
+   Bit#(64) cnt;
+   Bool valid;
+   } AggrResp deriving (Bits, Eq, FShow);
+
+interface AggrStreamIfc;
+   method Action configure(Bool isSigned);
+   method Action put(FlitT v);
+   method ActionValue#(Vector#(MaxGroups, AggrResp)) get;
+endinterface
+
+
 interface DoubleStreamIfc;
    method Action put(Vector#(8, Bit#(64)) v, ContextT cxt, Bit#(1) operand);
    method ActionValue#(Tuple2#(Vector#(8, Bit#(64)),ContextT)) get();
 endinterface
+
+
                                 
    
                            
