@@ -186,9 +186,9 @@ module mkAggregator(AggrStreamIfc);
       function AggrResp updateAggrs(AggrResp old, AggrResp update);
          return update.valid ? (old.valid ? AggrResp{min: getMin(old.min, update.min),
                                                      max: getMax(old.max, update.max),
-                                                    sum: (old.sum + update.sum),
-                                                    cnt: (old.cnt + update.cnt),
-                                                    valid: True} : update): old;
+                                                     sum: (old.sum + update.sum),
+                                                     cnt: (old.cnt + update.cnt),
+                                                     valid: True} : update): old;
       endfunction
 
       let newAggrs = zipWith(updateAggrs, aggrs, joinOutPipe.first);

@@ -16,6 +16,7 @@ Bool doRandSeq = False;
                  
 (* synthesize *)
 module mkTb_Aggregator();
+   Reg#(Bit#(32)) testCnt <- mkReg(0);
    Reg#(Bit#(32)) cycle <- mkReg(0);
    
    let testEng <- mkAggregator;
@@ -26,6 +27,10 @@ module mkTb_Aggregator();
    
    Bool isSigned = True;
    
+   rule incrCycle;
+      cycle <= cycle + 1;
+   endrule
+   
    rule configEng (!configured);
       testEng.configure(isSigned);
       init_test_aggr(isSigned);
@@ -35,14 +40,16 @@ module mkTb_Aggregator();
       testLength <= 1000;//truncate(randv%1000+1);
    endrule
    
-   rule testInput (cycle < testLength && configured);
+  
+   
+   rule testInput (testCnt < testLength && configured);
       Vector#(16, Bit#(64)) vals <- mapM(randu64, genWith(fromInteger));
       Vector#(8, Bit#(64)) data = take(vals);
       Vector#(8, GroupIdT) groupIds = map(truncate,takeAt(8 ,vals));
       let randBits <- randu64(16);
       Bit#(8) mask = truncate(randBits);
              
-      let last = (cycle == testLength-1);
+      let last = (testCnt == testLength-1);
       
       for (Integer i = 0; i < 8; i=i+1 ) begin
          inject_test_aggr(vals[i], extend(mask[i]), extend(groupIds[i]));
@@ -53,7 +60,7 @@ module mkTb_Aggregator();
                         groupIds: groupIds,
                         mask: mask,
                         last: last});
-      cycle <= cycle + 1;
+      testCnt <= testCnt + 1;
       // $display(fshow(vals));
    endrule
    Reg#(Bit#(64)) count <- mkReg(0);
@@ -69,6 +76,7 @@ module mkTb_Aggregator();
          end
       end
       if (result) $display("Passed: Aggregator test");
+      $display("cycle = %d, testLength = %d", cycle, testLength);
       $finish();
    endrule
       
