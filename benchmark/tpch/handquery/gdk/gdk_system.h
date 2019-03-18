@@ -16,7 +16,11 @@
 #define gdk_export extern __declspec(dllexport)
 #endif
 #else
+#ifdef __cplusplus
+#define gdk_export extern "C"
+#else
 #define gdk_export extern
+#endif
 #endif
 
 /*
