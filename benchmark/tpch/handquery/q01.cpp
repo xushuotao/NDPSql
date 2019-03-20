@@ -14,9 +14,114 @@
 
 #include "monetdb_config.h"
 #include "gdk/gdk.h"
+#include "gdk_private.h"
 
 #include "gdk/gdk_bbp.h"
 #include "gdk_cand.h"
+
+#define GRPnotfound()                                           \
+  do {                                                          \
+    /* no equal found: start new group */                       \
+    if (ngrp == maxgrps) {                                      \
+      /* we need to extend extents and histo bats, */           \
+      /* do it at most once */                                  \
+      maxgrps = colsz;                                          \
+      if (extents) {                                            \
+        BATsetcount(en, ngrp);                                  \
+        if (BATextend(en, maxgrps) != GDK_SUCCEED)              \
+          goto error;                                           \
+        exts = (oid *) Tloc(en, 0);                             \
+      }                                                         \
+      if (histo) {                                              \
+        BATsetcount(hn, ngrp);                                  \
+        if (BATextend(hn, maxgrps) != GDK_SUCCEED)              \
+          goto error;                                           \
+        cnts = (lng *) Tloc(hn, 0);                             \
+      }                                                         \
+    }                                                           \
+    if (extents)                                                \
+      exts[ngrp] = hseqb + p;                                   \
+    if (histo)                                                  \
+      cnts[ngrp] = 1;                                           \
+    fprintf(stderr, "new group = %lu @ r = %lu\n", ngrp, r);    \
+    ngrps[r] = ngrp++;                                          \
+  } while (0)
+
+
+#define GRP_create_partial_hash_table_core(INIT_1,HASH,COMP,ASSERT,GRPTST) \
+  do {                                                                  \
+    if (cand) {                                                         \
+      fprintf(stderr, "partial_ht cnt = %lu\n",cnt);                    \
+      for (r = 0; r < cnt; r++) {                                       \
+        /*if (r%1000000 == 0) fprintf(stderr, "partial_ht r = %lu\n",r);*/ \
+        p = cand[r];                                                    \
+        assert(p < end);                                                \
+        INIT_1;                                                         \
+        prb = HASH;                                                     \
+        for (hb = HASHget(hs, prb);                                     \
+             hb != HASHnil(hs) && hb >= start;                          \
+             hb = HASHgetlink(hs, hb)) {                                \
+          ASSERT;                                                       \
+          q = r;                                                        \
+          while (q != 0 && cand[--q] > hb)                              \
+            ;                                                           \
+          if (cand[q] != hb)                                            \
+            continue;                                                   \
+          /*q = hb - start;*/                                           \
+          GRPTST(q, r);                                                 \
+          grp = ngrps[q];                                               \
+          if (COMP) {                                                   \
+            ngrps[r] = grp;                                             \
+            if (histo)                                                  \
+              cnts[grp]++;                                              \
+            if (gn->tsorted &&                                          \
+                grp != ngrp - 1)                                        \
+              gn->tsorted = 0;                                          \
+            break;                                                      \
+          }                                                             \
+        }                                                               \
+        if (hb == HASHnil(hs) || hb < start) {                          \
+          GRPnotfound();                                                \
+          /* enter new group into hash table */                         \
+          HASHputlink(hs, p, HASHget(hs, prb));                         \
+          HASHput(hs, prb, p);                                          \
+        }                                                               \
+      }                                                                 \
+    } else {                                                            \
+      fprintf(stderr, "I don't think there is a candlist, cnt = %lu\n", cnt); \
+      for (r = 0; r < cnt; r++) {                                       \
+        p = start + r;                                                  \
+        assert(p < end);                                                \
+        INIT_1;                                                         \
+        prb = HASH;                                                     \
+        /*if ( r % 10000000 == 0) fprintf(stderr, "r = %lu, p = %lu, b[p] = %lx, grps[r] = %lx, prb = %lx\n", r, p, (unsigned long int)(bbb[p]), grps[r], prb);*/ \
+        for (hb = HASHget(hs, prb);                                     \
+             hb != HASHnil(hs) && hb >= start;                          \
+             hb = HASHgetlink(hs, hb)) {                                \
+          ASSERT;                                                       \
+          GRPTST(hb - start, r);                                        \
+          grp = ngrps[hb - start];                                      \
+          if (COMP) {                                                   \
+            ngrps[r] = grp;                                             \
+            if (histo)                                                  \
+              cnts[grp]++;                                              \
+            if (gn->tsorted &&                                          \
+                grp != ngrp - 1)                                        \
+              gn->tsorted = 0;                                          \
+            break;                                                      \
+          }                                                             \
+        }                                                               \
+        if (hb == HASHnil(hs) || hb < start) {                          \
+          GRPnotfound();                                                \
+          /* enter new group into hash table */                         \
+          HASHputlink(hs, p, HASHget(hs, prb));                         \
+          HASHput(hs, prb, p);                                          \
+        }                                                               \
+      }                                                                 \
+    }                                                                   \
+  } while (0)
+
+#define NOGRPTST(i, j)	(void) 0
 
 size_t getFilesize(const char* filename) {
   struct stat st;
@@ -88,9 +193,10 @@ BAT* select_date(int* column, size_t count, int lv, int hv){
   return bn;
 }
 
-gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* inGroup,
+gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* g, BAT* e,
                  BAT** groups, BAT** extents, BAT** histo){
 
+  const oid *grps = NULL;
   oid *restrict ngrps, ngrp, prev = 0, hseqb = 0;
   oid *restrict exts = NULL;
   lng *restrict cnts = NULL;
@@ -98,7 +204,7 @@ gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* inGroup,
   BUN p, q, r;
 
 
-  BUN maxgrps = (BUN) 1 << 8;
+  BUN maxgrps = g ? ((BUN) 1 << 8) * BATcount(e) : (BUN) 1 << 8;
 
   BUN start, end, cnt;
   const oid *restrict cand, *candend;
@@ -110,8 +216,12 @@ gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* inGroup,
 	cand = (const oid *) Tloc((s), 0);
     candend = (const oid *) Tloc((s), BATcount(s));
   }
+  else {
+    cand = NULL;
+    candend = NULL;
+  }
 
-  cnt = s ? (BUN) (candend - cand) : end - start;
+  cnt = cand ? (BUN) (candend - cand) : end - start;
 
   fprintf(stderr, "group, cnt = %lu, s count = %lu\n", cnt, BATcount(s));
         
@@ -133,44 +243,160 @@ gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* inGroup,
   cnts = (lng *) Tloc(hn, 0);
   memset(cnts, 0, maxgrps * sizeof(lng));
 
-  unsigned char *restrict bgrps =  (unsigned char *)GDKmalloc(256);
-  const unsigned char *restrict w = (const unsigned char *)column;
-  unsigned char v;
-  if (bgrps == NULL) return GDK_FAIL;
-  memset(bgrps, 0xFF, 256);
-  
-  ngrp = 0;
-  gn->tsorted = 1;
-  r = 0;
-  for (;;) {
-    if (s) {
-      if (cand == candend)
-        break;
-      p = *cand++;
-    } else {
-      p = start++;
+  if (g && (!BATordered(g) || !BATordered_rev(g)))
+    grps = (const oid *) Tloc(g, 0);
+
+  oid maxgrp = oid_nil;	/* maximum value of g BAT (if subgrouping) */
+  PROPrec *prop;
+  if (g) {
+    if (BATtdense(g))
+      maxgrp = g->tseqbase + BATcount(g);
+    else if (BATtordered(g))
+      maxgrp = * (oid *) Tloc(g, BATcount(g) - 1);
+    else {
+      prop = BATgetprop(g, GDK_MAX_VALUE);
+      if (prop)
+        maxgrp = prop->v.val.oval;
     }
-    if (p >= end)
-      break;
-    if ((v = bgrps[w[p]]) == 0xFF && ngrp < 256) {
-      fprintf(stderr, "new group v = %x, grpid = %lx\n", v, ngrp);
-      bgrps[w[p]] = v = (unsigned char) ngrp++;
-      if (extents)
-        exts[v] = (oid) p;
-    }
-    ngrps[r] = v;
-    if (r > 0 && v < ngrps[r - 1])
-      gn->tsorted = 0;
-    if (histo)
-      cnts[v]++;
-    r++;
+    if (maxgrp == 0)
+      g = NULL; /* single group */
   }
 
-  BATsetcount(en, ngrp);
-  BATsetcount(hn, ngrp);  
-  GDKfree(bgrps);
+  const bte *w = (bte *) column;//Tloc(b, 0);
+  if ( !grps ) {
+    unsigned char *restrict bgrps =  (unsigned char *)GDKmalloc(256);
+    unsigned char v;
+    if (bgrps == NULL) return GDK_FAIL;
+    memset(bgrps, 0xFF, 256);
+  
+    ngrp = 0;
+    gn->tsorted = 1;
+    r = 0;
+    for (;;) {
+      if (cand) {
+        if (cand == candend)
+          break;
+        p = *cand++;
+      } else {
+        p = start++;
+      }
+      if (p >= end)
+        break;
+      if ((v = bgrps[w[p]]) == 0xFF && ngrp < 256) {
+        fprintf(stderr, "new group v = %x, grpid = %lx\n", v, ngrp);
+        bgrps[w[p]] = v = (unsigned char) ngrp++;
+        if (extents)
+          exts[v] = (oid) p;
+      }
+      ngrps[r] = v;
+      if (r > 0 && v < ngrps[r - 1])
+        gn->tsorted = 0;
+      if (histo)
+        cnts[v]++;
+      r++;
+    }
+
+    BATsetcount(gn, r);
+    BATsetcount(en, ngrp);
+    BATsetcount(hn, ngrp);  
+    GDKfree(bgrps);
+  } else if ( maxgrps < 65536 ) {
+
+    unsigned short *restrict sgrps = (unsigned short *)GDKmalloc(65536 * sizeof(short));
+    unsigned short v;
+
+    BUN probe;
+
+    if (sgrps == NULL)
+      goto error;
+    memset(sgrps, 0xFF, 65536 * sizeof(short));
+    
+    ngrp = 0;
+    gn->tsorted = 1;
+    r = 0;
+    for (;;) {
+      if (cand) {
+        if (cand == candend)
+          break;
+        p = *cand++;
+      } else {
+        p = start++;
+      }
+      if (p >= end)
+        break;
+
+      probe = (grps[r]<<8) | w[p];
+      if ((v = sgrps[probe]) == 0xFFFF && ngrp < 65536) {
+        fprintf(stderr, "new group v = %x, grpid = %lx, r=%lu, grps[r] = %lx, w[p] = %x \n", v, ngrp, r, grps[r], w[p]);
+        sgrps[probe] = v = (unsigned short) ngrp++;
+        if (extents)
+          exts[v] =(oid) p;
+      }
+      ngrps[r] = v;
+      if (r > 0 && v < ngrps[r - 1])
+        gn->tsorted = 0;
+      if (histo)
+        cnts[v]++;
+      r++;
+    }
+    GDKfree(sgrps);
+    BATsetcount(gn, r);
+    BATsetcount(en, ngrp);
+    BATsetcount(hn, ngrp);  
+  }
+  else {
+    //     if (grps && maxgrp != oid_nil
+    // #if SIZEOF_OID == SIZEOF_LNG
+    //         && maxgrp < ((oid) 1 << (SIZEOF_LNG * 8 - 8))
+    // #endif
+    //         )
+    //       {
+
+    fprintf(stderr, "supplied group in\n");
+    char nme[20] = "grp_hashtable";
+    size_t nmelen = strlen(nme);
+    BUN mask = MAX(HASHmask(cnt), 1 << 16);
+    BUN hb;      
+    Heap* hp = (Heap*) GDKzalloc(sizeof(Heap));
+    hp->farmid = BBPselectfarm(TRANSIENT, TYPE_bte, hashheap);
+    hp->filename = (char*) GDKmalloc(nmelen + 30);
+    snprintf(hp->filename, nmelen + 30,
+             "%s.hash" SZFMT, nme, MT_getpid());
+
+
+    Hash *hs = HASHnew(hp, TYPE_bte, s ? BATcount(s): colsz,
+                       mask, BUN_NONE);
+
+    BUN prb;
+    oid grp;
+
+    ulng v;
+
+    fprintf(stderr, "creating partial hash table core....\n");
+
+    GRP_create_partial_hash_table_core(
+                                       (void) 0,
+                                       (v = ((ulng)grps[r]<<8)|(unsigned char)w[p], hash_lng(hs, &v)),
+                                       w[p] == w[hb] && grps[r] == grps[hb - start],
+                                       (void) 0,
+                                       NOGRPTST);
+
+    fprintf(stderr, "done partial hash table core....\n");
+
+      
+    BATsetcount(gn, r);
+    BATsetcount(en, ngrp);
+    BATsetcount(hn, ngrp);  
+    GDKfree(hp);
+    GDKfree(hs);
+    // } 
+
+  }
 
   return GDK_SUCCEED;
+
+ error:
+  return GDK_FAIL;
   
 }
 
@@ -179,6 +405,8 @@ std::string shipdate = "10/1051";
 std::string l_returnflag = "10/1047";
 std::string l_linestatus = "10/1050";
 size_t nRows = 1799989091;
+// size_t nRows = 100000;
+
 
 int main(){
   opt* set = NULL;
@@ -203,11 +431,21 @@ int main(){
   std::string fname_returnflag = db_path+l_returnflag+".tail";
   auto returnflag_rec = mapfile(fname_returnflag.c_str());
 
-  BAT* grp, *ext, *hist;
+  BAT* grp_rf, *ext_rf, *hist_rf;
 
-  auto stat = group((bte*)(returnflag_rec->base), nRows, pos, NULL, &grp, &ext, &hist);
+  auto stat = group((bte*)(returnflag_rec->base), nRows, pos, NULL, NULL,  &grp_rf, &ext_rf, &hist_rf);
   assert(stat == GDK_SUCCEED);
-  fprintf(stderr, "hist->cnt = %lu, ext->cnt = %lu\n", BATcount(hist), BATcount(ext));
+  fprintf(stderr, "grp->cnt = %lu, hist->cnt = %lu, ext->cnt = %lu\n", BATcount(grp_rf), BATcount(hist_rf), BATcount(ext_rf));
+
+  std::string fname_linestatus = db_path+l_linestatus+".tail";
+  auto linestatus_rec = mapfile(fname_linestatus.c_str());
+
+  BAT* grp=NULL, *ext, *hist;
+
+  stat = group((bte*)(linestatus_rec->base), nRows, pos, grp_rf, ext_rf, &grp, &ext, &hist);
+  assert(stat == GDK_SUCCEED);
+  fprintf(stderr, "grp->cnt = %lu, hist->cnt = %lu, ext->cnt = %lu\n", BATcount(grp), BATcount(hist), BATcount(ext));
+
 
   BATclear(pos,0);
   unmapfile(returnflag_rec);
