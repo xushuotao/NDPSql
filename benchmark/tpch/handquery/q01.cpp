@@ -11,6 +11,7 @@
 #include <omp.h>
 #include <chrono>
 #include <ctime>
+#include <functional>
 
 #include "monetdb_config.h"
 #include "gdk/gdk.h"
@@ -400,10 +401,93 @@ gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* g, BAT* e,
   
 }
 
+template<typename T>
+gdk_return aggr_sum(const T* col, BUN colsz, const BAT* s, const BAT* g, const BAT* hist, BAT** result){
+  if ( s )  assert(BATcount(s) == BATcount(g));
+  else assert(BATcount(g) == colsz);
+
+  BUN cnt = s ? BATcount(s) : colsz;
+
+  BUN grpcnt = BATcount(hist);
+
+  BAT* bn = COLnew(0, TYPE_lng, grpcnt, TRANSIENT);
+  BATsetcount(bn, grpcnt);
+  
+  *result = bn;
+
+  lng* aggr = (lng*) Tloc(bn, 0);
+  oid* grps = (oid*) Tloc(g, 0);
+  memset(aggr, 0,  grpcnt* sizeof(lng));
+
+  
+  oid p;
+  const oid* cand = s ? (oid*) Tloc(s,0) : NULL;
+
+  fprintf(stderr, "aggr_sum, cnt = %lu, grpcnt = %lu\n", cnt, grpcnt);
+  for ( oid i = 0; i < cnt; i++ ){
+    p = s ? cand[i] : i ;
+    T val = col[p];
+    oid grp = grps[i];
+    aggr[grp] += ((lng) val);
+  }
+
+
+
+  return GDK_SUCCEED;
+
+}
+
+template<typename T>
+BAT* merge(const T* col1,  BUN colsz1, BAT* s1, const T* col2, BUN colsz2, BAT* s2, std::function<T(T,T)> mergefunc){
+  BUN cnt1 = s1 ? BATcount(s1) : colsz1;
+  BUN cnt2 = s2 ? BATcount(s2) : colsz2;
+  assert(cnt1 == cnt2);
+  BUN cnt = cnt1;
+  int tt;
+
+  switch (sizeof(T)) {
+  case 1: tt = TYPE_bte; break;
+  case 2: tt = TYPE_sht; break;
+  case 4: tt = TYPE_int; break;
+  case 8: tt = TYPE_lng; break;
+    
+  }
+ 
+
+  BAT* bn = COLnew(0, tt, cnt, TRANSIENT);
+  BATsetcount(bn, cnt);
+  T* outp = (T*)Tloc(bn,0);
+
+
+  // T* w1 = (T*) col1;
+  // T* w2 = (T*) col2;
+  
+  oid p1, p2;
+  const oid* cand1 = s1 ? (oid*) Tloc(s1,0) : NULL;
+  const oid* cand2 = s2 ? (oid*) Tloc(s2,0) : NULL;
+
+  // fprintf(stderr, "aggr_sum, cnt = %lu, grpcnt = %lu\n", cnt, grpcnt);
+  for ( oid i = 0; i < cnt; i++ ){
+    p1 = s1 ? cand1[i] : i ;
+    p2 = s2 ? cand2[i] : i ;
+    outp[i] = mergefunc(col1[p1], col2[p2]);
+  }
+
+  return bn;
+
+}
+
+
+
+
 std::string db_path = "/mnt/nvme0/shuotao/tpch/.farms/monetdb-sf300/bat/";
 std::string shipdate = "10/1051";
 std::string l_returnflag = "10/1047";
 std::string l_linestatus = "10/1050";
+std::string l_quantity = "10/1043";
+std::string l_extendedprice = "10/1044";
+std::string l_discount = "10/1045";
+std::string l_tax = "10/1046";
 size_t nRows = 1799989091;
 // size_t nRows = 100000;
 
@@ -446,8 +530,77 @@ int main(){
   assert(stat == GDK_SUCCEED);
   fprintf(stderr, "grp->cnt = %lu, hist->cnt = %lu, ext->cnt = %lu\n", BATcount(grp), BATcount(hist), BATcount(ext));
 
+  for ( int i = 0; i < BATcount(hist); i++ ){
+    fprintf(stderr, "group %d count = %lld\n", i, ((lng*)Tloc(hist,0))[i]);
+  }
 
+  BATclear(grp_rf,0);
+  BATclear(ext_rf,0);
+  BATclear(hist_rf,0);
+
+  
+  std::string fname_quantity = db_path+l_quantity+".tail";
+  auto quantity_rec = mapfile(fname_quantity.c_str());
+
+  BAT* sum_quantity;
+  stat = aggr_sum<int>((int*)(quantity_rec->base), nRows, pos, grp, hist, &sum_quantity);
+  assert(stat == GDK_SUCCEED);
+  for ( int i = 0; i < BATcount(sum_quantity); i++ ){
+    fprintf(stderr, "group %d sum_quantity = %lld\n", i, ((lng*)Tloc(sum_quantity,0))[i]);
+  }
+
+  std::string fname_extendedprice = db_path+l_extendedprice+".tail";
+  auto extendedprice_rec = mapfile(fname_extendedprice.c_str());
+
+  BAT* sum_extendedprice;
+  stat = aggr_sum<lng>((lng*)(extendedprice_rec->base), nRows, pos, grp, hist, &sum_extendedprice);
+  assert(stat == GDK_SUCCEED);
+  for ( int i = 0; i < BATcount(sum_extendedprice); i++ ){
+    fprintf(stderr, "group %d sum_extendedprice = %.2lf\n", i, (((lng*)Tloc(sum_extendedprice,0))[i])/100.0);
+  }
+
+  
+  std::string fname_discount = db_path+l_discount+".tail";
+  auto discount_rec = mapfile(fname_discount.c_str());
+
+  BAT* disc_price = merge<lng>((lng*)(extendedprice_rec->base), nRows, pos, (lng*)(discount_rec->base), nRows, pos,
+                                [](lng price, ulng disc) -> lng { return price*(100-disc);});
+
+
+  BAT* sum_disc_price;
+  stat = aggr_sum<lng>((lng*)Tloc(disc_price,0), BATcount(disc_price), NULL, grp, hist, &sum_disc_price);
+  assert(stat == GDK_SUCCEED);
+  for ( int i = 0; i < BATcount(sum_disc_price); i++ ){
+    fprintf(stderr, "group %d sum_disc_price = %.4lf\n", i, (((lng*)Tloc(sum_disc_price,0))[i])/10000.0);
+  }
+
+
+  std::string fname_tax = db_path+l_tax+".tail";
+  auto tax_rec = mapfile(fname_tax.c_str());
+
+  BAT* charge = merge<lng>((lng*)Tloc(disc_price,0), BATcount(disc_price), NULL, (lng*)(tax_rec->base), nRows, pos,
+                                [](lng price, ulng disc) -> lng { return price*(100+disc);});
+
+
+
+  BAT* sum_charge;
+  stat = aggr_sum<ulng>((ulng*)Tloc(charge,0), BATcount(charge), NULL, grp, hist, &sum_charge);
+  assert(stat == GDK_SUCCEED);
+  for ( int i = 0; i < BATcount(sum_charge); i++ ){
+    fprintf(stderr, "group %d sum_charge = %.6lf\n", i, (((ulng*)Tloc(sum_charge,0))[i])/1000000.0);
+  }
+
+
+
+
+
+  
   BATclear(pos,0);
+  unmapfile(extendedprice_rec);
+
+  unmapfile(quantity_rec);
+
+  unmapfile(linestatus_rec);
   unmapfile(returnflag_rec);
   unmapfile(date_rec);
   return 0;
