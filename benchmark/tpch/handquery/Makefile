@@ -1,4 +1,4 @@
-targets := q01
+targets := q01 q03
 
 INC=common/stream common/options common/utils
 INC_FLAGS=$(foreach d, $(INC), -I$d)
@@ -31,5 +31,5 @@ all: $(targets)
 clean:
 	rm -f $(targets) *.o *.so
 
-.PHONY: q01
+.PHONY: $(targets)
 .DEFAULT_GOAL := all
