@@ -138,6 +138,7 @@ BAT* select(T* column, size_t count, T lv, T hv){
   // std::vector<size_t> localcnt = std::vector<size_t>(omp_get_max_threads(),0);
   size_t cap = count;
   BAT* bn = COLnew(0, TYPE_oid, cap, TRANSIENT);
+  bn->tkey = TRUE;
   oid* w = (oid*)(bn->theap.base);
   auto t_start = std::chrono::high_resolution_clock::now();
   BUN p = 0;
@@ -488,3 +489,226 @@ template BAT* merge<lng>(const lng* col1,  BUN colsz1, BAT* s1, const lng* col2,
 template BAT* merge<ulng>(const ulng* col1,  BUN colsz1, BAT* s1, const ulng* col2, BUN colsz2, BAT* s2, std::function<ulng(ulng,ulng)> mergefunc);
 
 // template BAT* merge<ulng>(const ulng* col1,  BUN colsz1, BAT* s1, const ulng* col2, BUN colsz2, BAT* s2, std::function<ulng(ulng,ulng)> mergefunc);
+
+
+BAT* maptoBAT(FRec *frec, int tt,  size_t nRows){
+  BAT* bn = COLnew(0, tt, 0, PERSISTENT);
+  bn->batCapacity = (frec->fs)/ATOMsize(tt);
+  bn->batCount = nRows;
+  bn->theap.base = (char*)frec->base;
+  bn->tsorted = bn->trevsorted = FALSE;
+  return bn;
+}
+
+
+
+
+#ifndef HAVE_STRPTIME
+extern char *strptime(const char *, const char *, struct tm *);
+#include "strptime.c"
+#endif
+
+
+#define get_rule(r)	((r).s.weekday | ((r).s.day<<6) | ((r).s.minutes<<10) | ((r).s.month<<21))
+#define set_rule(r,i)							\
+	do {										\
+		(r).asint = int_nil;					\
+		(r).s.weekday = (i)&15;					\
+		(r).s.day = ((i)&(63<<6))>>6;			\
+		(r).s.minutes = ((i)&(2047<<10))>>10;	\
+		(r).s.month = ((i)&(15<<21))>>21;		\
+	} while (0)
+
+/* phony zero values, used to get negative numbers from unsigned
+ * sub-integers in rule */
+#define WEEKDAY_ZERO	8
+#define DAY_ZERO	32
+#define OFFSET_ZERO	4096
+
+/* as the offset field got split in two, we need macros to get and set them */
+#define get_offset(z)	(((int) (((z)->off1 << 7) + (z)->off2)) - OFFSET_ZERO)
+#define set_offset(z,i)	do { (z)->off1 = (((i)+OFFSET_ZERO)&8064) >> 7; (z)->off2 = ((i)+OFFSET_ZERO)&127; } while (0)
+
+tzone tzone_local;
+
+static const char *MONTHS[13] = {
+	NULL, "january", "february", "march", "april", "may", "june",
+	"july", "august", "september", "october", "november", "december"
+};
+
+static const char *DAYS[8] = {
+	NULL, "monday", "tuesday", "wednesday", "thursday",
+	"friday", "saturday", "sunday"
+};
+static const char *COUNT1[7] = {
+	NULL, "first", "second", "third", "fourth", "fifth", "last"
+};
+static const char *COUNT2[7] = {
+	NULL, "1st", "2nd", "3rd", "4th", "5th", "last"
+};
+static int LEAPDAYS[13] = {
+	0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+};
+static int CUMDAYS[13] = {
+	0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365
+};
+static int CUMLEAPDAYS[13] = {
+	0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366
+};
+
+static date DATE_MAX, DATE_MIN;		/* often used dates; computed once */
+
+#define YEAR_MAX		5867411
+#define YEAR_MIN		(-YEAR_MAX)
+#define MONTHDAYS(m,y)	((m) != 2 ? LEAPDAYS[m] : leapyear(y) ? 29 : 28)
+#define YEARDAYS(y)		(leapyear(y) ? 366 : 365)
+#define DATE(d,m,y)		((m) > 0 && (m) <= 12 && (d) > 0 && (y) != 0 && (y) >= YEAR_MIN && (y) <= YEAR_MAX && (d) <= MONTHDAYS(m, y))
+#define TIME(h,m,s,x)	((h) >= 0 && (h) < 24 && (m) >= 0 && (m) < 60 && (s) >= 0 && (s) < 60 && (x) >= 0 && (x) < 1000)
+#define LOWER(c)		((c) >= 'A' && (c) <= 'Z' ? (c) + 'a' - 'A' : (c))
+
+/*
+ * auxiliary functions
+ */
+
+static union {
+	timestamp ts;
+	lng nilval;
+} ts_nil;
+static union {
+	tzone tz;
+	lng nilval;
+} tz_nil;
+timestamp *timestamp_nil = NULL;
+static tzone *tzone_nil = NULL;
+
+int TYPE_date;
+int TYPE_daytime;
+int TYPE_timestamp;
+int TYPE_tzone;
+int TYPE_rule;
+
+static int synonyms = TRUE;
+
+#define leapyear(y)		((y) % 4 == 0 && ((y) % 100 != 0 || (y) % 400 == 0))
+
+static int
+leapyears(int year)
+{
+	/* count the 4-fold years that passed since jan-1-0 */
+	int y4 = year / 4;
+
+	/* count the 100-fold years */
+	int y100 = year / 100;
+
+	/* count the 400-fold years */
+	int y400 = year / 400;
+
+	return y4 + y400 - y100 + (year >= 0);	/* may be negative */
+}
+
+date
+todate(int day, int month, int year)
+{
+	date n = date_nil;
+
+	if (DATE(day, month, year)) {
+		if (year < 0)
+			year++;				/* HACK: hide year 0 */
+		n = (date) (day - 1);
+		if (month > 2 && leapyear(year))
+			n++;
+		n += CUMDAYS[month - 1];
+		/* current year does not count as leapyear */
+		n += 365 * year + leapyears(year >= 0 ? year - 1 : year);
+	}
+	return n;
+}
+
+static void
+fromdate(date n, int *d, int *m, int *y)
+{
+	int day, month, year;
+
+	if (n == date_nil) {
+		if (d)
+			*d = int_nil;
+		if (m)
+			*m = int_nil;
+		if (y)
+			*y = int_nil;
+		return;
+	}
+	year = n / 365;
+	day = (n - year * 365) - leapyears(year >= 0 ? year - 1 : year);
+	if (n < 0) {
+		year--;
+		while (day >= 0) {
+			year++;
+			day -= YEARDAYS(year);
+		}
+		day = YEARDAYS(year) + day;
+	} else {
+		while (day < 0) {
+			year--;
+			day += YEARDAYS(year);
+		}
+	}
+	if (d == 0 && m == 0) {
+		if (y)
+			*y = (year <= 0) ? year - 1 : year;	/* HACK: hide year 0 */
+		return;
+	}
+
+	day++;
+	if (leapyear(year)) {
+		for (month = day / 31 == 0 ? 1 : day / 31; month <= 12; month++)
+			if (day > CUMLEAPDAYS[month - 1] && day <= CUMLEAPDAYS[month]) {
+				if (m)
+					*m = month;
+				if (d == 0)
+					return;
+				break;
+			}
+		day -= CUMLEAPDAYS[month - 1];
+	} else {
+		for (month = day / 31 == 0 ? 1 : day / 31; month <= 12; month++)
+			if (day > CUMDAYS[month - 1] && day <= CUMDAYS[month]) {
+				if (m)
+					*m = month;
+				if (d == 0)
+					return;
+				break;
+			}
+		day -= CUMDAYS[month - 1];
+	}
+	if (d)
+		*d = day;
+	if (m)
+		*m = month;
+	if (y)
+		*y = (year <= 0) ? year - 1 : year;	/* HACK: hide year 0 */
+}
+
+
+
+int
+date_tostr(str *buf, int *len, const date *val)
+{
+	int day, month, year;
+
+	fromdate(*val, &day, &month, &year);
+	/* longest possible string: "-5867411-01-01" i.e. 14 chars
+	   without NUL (see definition of YEAR_MIN/YEAR_MAX above) */
+	if (*len < 15 || *buf == NULL) {
+		GDKfree(*buf);
+		*buf = (str) GDKmalloc(*len = 15);
+		if( *buf == NULL)
+			return 0;
+	}
+	if (*val == date_nil || !DATE(day, month, year)) {
+		strcpy(*buf, "nil");
+		return 3;
+	}
+	sprintf(*buf, "%d-%02d-%02d", year, month, day);
+	return (int) strlen(*buf);
+}

@@ -30,7 +30,7 @@ dbengines.o: dbengines.cpp
 # $(GDK_OBJS) $(COMMON_OPTION_OBJS) $(COMMON_STREAM_OBJS) $(COMMON_UTILS_OBJS) -ldl -lz -lbz2 -lssl -lcrypto -lcurl -llzma -luuid
 
 $(targets): %: %.cpp $(GDK_OBJS) $(COMMON_OPTION_OBJS) $(COMMON_STREAM_OBJS) $(COMMON_UTILS_OBJS) dbengines.o
-	g++ -g -Igdk $(INC_FLAGS) -std=c++11 -fopenmp $@.cpp -o $@ dbengines.o $(GDK_OBJS) $(COMMON_OPTION_OBJS) $(COMMON_STREAM_OBJS) $(COMMON_UTILS_OBJS) -ldl -lz -lbz2 -lssl -lcrypto -lcurl -llzma -luuid
+	g++ -g -Igdk $(INC_FLAGS) -std=c++11 -fopenmp $@.cpp -o $@ dbengines.o $(GDK_OBJS) $(COMMON_OPTION_OBJS) $(COMMON_STREAM_OBJS) $(COMMON_UTILS_OBJS) -ldl -lz -lbz2 -lssl -lcrypto -lcurl -llzma -luuid libbloom.so
 
 all: $(targets)
 

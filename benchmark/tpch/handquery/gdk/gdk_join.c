@@ -2448,6 +2448,7 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 	const char *v = (const char *) &lval;
 	int lskipped = 0;	/* whether we skipped values in l */
 	const Hash *restrict hsh;
+    Bloom * blm;
 	int t;
 
 	ALGODEBUG fprintf(stderr, "#hashjoin(l=%s#" BUNFMT "[%s]%s%s%s,"
@@ -2546,9 +2547,29 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 
 	if (BAThash(r, 0) != GDK_SUCCEED)
 		goto bailout;
+    /* if (BAThashbloom(r, 0) != GDK_SUCCEED) */
+	/* 	goto bailout; */
+
+
+    blm = GDKzalloc(sizeof(Bloom));
+    if ( bloom_init(blm, BATcount(sr), 0.01) ){
+      GDKerror("BAThashjoin: bloom init failed\n");
+      GDKfree(blm);
+      return GDK_FAIL;
+    }
+    
+    char *vv = (char *) Tloc(r, 0);
+    for (oid i = 0; i < BATcount(sr); i++) {
+      /* BUN pos = VALUE(sr, i); */
+      BUN pos = *(rcand+i);
+      bloom_add(blm, (vv+(pos<<r->tshift)), r->twidth);
+    }
+    bloom_print(blm);    
+
 	ri = bat_iterator(r);
 	nrcand = (BUN) (rcandend - rcand);
 	hsh = r->thash;
+    /* blm = r->tbloom; */
 	t = ATOMbasetype(r->ttype);
 
 	if (lcand == NULL && rcand == NULL && lvars == NULL &&
@@ -2589,7 +2610,12 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 			}
 		}
 	} else if (lcand) {
+
+      int totalcnt, hashcnt, bloomcnt;
+      totalcnt = hashcnt = bloomcnt =0;
+      fprintf(stderr, "ltwidht = %d\n", l->twidth);
 		while (lcand < lcandend) {
+          totalcnt++;
 			lo = *lcand++;
 			if (BATtvoid(l)) {
 				if (l->tseqbase != oid_nil)
@@ -2600,7 +2626,12 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 			nr = 0;
 			if (!nil_matches && cmp(v, nil) == 0) {
 				/* no match */
-			} else if (rcand) {
+			} else if ( bloom_check(blm, Tloc(l, lo - l->hseqbase), l->twidth) == 0 ){
+              /* filtered out by bloom */
+              bloomcnt++;
+            }
+            else if (rcand) {
+              hashcnt++;
 				HASHloop_bound(ri, hsh, rb, v, rl, rh) {
 					ro = (oid) (rb - rl + rseq);
 					if (!binsearchcand(rcand, 0, nrcand, ro))
@@ -2614,6 +2645,7 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 						break;
 				}
 			} else {
+              hashcnt++;
 				HASHloop_bound(ri, hsh, rb, v, rl, rh) {
 					ro = (oid) (rb - rl + rseq);
 					if (only_misses) {
@@ -2679,6 +2711,7 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 			if (nr > 0 && BATcount(r1) > nr)
 				r1->trevsorted = 0;
 		}
+        fprintf(stderr, "totalcnt = %d, hashcnt = %d, bloomcnt = %d", totalcnt, hashcnt, bloomcnt);
 	} else {
 		for (lo = lstart + l->hseqbase; lstart < lend; lo++) {
 			if (BATtvoid(l)) {

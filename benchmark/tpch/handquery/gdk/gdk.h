@@ -381,6 +381,8 @@
 #include "gdk_posix.h"
 #include <stream.h>
 
+#include "../libbloom/bloom.h"
+
 #undef MIN
 #undef MAX
 #define MAX(A,B)	((A)<(B)?(B):(A))
@@ -461,7 +463,7 @@
 #define ?ddbench?	if (GDKdebug&(1<<20))
 */
 #define ALGOMASK	(1<<21)
-#define ALGODEBUG	if (GDKdebug & ALGOMASK)
+#define ALGODEBUG	//if (GDKdebug & ALGOMASK)
 #define ESTIMASK	(1<<22)
 #define ESTIDEBUG	if (GDKdebug & ESTIMASK)
 /* XPROPMASK not used anymore
@@ -844,6 +846,8 @@ typedef struct {
 	Heap *orderidx;		/* order oid index */
 
 	PROPrec *props;		/* list of dynamic properties stored in the bat descriptor */
+
+  Bloom *bloom;
 } COLrec;
 
 #define ORDERIDXOFF		3
@@ -913,6 +917,7 @@ typedef struct BATiter {
 #define thash		T.hash
 #define timprints	T.imprints
 #define tprops		T.props
+#define tbloom		T.bloom
 
 
 
@@ -1909,6 +1914,8 @@ gdk_export ptr ATOMdup(int id, const void *val);
  */
 gdk_export gdk_return BAThash(BAT *b, BUN masksize);
 
+gdk_export gdk_return BAThashbloom(BAT *b, BUN masksize);
+
 /*
  * @- Column Imprints Functions
  *
@@ -2331,6 +2338,8 @@ gdk_export void GDKclrerr(void);
 #include "gdk_atoms.h"
 #include "gdk_bbp.h"
 #include "gdk_utils.h"
+
+
 
 /* functions defined in gdk_bat.c */
 gdk_export BUN void_replace_bat(BAT *b, BAT *p, BAT *u, bit force)

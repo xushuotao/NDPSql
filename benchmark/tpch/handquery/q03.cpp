@@ -68,125 +68,70 @@ int main(){
 
   auto c_mktsegment_rec = mapfile(fname_c_mktsegment.c_str());
 
-  auto mask = select<char>((char*)c_mktsegment_rec->base, rows_customers, (char)(pos-GDK_VAROFFSET), pos-GDK_VAROFFSET);
+  auto mask_cust = select<char>((char*)c_mktsegment_rec->base, rows_customers, (char)(pos-GDK_VAROFFSET), pos-GDK_VAROFFSET);
 
   unmapfile(c_mktsegment_rec);
 
-  fprintf(stderr, "mask count = %lu, filter rate = (%lu/%lu) %.2f\n", BATcount(mask), BATcount(mask), rows_customers, (float)BATcount(mask)/(float)rows_customers*100.0);
+  fprintf(stderr, "mask_cust count = %lu, filter rate = (%lu/%lu) %.2f\n", BATcount(mask_cust), BATcount(mask_cust), rows_customers, (float)BATcount(mask_cust)/(float)rows_customers*100.0);
 
-  // auto pos = select_date((int*)date_rec->base, nRows, INT_MIN, 729999);
-  // fprintf(stderr, "pos count = %lu, filter rate = (%lu/%lu) %.2f\n", pos->batCount, pos->batCount, nRows, (float)pos->batCount/(float)nRows*100.0);
 
-  // std::string fname_returnflag = db_path+l_returnflag+".tail";
-  // auto returnflag_rec = mapfile(fname_returnflag.c_str());
+  std::string fname_o_orderdate = db_path+o_orderdate+".tail";
+  auto o_orderdate_rec = mapfile(fname_o_orderdate.c_str());
 
-  // BAT* grp_rf, *ext_rf, *hist_rf;
+  auto mask_order = select<int>((int*)o_orderdate_rec->base, rows_orders, INT_MIN, todate(15, 03, 1995)-1);
 
-  // auto stat = group((bte*)(returnflag_rec->base), nRows, pos, NULL, NULL,  &grp_rf, &ext_rf, &hist_rf);
-  // assert(stat == GDK_SUCCEED);
-  // fprintf(stderr, "grp->cnt = %lu, hist->cnt = %lu, ext->cnt = %lu\n", BATcount(grp_rf), BATcount(hist_rf), BATcount(ext_rf));
+  fprintf(stderr, "mask_order count = %lu, filter rate = (%lu/%lu) %.2f\n", BATcount(mask_order), BATcount(mask_order), rows_orders, (float)BATcount(mask_order)/(float)rows_orders*100.0);
 
-  // std::string fname_linestatus = db_path+l_linestatus+".tail";
-  // auto linestatus_rec = mapfile(fname_linestatus.c_str());
-
-  // BAT* grp=NULL, *ext, *hist;
-
-  // stat = group((bte*)(linestatus_rec->base), nRows, pos, grp_rf, ext_rf, &grp, &ext, &hist);
-  // assert(stat == GDK_SUCCEED);
-  // fprintf(stderr, "grp->cnt = %lu, hist->cnt = %lu, ext->cnt = %lu\n", BATcount(grp), BATcount(hist), BATcount(ext));
-
-  // for ( int i = 0; i < BATcount(hist); i++ ){
-  //   fprintf(stderr, "group %d count = %lld\n", i, ((lng*)Tloc(hist,0))[i]);
-  // }
-
-  // BATclear(grp_rf,0);
-  // BATclear(ext_rf,0);
-  // BATclear(hist_rf,0);
+  std::string fname_o_custkey = db_path+o_custkey+".tail";
+  auto o_custkey_rec = mapfile(fname_o_custkey.c_str());
+  BAT* o_custkey_bat = maptoBAT(o_custkey_rec, TYPE_int, rows_orders);
 
   
-  // std::string fname_quantity = db_path+l_quantity+".tail";
-  // auto quantity_rec = mapfile(fname_quantity.c_str());
+  std::string fname_c_custkey = db_path+c_custkey+".tail";
+  auto c_custkey_rec = mapfile(fname_c_custkey.c_str());
+  BAT* c_custkey_bat = maptoBAT(c_custkey_rec, TYPE_int, rows_customers);
 
-  // BAT* sum_quantity;
-  // stat = aggr_sum<lng,int>((int*)(quantity_rec->base), nRows, pos, grp, hist, &sum_quantity);
-  // assert(stat == GDK_SUCCEED);
-  // for ( int i = 0; i < BATcount(sum_quantity); i++ ){
-  //   fprintf(stderr, "group %d sum_quantity = %lld\n", i, ((lng*)Tloc(sum_quantity,0))[i]);
-  // }
+  fprintf(stderr, "|%25s|%25s|%25s|\n", "c_custkey","o_custkey", "o_orderdate");
+  str date_str = (str)GDKmalloc(15);
+  int len = 15;
+  for (int i = 0; i < 10; i++ ){
+    BUN cust_p = ((BUN*)Tloc(mask_cust,0))[i];
+    BUN order_p = ((BUN*)Tloc(mask_order,0))[i];
+    date_tostr(&date_str, &len, ((date*)(o_orderdate_rec->base))+order_p);
+    fprintf(stderr, "|%25d|%25d|%25s|\n", ((int*)Tloc(c_custkey_bat,0))[cust_p],((int*)Tloc(o_custkey_bat,0))[order_p], date_str);
+  }
 
-  // std::string fname_extendedprice = db_path+l_extendedprice+".tail";
-  // auto extendedprice_rec = mapfile(fname_extendedprice.c_str());
+  BAT *lid, *rid;
 
-  // BAT* sum_extendedprice;
-  // stat = aggr_sum<lng, lng>((lng*)(extendedprice_rec->base), nRows, pos, grp, hist, &sum_extendedprice);
-  // assert(stat == GDK_SUCCEED);
-  // for ( int i = 0; i < BATcount(sum_extendedprice); i++ ){
-  //   fprintf(stderr, "group %d sum_extendedprice = %.2lf\n", i, (((lng*)Tloc(sum_extendedprice,0))[i])/100.0);
-  // }
+  auto status = BATjoin(&lid, &rid, c_custkey_bat, o_custkey_bat, mask_cust, mask_order, 0, 0);
 
-  
-  // std::string fname_discount = db_path+l_discount+".tail";
-  // auto discount_rec = mapfile(fname_discount.c_str());
-
-  // BAT* sum_discount;
-  // stat = aggr_sum<lng, lng>((lng*)(discount_rec->base), nRows, pos, grp, hist, &sum_discount);
-  // assert(stat == GDK_SUCCEED);
-  // for ( int i = 0; i < BATcount(sum_discount); i++ ){
-  //   fprintf(stderr, "group %d sum_discount = %.2lf\n", i, (((lng*)Tloc(sum_discount,0))[i])/100.0);
-  // }
+  fprintf(stderr, "(c and o join result on custkey) lid->batCount = %ld, rid->batCount = %ld\n", BATcount(lid), BATcount(rid));
 
 
-  // BAT* disc_price = merge<lng>((lng*)(extendedprice_rec->base), nRows, pos, (lng*)(discount_rec->base), nRows, pos,
-  //                               [](lng price, ulng disc) -> lng { return price*(100-disc);});
-
-
-  // BAT* sum_disc_price;
-  // stat = aggr_sum<lng, lng>((lng*)Tloc(disc_price,0), BATcount(disc_price), NULL, grp, hist, &sum_disc_price);
-  // assert(stat == GDK_SUCCEED);
-  // for ( int i = 0; i < BATcount(sum_disc_price); i++ ){
-  //   fprintf(stderr, "group %d sum_disc_price = %.4lf\n", i, (((lng*)Tloc(sum_disc_price,0))[i])/10000.0);
-  // }
-
-
-  // std::string fname_tax = db_path+l_tax+".tail";
-  // auto tax_rec = mapfile(fname_tax.c_str());
-
-  // BAT* charge = merge<ulng>((ulng*)Tloc(disc_price,0), BATcount(disc_price), NULL, (ulng*)(tax_rec->base), nRows, pos,
-  //                               [](ulng price, ulng disc) -> lng { return price*(100+disc);});
-
+  fprintf(stderr, "|%25s|%25s|%25s|\n", "c_custkey","o_custkey", "o_orderdate");
+  // str date_str = (str)GDKmalloc(15);
+  // int len = 15;
+  for (int i = 0; i < 10; i++ ){
+    BUN cust_p = ((BUN*)Tloc(lid,0))[i];
+    BUN order_p = ((BUN*)Tloc(rid,0))[i];
+    date_tostr(&date_str, &len, ((date*)(o_orderdate_rec->base))+order_p);
+    fprintf(stderr, "|%25d|%25d|%25s|\n", ((int*)Tloc(c_custkey_bat,0))[cust_p],((int*)Tloc(o_custkey_bat,0))[order_p], date_str);
+  }
   
 
-  // BAT* sum_charge;
-  // stat = aggr_sum<hge, lng>((lng*)Tloc(charge,0), BATcount(charge), NULL, grp, hist, &sum_charge);
-  // assert(stat == GDK_SUCCEED);
-  // for ( int i = 0; i < BATcount(sum_charge); i++ ){
-  //   fprintf(stderr, "group %d sum_charge = %.6lf\n", i, (((hge*)Tloc(sum_charge,0))[i])/1000000.0);
-  // }
-
-  // fprintf(stderr, "|%25s|%25s|%25s|%25s|%25s|%25s|%25s|%25s|%25s|\n", "group id","sum_qty", "sum_base_price", "sum_disc_price", "sum_charge", "avg_qty", "avg_price", "avg_disc", "count_order");
-  // for ( int i = 0; i < BATcount(hist); i++ ){
-  //   fprintf(stderr, "|%25d|%25lld|%25.2lf|%25.4lf|%25.6lf|%25.6lf|%25.6lf|%25.6lf|%25lld|\n",
-  //           i,
-  //           ((lng*)Tloc(sum_quantity,0))[i],
-  //           (((lng*)Tloc(sum_extendedprice,0))[i])/100.0,
-  //           (((lng*)Tloc(sum_disc_price,0))[i])/10000.0,
-  //           (((hge*)Tloc(sum_charge,0))[i])/1000000.0,
-  //           (((lng*)Tloc(sum_quantity,0))[i])/(dbl)(((lng*)Tloc(hist,0))[i]), //avg_qty
-  //           (((lng*)Tloc(sum_extendedprice,0))[i])/100.0/(((lng*)Tloc(hist,0))[i]), //avg_price
-  //           (((lng*)Tloc(sum_discount,0))[i])/100.0/(((lng*)Tloc(hist,0))[i]), //avg_disc
-  //           ((lng*)Tloc(hist,0))[i]);
-  // }
-
-
   
-  // BATclear(pos,0);
-  // unmapfile(extendedprice_rec);
+  
 
-  // unmapfile(quantity_rec);
 
-  // unmapfile(linestatus_rec);
-  // unmapfile(returnflag_rec);
-  // unmapfile(date_rec);
+  // std::string fname_o_orderdate = db_path+o_orderdate+".tail";
+  // auto o_orderdate_rec = mapfile(fname_o_orderdate.c_str());
+
+
+
+  unmapfile(o_orderdate_rec);
+
+
   return 0;
 }
+
 
