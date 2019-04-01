@@ -107,19 +107,36 @@ int main(){
 
   fprintf(stderr, "(c and o join result on custkey) lid->batCount = %ld, rid->batCount = %ld\n", BATcount(lid), BATcount(rid));
 
-
-  fprintf(stderr, "|%25s|%25s|%25s|\n", "c_custkey","o_custkey", "o_orderdate");
-  // str date_str = (str)GDKmalloc(15);
-  // int len = 15;
+   
+  fprintf(stderr, "|%25s|%25s|%25s|%25s|%25s|\n", "cust_ptr", "c_custkey", "order_ptr", "o_custkey", "o_orderdate");
   for (int i = 0; i < 10; i++ ){
     BUN cust_p = ((BUN*)Tloc(lid,0))[i];
     BUN order_p = ((BUN*)Tloc(rid,0))[i];
     date_tostr(&date_str, &len, ((date*)(o_orderdate_rec->base))+order_p);
-    fprintf(stderr, "|%25d|%25d|%25s|\n", ((int*)Tloc(c_custkey_bat,0))[cust_p],((int*)Tloc(o_custkey_bat,0))[order_p], date_str);
+    fprintf(stderr, "|%25lu|%25d|%25lu|%25d|%25s|\n", cust_p, ((int*)Tloc(c_custkey_bat,0))[cust_p], order_p, ((int*)Tloc(o_custkey_bat,0))[order_p], date_str);
   }
   
 
-  
+  std::string fname_l_shipdate = db_path+l_shipdate+".tail";
+  auto l_shipdate_rec = mapfile(fname_l_shipdate.c_str());
+
+  auto mask_lineitem = select<int>((int*)l_shipdate_rec->base, rows_lineitem, todate(15, 03, 1995)+1, INT_MAX);
+
+  fprintf(stderr, "mask_lineitem count = %lu, filter rate = (%lu/%lu) %.2f\n", BATcount(mask_lineitem), BATcount(mask_lineitem), rows_lineitem, (float)BATcount(mask_lineitem)/(float)rows_lineitem*100.0);
+
+  std::string fname_l_orderkey = db_path+l_orderkey+".tail";
+  auto l_orderkey_rec = mapfile(fname_l_orderkey.c_str());
+  BAT* l_orderkey_bat = maptoBAT(l_orderkey_rec, TYPE_int, rows_lineitem);
+
+
+  std::string fname_o_orderkey = db_path+o_orderkey+".tail";
+  auto o_orderkey_rec = mapfile(fname_o_orderkey.c_str());
+  BAT* o_orderkey_bat = maptoBAT(o_orderkey_rec, TYPE_int, rows_orders);
+
+
+  BAT *lid_1, *rid_1;
+
+  status = BATjoin(&lid_1, &rid_1, l_orderkey_bat, BATproject(rid, o_orderkey_bat), mask_lineitem, NULL, 0, 0);
   
 
 
