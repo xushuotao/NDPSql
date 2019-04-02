@@ -176,6 +176,9 @@ BAT* select(T* column, size_t count, T lv, T hv){
   //     retval.insert(retval.end(), localv[i].begin(), localv[i].end());
   // }
   // //free(localv);
+  bn->tsorted = 1;
+  bn->trevsorted = 0;
+  bn->tkey = 1;
   return bn;
 }
 
