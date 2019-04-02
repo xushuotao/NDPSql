@@ -20,11 +20,21 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifndef INLINE
 #include "bloom.h"
 #include "murmurhash2.h"
+#define inline_export 
+#else
+#include "bloom.h"
+#include "MurmurHash2.c"
+#define inline_export inline 
+#endif
 
 #define MAKESTRING(n) STRING(n)
 #define STRING(n) #n
+
+
+
 
 
 inline static int test_bit_set_bit(unsigned char * buf,
@@ -45,7 +55,7 @@ inline static int test_bit_set_bit(unsigned char * buf,
 }
 
 
-static int bloom_check_add(Bloom * bloom,
+inline static int bloom_check_add(Bloom * bloom,
                            const void * buffer, int len, int add)
 {
   if (bloom->ready == 0) {
@@ -77,14 +87,14 @@ static int bloom_check_add(Bloom * bloom,
 }
 
 
-int bloom_init_size(Bloom * bloom, int entries, double error,
+inline_export int bloom_init_size(Bloom * bloom, int entries, double error,
                     unsigned int cache_size)
 {
   return bloom_init(bloom, entries, error);
 }
 
 
-int bloom_init(Bloom * bloom, int entries, double error)
+inline_export int bloom_init(Bloom * bloom, int entries, double error)
 {
   bloom->ready = 0;
 
@@ -120,19 +130,19 @@ int bloom_init(Bloom * bloom, int entries, double error)
 }
 
 
-int bloom_check(Bloom * bloom, const void * buffer, int len)
+inline_export int bloom_check(Bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 0);
 }
 
 
-int bloom_add(Bloom * bloom, const void * buffer, int len)
+inline_export int bloom_add(Bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 1);
 }
 
 
-void bloom_print(Bloom * bloom)
+inline_export void bloom_print(Bloom * bloom)
 {
   printf("bloom at %p\n", (void *)bloom);
   printf(" ->entries = %d\n", bloom->entries);
@@ -144,7 +154,7 @@ void bloom_print(Bloom * bloom)
 }
 
 
-void bloom_free(Bloom * bloom)
+inline_export void bloom_free(Bloom * bloom)
 {
   if (bloom->ready) {
     free(bloom->bf);
@@ -153,7 +163,7 @@ void bloom_free(Bloom * bloom)
 }
 
 
-int bloom_reset(Bloom * bloom)
+inline_export int bloom_reset(Bloom * bloom)
 {
   if (!bloom->ready) return 1;
   memset(bloom->bf, 0, bloom->bytes);
@@ -161,7 +171,7 @@ int bloom_reset(Bloom * bloom)
 }
 
 
-const char * bloom_version()
+inline_export const char * bloom_version()
 {
   return MAKESTRING(BLOOM_VERSION);
 }

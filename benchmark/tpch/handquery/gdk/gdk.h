@@ -381,7 +381,7 @@
 #include "gdk_posix.h"
 #include <stream.h>
 
-#include "../libbloom/bloom.h"
+#include "bloom.h"
 
 #undef MIN
 #undef MAX

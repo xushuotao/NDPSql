@@ -11,8 +11,11 @@
 // 1. It will not work incrementally.
 // 2. It will not produce the same results on little-endian and big-endian
 //    machines.
-
-unsigned int murmurhash2(const void * key, int len, const unsigned int seed)
+unsigned int
+#ifdef INLINE
+inline 
+#endif
+ murmurhash2(const void * key, int len, const unsigned int seed)
 {
 	// 'm' and 'r' are mixing constants generated offline.
 	// They're not really 'magic', they just happen to work well.

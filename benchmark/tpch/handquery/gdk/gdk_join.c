@@ -11,6 +11,10 @@
 #include "gdk_private.h"
 #include "gdk_calc_private.h"
 
+#ifdef INLINE
+#include "bloom.c"
+#endif
+
 /*
  * All join variants produce some sort of join on two input BATs,
  * optionally subject to up to two candidate lists.  Only values in
@@ -2398,7 +2402,15 @@ binsearchcand(const oid *cand, BUN lo, BUN hi, oid v)
 			v = FVALUE(l, lstart);				\
 			lstart++;					\
 			nr = 0;						\
-			if (*(const TYPE*)v != TYPE##_nil) {		\
+			if (*(const TYPE*)v != TYPE##_nil ) {                   \
+              totalcnt++;                                           \
+              if (  bloom_check(blm, v, l->twidth) == 0  ) {              \
+                /* fprintf(stderr, "filtered out by bloom at v=%p\n", (ptr)v); */ \
+                bloomcnt++;                                            \
+              }                                                         \
+              else {                                                    \
+                hashcnt++;                                              \
+                /* fprintf(stderr, "not filtered out by bloom at v=%p\n", (ptr)v); */ \
 				for (rb = HASHget##WIDTH(hsh, hash_##TYPE(hsh, v)); \
 				     rb != hashnil;			\
 				     rb = HASHgetlink##WIDTH(hsh, rb))	\
@@ -2407,6 +2419,7 @@ binsearchcand(const oid *cand, BUN lo, BUN hi, oid v)
 						ro = (oid) (rb - rl + rseq); \
 						HASHLOOPBODY();		\
 					}				\
+              }                     \
 			}						\
 			if (nr == 0) {					\
 				lskipped = BATcount(r1) > 0;		\
@@ -2440,15 +2453,17 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 	oid rseq;
 	BUN nr, nrcand, newcap;
 	const char *lvals;
+    const char *rvals;
 	const char *lvars;
 	int lwidth;
+    int rwidth;
 	const void *nil = ATOMnilptr(l->ttype);
 	int (*cmp)(const void *, const void *) = ATOMcompare(l->ttype);
 	oid lval = oid_nil;	/* hold value if l has dense tail */
 	const char *v = (const char *) &lval;
 	int lskipped = 0;	/* whether we skipped values in l */
 	const Hash *restrict hsh;
-    Bloom * blm;
+    Bloom * blm = NULL;
 	int t;
 
 	ALGODEBUG fprintf(stderr, "#hashjoin(l=%s#" BUNFMT "[%s]%s%s%s,"
@@ -2483,7 +2498,9 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 	CANDINIT(l, sl, lstart, lend, lcnt, lcand, lcandend);
 	CANDINIT(r, sr, rstart, rend, rcnt, rcand, rcandend);
 	lwidth = l->twidth;
+    rwidth = r->twidth;
 	lvals = (const char *) Tloc(l, 0);
+    rvals = (const char *) Tloc(r, 0);
 	if (l->tvarsized && l->ttype) {
 		assert(r->tvarsized && r->ttype);
 		lvars = l->tvheap->base;
@@ -2552,17 +2569,19 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 
 
     blm = GDKzalloc(sizeof(Bloom));
-    if ( bloom_init(blm, BATcount(sr), 0.01) ){
+    size_t blmcnt = sr? BATcount(sr) : BATcount(r);
+    if ( bloom_init(blm, blmcnt, 0.01) ){
       GDKerror("BAThashjoin: bloom init failed\n");
       GDKfree(blm);
       return GDK_FAIL;
     }
     
     char *vv = (char *) Tloc(r, 0);
-    for (oid i = 0; i < BATcount(sr); i++) {
+    for (oid i = 0; i < blmcnt; i++) {
       /* BUN pos = VALUE(sr, i); */
-      BUN pos = *(rcand+i);
-      bloom_add(blm, (vv+(pos<<r->tshift)), r->twidth);
+      BUN pos = rcand ? *(rcand+i): i;
+      /* fprintf(stderr, "pos = %lu, obj_ptr = %lu\n", pos, (vv+(pos<<r->tshift))); */
+      bloom_add(blm, FVALUE(r, pos), r->twidth);
     }
     bloom_print(blm);    
 
@@ -2571,6 +2590,10 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 	hsh = r->thash;
     /* blm = r->tbloom; */
 	t = ATOMbasetype(r->ttype);
+    
+    int totalcnt, hashcnt, bloomcnt;
+    totalcnt = hashcnt = bloomcnt =0;
+
 
 	if (lcand == NULL && rcand == NULL && lvars == NULL &&
 	    !nil_matches && !nil_on_miss && !semi && !only_misses &&
@@ -2611,8 +2634,6 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 		}
 	} else if (lcand) {
 
-      int totalcnt, hashcnt, bloomcnt;
-      totalcnt = hashcnt = bloomcnt =0;
       fprintf(stderr, "ltwidht = %d\n", l->twidth);
 		while (lcand < lcandend) {
           totalcnt++;
@@ -2711,7 +2732,6 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 			if (nr > 0 && BATcount(r1) > nr)
 				r1->trevsorted = 0;
 		}
-        fprintf(stderr, "totalcnt = %d, hashcnt = %d, bloomcnt = %d", totalcnt, hashcnt, bloomcnt);
 	} else {
 		for (lo = lstart + l->hseqbase; lstart < lend; lo++) {
 			if (BATtvoid(l)) {
@@ -2878,6 +2898,8 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 		if (r2 && r2->tdense)
 			r2->tseqbase = ((oid *) r2->theap.base)[0];
 	}
+
+fprintf(stderr, "totalcnt = %d, hashcnt = %d, bloomcnt = %d\n", totalcnt, hashcnt, bloomcnt);
 	ALGODEBUG fprintf(stderr, "#hashjoin(l=%s,r=%s)=(%s#"BUNFMT"%s%s%s%s,%s#"BUNFMT"%s%s%s%s) " LLFMT "us\n",
 			  BATgetId(l), BATgetId(r),
 			  BATgetId(r1), BATcount(r1),
