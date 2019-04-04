@@ -3,9 +3,9 @@ CONNECTALDIR?=$(BASEDIR)/build_tools/connectal/
 
 
 COREDIR=$(BASEDIR)/core-scripts/
-MIGDIR=$(BASEDIR)/xilinx/ddr4_v2_2/)
+MIGDIR=$(BASEDIR)/xilinx/ddr4_v2_2/
 
-BSVDIR=$(BASEDIR)/src/dram_ctrl/ddr4/:$(MIGDIR)
+BSVDIR=$(BASEDIR)/dram_ctrl/ddr4/:$(MIGDIR):$(BASEDIR)/../bsvlib
 
 
 S2H_INTERFACES = Ddr4PerfRequest:Ddr4Perf.request
