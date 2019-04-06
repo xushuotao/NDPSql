@@ -99,7 +99,7 @@ module mkPipelineRightShifter(ByteShiftIfc#(element_type, size))
    
    Integer numStages =  valueOf(size);
    
-   Vector#(size, FIFO#(Tuple2#(element_type, Bit#(size)))) stageFifos <- replicateM(mkFIFO);
+   Vector#(size, FIFO#(Tuple2#(element_type, Bit#(size)))) stageFifos <- replicateM(mkLFIFO);
    
    FIFO#(element_type) outputFifo <- mkBypassFIFO;
    
@@ -139,7 +139,7 @@ module mkPipelineLeftShifter(ByteShiftIfc#(element_type, size))
    
    Integer numStages =  valueOf(size);
    
-   Vector#(size, FIFO#(Tuple2#(element_type, Bit#(size)))) stageFifos <- replicateM(mkFIFO);
+   Vector#(size, FIFO#(Tuple2#(element_type, Bit#(size)))) stageFifos <- replicateM(mkLFIFO);
    
    FIFO#(element_type) outputFifo <- mkBypassFIFO;
    
