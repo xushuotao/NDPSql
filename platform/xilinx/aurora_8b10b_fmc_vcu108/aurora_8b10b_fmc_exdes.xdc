@@ -70,6 +70,8 @@ create_clock -name GT_REFCLK1_FMC2 -period 3.636	 [get_pins -hier -filter {NAME 
 # 9.091 ns period Board Clock Constraint
 #create_clock -name init_clk_i -period 9.091 [get_ports INIT_CLK_P]
 #create_clock -name auroraI_init_clk_i -period 9.091 [get_pins -hierarchical -regexp {.*/auroraIntraClockGen_clkout0buffer/O}]
+set pcie250 [get_clocks -of_objects  [get_pins *ep7/pcie_ep/inst/gt_top_i/phy_clk_i/bufg_gt_userclk/O]]
+create_generated_clock -name auroraI_init_clk_i -master_clock $pcie250 [get_pins *ep7/clkgen_pll/CLKOUT0]
 
 create_clock -name auroraI_user_clk_i_fmc1 -period 9.091	 [get_pins -hierarchical -regexp {.*auroraIntra1.*/aurora_module_i/clock_module_i/user_clk_buf_i/O}]
 

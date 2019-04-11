@@ -26,6 +26,8 @@
 #define PAGE_SIZE_VALID (8224)
 #define NUM_TAGS 128
 
+// #define DEBUG 1
+
 #ifdef DEBUG
 #define DEBUG_PRINT(...) do{ fprintf( stderr, __VA_ARGS__ ); } while( false )
 #else
@@ -74,8 +76,6 @@ int curWritesInFlight = 0;
 int curErasesInFlight = 0;
 
 int blockBase = 0; // so that we are not erasing the same block;
-
-bool readReqTestDone = false;
 
 double timespec_diff_sec( timespec start, timespec end ) {
   double t = end.tv_sec - start.tv_sec;
@@ -131,10 +131,10 @@ void checkReadData(int tag) {
 class FlashIndication : public FlashIndicationWrapper{
 public:
   virtual void readDone(unsigned int tag, uint64_t cycles) {
-    fprintf(stderr, "LOG: pagedone: tag=%d; inflight=%d, FPGA cycles = %lu\n", tag, curReadsInFlight, cycles );
-    readReqTestDone = true;
-    /*
-    if ( verbose ) {
+
+    fprintf(stderr, "ERROR: pagedone: no indication should be really sent");
+
+    /*    if ( verbose ) {
       // printf( "%s received read page buffer: %d %d\n", log_prefix, rbuf, curReadsInFlight );
       //DEBUG_PRINT( "LOG: pagedone: tag=%d; inflight=%d, FPGA cycles = %lu\n", tag, curReadsInFlight, cycles );
 
@@ -159,7 +159,8 @@ public:
     }
     readTagTable[tag].busy = false;
     //pthread_cond_broadcast(&flashFreeTagCond);
-    pthread_mutex_unlock(&flashReqMutex);*/
+    pthread_mutex_unlock(&flashReqMutex);
+    */
   }
 
   virtual void writeDone(unsigned int tag, uint64_t cycles) {
@@ -322,12 +323,13 @@ void writePage(int card, int bus, int chip, int block, int page, int tag) {
   pthread_mutex_unlock(&flashReqMutex);
 
   if ( verbose ) DEBUG_PRINT( "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
+  if ( verbose ) DEBUG_PRINT( "LOG: currNumWrite =%d\n", curWritesInFlight);
   //fprintf(stderr, "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
   device->writePage(card,bus,chip,(blockBase+block)%4096,page,tag);
 }
 
 void readPage(int card, int bus, int chip, int block, int page, int tag) {
-  /*  pthread_mutex_lock(&flashReqMutex);
+  pthread_mutex_lock(&flashReqMutex);
   curReadsInFlight ++;
   readTagTable[tag].card = card;
   readTagTable[tag].bus = bus;
@@ -336,8 +338,44 @@ void readPage(int card, int bus, int chip, int block, int page, int tag) {
   pthread_mutex_unlock(&flashReqMutex);
 
   if ( verbose ) DEBUG_PRINT( "LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
-  //fprintf(stderr,"LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );*/
+  //fprintf(stderr,"LOG: sending read page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
   device->readPage(card,bus,chip,(blockBase+block)%4096,page,tag);
+}
+
+
+void *check_read_buffer_done(void *ptr){
+
+  
+
+  int tag = 0;
+  int flag_word_offset=PAGE_SIZE_VALID/sizeof(unsigned int);
+  while ( true ){
+    // DEBUG_PRINT("LOG: readBuffers[%d][%d]=%x\n", tag, flag_word_offset, readBuffers[tag][flag_word_offset] );
+
+    if ( readBuffers[tag][flag_word_offset] == (unsigned int)-1 ) {
+
+      DEBUG_PRINT("LOG: pagedone: tag=%d; inflight=%d\n", tag, curReadsInFlight );
+      checkReadData(tag);
+      
+      pthread_mutex_lock(&flashReqMutex);
+      curReadsInFlight --;
+      if ( curReadsInFlight < 0 ) {
+        DEBUG_PRINT( "LOG: **ERROR: Read requests in flight cannot be negative %d\n", curReadsInFlight );
+        curReadsInFlight = 0;
+      }
+      if ( readTagTable[tag].busy == false ) {
+        DEBUG_PRINT( "LOG: **ERROR: received unused buffer read done %d\n", tag);
+        testPass = 0;
+      }
+      readTagTable[tag].busy = false;
+      readBuffers[tag][flag_word_offset] = 0;
+      pthread_mutex_unlock(&flashReqMutex);
+    }
+
+    tag = (tag + 1)%NUM_TAGS;
+    // usleep(100);
+  }
+    
 }
 
 
@@ -414,6 +452,17 @@ int main(int argc, const char **argv){
   // device->auroraStatus();
   // sem_wait(&sem);
 
+  /* this variable is our reference to the second thread */
+  pthread_t check_thread;
+
+  /* create a second thread which executes inc_x(&x) */
+  if(pthread_create(&check_thread, NULL, check_read_buffer_done, NULL)) {
+    fprintf(stderr, "Error creating thread\n");
+    return 1;
+  }
+
+  fprintf(stderr, "Done Spinning check read done thread\n");
+
 #if not defined(SIMULATION)
   srand(time(NULL));
   blockBase=rand()%4096;
@@ -422,20 +471,9 @@ int main(int argc, const char **argv){
   fprintf(stderr, "Done initializing blockBase = %u\n", blockBase);
   
   fprintf(stderr, "FPGA starts\n");
-
-
-#if defined(SIMULATION)
-  int num_repeats = 4;
-#else
-  int num_repeats = 2000;
-#endif
-
-  device->start(num_repeats*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS);
-    
+  device->start(0);
+  fprintf(stderr, "LOG: Starting Correctness TEST...\n");
   timespec start, now;
-  double total;
-
-  /*  fprintf(stderr, "LOG: Starting Correctness TEST...\n");
   clock_gettime(CLOCK_REALTIME, & start);
   
   for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
@@ -456,9 +494,10 @@ int main(int argc, const char **argv){
 
   clock_gettime(CLOCK_REALTIME, & now);
   fprintf(stderr, "LOG: finished erasing to flash! %f\n", timespec_diff_sec(start, now) );
-   total = 256*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
+  double total = 256*BLOCKS_PER_CHIP*CHIPS_PER_BUS*NUM_BUSES*NUM_CARDS*8192.0/1024.0/1024.0;
   fprintf(stderr, "LOG: erase %.4lf MB,  bw = %.4lf MB/s\n", total, total/timespec_diff_sec(start, now) );
-	
+
+  clock_gettime(CLOCK_REALTIME, & start);
   //read back erased pages
   for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
     for (int chip = 0; chip < CHIPS_PER_BUS; chip++){
@@ -474,6 +513,8 @@ int main(int argc, const char **argv){
     usleep(100);
     if ( getNumReadsInFlight() == 0 ) break;
   }
+  clock_gettime(CLOCK_REALTIME, & now);
+  fprintf(stderr, "LOG: finished checking erased flash pages! %f\n", timespec_diff_sec(start, now) );
 
   //write pages
   //FIXME: in old xbsv, simulatneous DMA reads using multiple readers cause kernel panic
@@ -509,6 +550,11 @@ int main(int argc, const char **argv){
   fprintf(stderr, "LOG: write %.4lf MB,  bw = %.4lf MB/s (this data is not accurate since it includes time for data generation)\n", total, total/timespec_diff_sec(start, now) );
   
 
+#if defined(SIMULATION)
+  int num_repeats = 1;
+#else
+  int num_repeats = 2000;
+#endif
   clock_gettime(CLOCK_REALTIME, & start);
 
 
@@ -553,7 +599,9 @@ int main(int argc, const char **argv){
     fprintf(stderr, "LOG: **ERROR: Correctness TEST FAILED!\n");
   }
 
-
+#if defined(SIMULATION)
+  return 0;
+#endif
   // read performance check:
   fprintf(stderr, "LOG: Starting read performance TEST...\n");
   // this following makes no data checking on data read
@@ -567,7 +615,7 @@ int main(int argc, const char **argv){
       }
     }
   }
-  */
+
   // start read benchmark
   clock_gettime(CLOCK_REALTIME, & start);
 
@@ -581,8 +629,7 @@ int main(int argc, const char **argv){
             //int chip = rand() % 8;
             //int bus = rand() % 8;
             int page = 0;
-            //readPage(card, bus, chip, blk, page, waitIdleReadBuffer());
-            readPage(card, bus, chip, blk, page, 0);
+            readPage(card, bus, chip, blk, page, waitIdleReadBuffer());
           }
         }
       }
@@ -591,8 +638,7 @@ int main(int argc, const char **argv){
 
   while (true) {
     usleep(100);
-    //    if ( getNumReadsInFlight() == 0 ) break;
-    if ( readReqTestDone ) break;
+    if ( getNumReadsInFlight() == 0 ) break;
   }
 
 
