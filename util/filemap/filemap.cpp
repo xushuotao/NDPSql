@@ -60,6 +60,7 @@ namespace filemap_namespace
         for ( it = map.begin(); it !=map.end(); ++it ){
           file << it->first << " " << it->second.base_page << " " << it->second.file_size << "\n";
         }
+        updated = false;
         file.close();
         return true;
       }
