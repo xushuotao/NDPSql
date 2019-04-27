@@ -20,9 +20,9 @@ CONNECTALFLAGS += --bscflags="-D BSIM -D SIM_DMA_WRITE_LATENCY=1"
 endif
 
 BSVFILES = FlashTop.bsv
-CPPFILES = testfile.cpp flashmanage.cpp mmap_util.cpp ../../util/filemap/filemap.cpp
+CPPFILES = testfile.cpp ../../util/flashmanage/flashmanage.cpp ../../util/mmap_util/mmap_util.cpp ../../util/filemap/filemap.cpp 
 
-CONNECTALFLAGS += -l boost_system -l boost_filesystem -l boost_thread -I ../../util/filemap/ --cflags=" --std=c++11 " --nonstrict
+CONNECTALFLAGS += -l boost_system -l boost_filesystem -l boost_thread -I ../../util/filemap/ -I ../../util/flashmanage/ -I ../../util/mmap_util/ --cflags=" --std=c++11 " --nonstrict
 
 ifeq ($(BOARD), vcu108)
 
