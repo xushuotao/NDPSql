@@ -56,8 +56,8 @@ module mkCompact(Compact#(colBytes)) provisos(
    NumAlias#(TMul#(8, colBytes), colWidth),
    Add#(a__, TLog#(TAdd#(1, TDiv#(32, colBytes))), 6),
    Bits#(Vector::Vector#(colBytes, Bit#(TDiv#(32, colBytes))), 32),
-   Add#(b__, TLog#(TAdd#(1, TDiv#(32, colBytes))), TAdd#(TLog#(TDiv#(32,
-      colBytes)), 2)),
+   Add#(b__, TLog#(TAdd#(1, TDiv#(32, colBytes))), TLog#(TAdd#(1,
+      TAdd#(TDiv#(32, colBytes), TDiv#(32, colBytes))))),
    Add#(1, c__, TDiv#(32, colBytes)),
    Add#(TDiv#(32, colBytes), d__, TMul#(TDiv#(32, colBytes), 2))
  );

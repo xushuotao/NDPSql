@@ -61,7 +61,7 @@ endmodule
 module mkCompaction(Compaction#(dataT, vSz)) provisos(
    Bits#(dataT, dSz),
    NumAlias#(vSz, TExp#(TLog#(vSz))),
-   Add#(a__, TLog#(TAdd#(1, vSz)), TAdd#(TLog#(vSz), 2)),
+   Add#(a__, TLog#(TAdd#(1, vSz)), TLog#(TAdd#(1, TAdd#(vSz, vSz)))),
    Add#(1, b__, vSz),
    Add#(vSz, c__, TMul#(vSz, 2))
  );
@@ -103,7 +103,7 @@ module mkCompaction(Compaction#(dataT, vSz)) provisos(
       Vector#(TAdd#(vSz,vSz), Tuple2#(Bool, Bit#(dSz))) concataV = append(outBuf, v.data);
       
       // let rotatedV = reverse(rotateBy(reverse(concataV), newCnt));
-      UInt#(TAdd#(TLog#(vSz),2)) shiftSz = extend(newCnt);
+      UInt#(TLog#(TAdd#(1, TAdd#(vSz, vSz)))) shiftSz = extend(newCnt);
       let rotatedV = shiftOutFrom0(?, concataV, shiftSz);
       
       if ( newCnt > 0 ) begin
@@ -122,7 +122,7 @@ module mkCompaction(Compaction#(dataT, vSz)) provisos(
       oldCnt <= last? 0 : (oldCnt + newCnt)%fromInteger(vSz_int);
       
       // let outdata = reverse(rotateBy(reverse(concataV), 8-oldCnt));
-      UInt#(TAdd#(TLog#(vSz),2)) shiftSz2 = extend(fromInteger(vSz_int) - oldCnt);
+      UInt#(TLog#(TAdd#(1, TAdd#(vSz, vSz)))) shiftSz2 = extend(fromInteger(vSz_int) - oldCnt);
       let outdata = shiftOutFrom0(?, concataV, shiftSz2);
 
       $display("v.last = %d, islast = %d", v.last, last);
