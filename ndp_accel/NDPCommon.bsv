@@ -6,10 +6,22 @@ import FIFOF::*;
 typedef enum {Char, Short, Int, Long, BigInt} ColType deriving (Bits, FShow, Eq);
 
 
+typedef Bit#(256) RowData;
+// typedef struct{
+//    Bit#(256) data;
+//    Bool last;
+// } RowData deriving (Bits, Eq, FShow); 
+
+typedef struct{
+   Bit#(32) mask;
+   Bool last;
+   } RowMask deriving (Bits, Eq, FShow);
+
 typedef struct{
    Bit#(256) data;
+   Bit#(6) bytes;
    Bool last;
-} RowData deriving (Bits, Eq, FShow); 
+   } CompactT deriving (Bits, Eq, FShow);
 
 
 function ColType toColType(Bit#(5) colBytes);
@@ -25,12 +37,12 @@ endfunction
 
 interface NDPStreamIn;
    interface PipeIn#(RowData) rowData;
-   interface PipeIn#(Bit#(32)) rowMask;
+   interface PipeIn#(RowMask) rowMask;
 endinterface
 
 interface NDPStreamOut;
    interface PipeOut#(RowData) rowData;
-   interface PipeOut#(Bit#(32)) rowMask;
+   interface PipeOut#(RowMask) rowMask;
 endinterface
 
 
@@ -55,7 +67,7 @@ interface NDPAccel;
 endinterface
 
 
-function NDPStreamIn toNDPStreamIn(FIFOF#(RowData) dataQ, FIFOF#(Bit#(32)) maskQ);
+function NDPStreamIn toNDPStreamIn(FIFOF#(RowData) dataQ, FIFOF#(RowMask) maskQ);
    return (interface NDPStreamIn;
               interface rowData = toPipeIn(dataQ);
               interface rowMask = toPipeIn(maskQ);
@@ -63,7 +75,7 @@ function NDPStreamIn toNDPStreamIn(FIFOF#(RowData) dataQ, FIFOF#(Bit#(32)) maskQ
 endfunction
 
 
-function NDPStreamOut toNDPStreamOut(FIFOF#(RowData) dataQ, FIFOF#(Bit#(32)) maskQ);
+function NDPStreamOut toNDPStreamOut(FIFOF#(RowData) dataQ, FIFOF#(RowMask) maskQ);
    return (interface NDPStreamOut;
               interface rowData = toPipeOut(dataQ);
               interface rowMask = toPipeOut(maskQ);

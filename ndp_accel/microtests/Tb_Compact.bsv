@@ -81,19 +81,19 @@ module mkTb_Compact();
       
       inject_rowData(pack(vals));
 
-      testEng.streamIn.rowData.enq(RowData{data:pack(vals),
-                                           last: last});
+      testEng.streamIn.rowData.enq(pack(vals));
+      
       // $display(fshow(vals));
       
       if ( valueOf(ColBytes) == 1) begin
          let randMask <- randu32(0);
-         testEng.streamIn.rowMask.enq(randMask);
+         testEng.streamIn.rowMask.enq(RowMask{mask:randMask, last:last});
          inject_rowMask(randMask);
          // $display("inject mask = %b", randMask);
       end
       else if ( cycle % fromInteger(valueOf(ColBytes)) == fromInteger(valueOf(ColBytes)-1) ) begin
          let randMask <- randu32(0);
-         testEng.streamIn.rowMask.enq(randMask);
+         testEng.streamIn.rowMask.enq(RowMask{mask:randMask, last:last});
          inject_rowMask(randMask);
          // $display("inject mask = %b", randMask);
       end
