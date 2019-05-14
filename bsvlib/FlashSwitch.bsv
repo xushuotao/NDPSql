@@ -79,7 +79,7 @@ module mkFlashSwitch(FlashSwitch#(n)) provisos(
       reqRenameTb.invalidEntry(reTag);
    endrule
    
-
+   Reg#(Bit#(8)) writeCnt[2] <- mkCReg(2, 0);
 
 
    function FlashCtrlUser genFlashCtrl(Integer i);

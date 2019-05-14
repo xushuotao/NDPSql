@@ -3,6 +3,34 @@ import FlashCtrlVirtex::*;
 
 import Connectable::*;
 
+typedef Bit#(TLog#(PagesPerBlock)) PageT;
+typedef Bit#(TLog#(BlocksPerCE)) BlockT;
+typedef Bit#(1) CardT;
+
+
+typedef struct {
+   PageT page;
+   BlockT block;
+   ChipT chip;
+   BusT bus;
+   CardT card;
+   } DualFlashAddr deriving (Bits, Eq, FShow);
+
+
+function DualFlashAddr toDualFlashAddr(Bit#(64) pageAddr);
+   PageT page;
+   BlockT block;
+   ChipT chip;
+   BusT bus;
+   CardT card;
+   {block, page, chip, bus, card} = unpack(truncate(pageAddr));
+   return DualFlashAddr{page: page,
+                        block: block,
+                        chip: chip,
+                        bus: bus,
+                        card: card};
+endfunction
+
 
 // Flash Controller client Ifc
 interface FlashCtrlClient;
