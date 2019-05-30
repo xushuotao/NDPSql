@@ -31,3 +31,8 @@ function Bit#(w) minSigned2(Bit#(w) a, Bit#(w) b);
    return signedLT(a,b) ? a : b; 
 endfunction
 
+function Action addOne(Reg#(Bit#(w)) theReg);
+   action
+      theReg <= theReg + 1;
+   endaction
+endfunction

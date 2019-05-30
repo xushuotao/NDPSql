@@ -26,6 +26,8 @@ import BuildVector::*;
 import NDPCommon::*;
 import Pipe::*;
 import AlgFuncs::*;
+import ClientServer::*;
+import GetPut::*;
 
 
 // flash controller stuff
@@ -63,9 +65,18 @@ import "BDPI" function ActionValue#(Bool) inject_rowMask(Bit#(32) x);
 function Bit#(w) mod(Bit#(w) a, Integer i);
    return a%fromInteger(i);
 endfunction
-                 
+
+// `define PassThru
+
+`ifdef PassThru
+Bool isPassThru = True;
+typedef 1 ColBytes;
+`else                 
+Bool isPassThru = False;
 typedef 4 ColBytes;
-Integer colBytes = valueOf(ColBytes);                 
+`endif
+              
+Integer colBytes = valueOf(ColBytes); 
 
 
 typedef enum {Init0, Init1, Run} StatusT deriving (Bits, Eq, FShow);
@@ -120,10 +131,31 @@ module mkTb_FirstColReader(Empty);
       Bit#(64) numRows = randv%8192 + 1;
       numRowsReg <= numRows;
       Bool isMasked = False;
-      colReader.configure.setParameters(vec(extend(base), extend(numRows), extend(pack(isMasked)), ?));
+      colReader.configure.setParameters(vec(extend(base), extend(numRows), isPassThru?1:0, ?));
       state <= Run;
       reqCnt <= 1;
       rand_seed();
+   endrule
+   
+   Reg#(Bit#(64)) vecCnt <- mkReg(0);
+   rule handeReserveReq;
+      let req <- colReader.reserveRowVecs.request.get();
+      vecCnt <= vecCnt + extend(req);
+      $display("vecCnt = %d", vecCnt);
+      
+      if ( vecCnt + fromInteger(8192/colBytes/32) >= ((numRowsReg+31)>>5) ) begin
+         if ( req != truncate(((numRowsReg+31)>>5) - vecCnt) ) begin
+            $display("WARNING: Wrong row vector reserved (%d, %d), %d", req, ((numRowsReg+31)>>5) - vecCnt, ((numRowsReg+31)>>5));
+            $finish();
+         end
+      end
+      else begin
+         if ( req != fromInteger(8192/colBytes/32) ) begin
+            $display("WARNING: Wrong row vector reserved (%d, %d)", req, 8192/colBytes);
+            $finish();
+         end
+      end
+      colReader.reserveRowVecs.response.put(?);
    endrule
       
    Reg#(Bit#(64)) totalBeat <- mkRegU;
@@ -176,6 +208,7 @@ module mkTb_FirstColReader(Empty);
       end
    endrule
    
+   `ifndef PassThru
    Reg#(Bit#(64)) dataRespCnt <- mkReg(0);
    rule collectRowData if ( state == Run);
       let d = colReader.streamOut.rowData.first;
@@ -191,8 +224,14 @@ module mkTb_FirstColReader(Empty);
       end
          
    endrule
+   `endif
 
-   rule passTest if (dataDone && maskDone);
+   rule passTest if (maskDone 
+                    `ifndef PassThru
+                    && dataDone
+                    `endif
+                     );
+      
       $display("RowAggr = %d, numRows = %d", rowAggr, numRowsReg);
       if ( rowAggr == numRowsReg) 
          $display("Test Passed");

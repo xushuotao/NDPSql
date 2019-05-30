@@ -8,7 +8,7 @@ bsvdir=%:+:..:$(connectal_dir):..:$(connectal_dir)/../lib/bsv/:../../bsvlib:$(BA
 
 bscflags=-aggressive-conditions -show-schedule -bdir build_dir/$@ -simdir build_dir/$@ -p $(bsvdir) +RTS -K1G -RTS  -D ClockDefaultParam
 
-targets := Compact FirstColReader
+targets := Compact FirstColReader OneToNRouter
 
 build_dir/bdpi_common.o: bdpi_common.cpp
 	mkdir -p build_dir

@@ -6,6 +6,7 @@ import FIFOF::*;
 typedef enum {Char, Short, Int, Long, BigInt} ColType deriving (Bits, FShow, Eq);
 
 
+
 typedef Bit#(256) RowData;
 // typedef struct{
 //    Bit#(256) data;
@@ -50,6 +51,11 @@ interface NDPConfigure;
    method Action setColBytes(Bit#(5) colBytes);
    method Action setParameters(Vector#(4, Bit#(128)) paras);
 endinterface
+
+
+// instance Connectable#(PipeOut#(Bit#(5)), NDPConfigure);
+//    module mkConnection#(PipeOUt#(Bit#(5))
+// endinstance
 
 
 instance Connectable#(NDPStreamOut, NDPStreamIn);
