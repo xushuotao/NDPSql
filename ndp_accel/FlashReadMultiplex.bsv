@@ -18,8 +18,9 @@ interface FlashReadMultiplex#(numeric type nSlaves);
    interface Vector#(2, FlashCtrlClient) flashClient;
 endinterface
 
-
 typedef TMul#(128, 1024) MaxInflightRows;
+
+Bool verbose = False;
 
 module mkFlashReadMultiplex(FlashReadMultiplex#(nSlaves));
 
@@ -50,7 +51,7 @@ module mkFlashReadMultiplex(FlashReadMultiplex#(nSlaves));
       else 
          beatCnt <= 0;
       pageRespQs[channel].enq(d);
-      $display("flashReadMux deqResp beatCnt = %d, card = %d, bus = %d, channel = %d", beatCnt, card, bus, channel);
+      if (verbose) $display("flashReadMux deqResp beatCnt = %d, card = %d, bus = %d, channel = %d", beatCnt, card, bus, channel);
    endrule
       
       
@@ -90,7 +91,7 @@ module mkFlashReadMultiplex(FlashReadMultiplex#(nSlaves));
                     return ?;
                  endmethod
                  method Action readWord (Tuple2#(Bit#(128), TagT) taggedData); 
-                    $display("flashreadmux got readWord from card %d ", i, fshow(taggedData));
+                    if (verbose) $display("flashreadmux got readWord from card %d ", i, fshow(taggedData));
                     let {data, tag} = taggedData;
                     Bit#(3) busSelect = truncate(tag);
                     wordBufs[i][busSelect] <= data;

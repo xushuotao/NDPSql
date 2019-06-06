@@ -47,15 +47,34 @@ interface NDPStreamOut;
 endinterface
 
 
+typedef Vector#(4, Bit#(128)) ParamT;
+
 interface NDPConfigure;
    method Action setColBytes(Bit#(5) colBytes);
-   method Action setParameters(Vector#(4, Bit#(128)) paras);
+   method Action setParameters(ParamT paras);
 endinterface
 
 
-// instance Connectable#(PipeOut#(Bit#(5)), NDPConfigure);
-//    module mkConnection#(PipeOUt#(Bit#(5))
-// endinstance
+instance Connectable#(PipeOut#(Bit#(5)), NDPConfigure);
+   module mkConnection#(PipeOut#(Bit#(5)) pipeOut, NDPConfigure ifc)(Empty);
+      rule doConn;
+         let colBytes = pipeOut.first;
+         pipeOut.deq;
+         ifc.setColBytes(colBytes);
+      endrule
+   endmodule
+endinstance
+
+instance Connectable#(PipeOut#(ParamT), NDPConfigure);
+   module mkConnection#(PipeOut#(ParamT) pipeOut, NDPConfigure ifc)(Empty);
+      rule doConn;
+         let v = pipeOut.first;
+         pipeOut.deq;
+         ifc.setParameters(v);
+      endrule
+   endmodule
+endinstance
+
 
 
 instance Connectable#(NDPStreamOut, NDPStreamIn);

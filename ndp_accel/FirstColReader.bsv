@@ -45,8 +45,8 @@ module mkFirstColReader(FirstColReader);
    
 
    // fifos for interactions with flash
-   FIFO#(DualFlashAddr) flashReadReqQ <- mkFIFO;
-   FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
+   FIFOF#(DualFlashAddr) flashReadReqQ <- mkFIFOF;
+   FIFOF#(Bit#(256)) flashRespQ <- mkFIFOF;
    
    // flash read request related
    Reg#(Bit#(64)) basePageReg <- mkRegU();
@@ -80,7 +80,7 @@ module mkFirstColReader(FirstColReader);
    FIFO#(DualFlashAddr) addrQ <- mkSizedFIFO(8);
    
    Reg#(Bit#(64)) rowVecCnt <- mkReg(maxBound);
-   Reg#(Bit#(64)) totalrowVec <- mkReg(maxBound);
+   Reg#(Bit#(64)) totalrowVec <- mkReg(0);
    
    
    rule genRowVecReserve if (ready && !passThru && pageReqCnt <= endPageID);
@@ -110,8 +110,15 @@ module mkFirstColReader(FirstColReader);
 
    FIFOF#(Bit#(256)) streamOutQ <- mkFIFOF;
    
+   // rule displayFlashResp (flashRespQ.notEmpty );//&& ready && !passThru );&& pageRespCnt <= endPageID);
+   //    $display("data ready from flash, passThru = %d, pageRespCnt = %d, endPageID = %d, ready = %d", passThru, pageRespCnt, endPageID, ready);
+   // endrule
+   
    rule doFlashResp if (ready && !passThru && pageRespCnt <= endPageID);
       let flashWord <- toGet(flashRespQ).get;
+      
+      Vector#(8, Bit#(32)) word_int = unpack(flashWord);
+      $display("(%m) flashWord ", fshow(word_int));
       
       if ( pageBeatCnt == fromInteger(pageWords/2-1) ) begin
          pageBeatCnt <= 0;
@@ -184,8 +191,9 @@ module mkFirstColReader(FirstColReader);
    
       
    rule finishColRead if (ready &&
-                          (!passThru && (pageRespCnt == endPageID + 1 &&
-                          pageReqCnt == endPageID + 1) || rowVecCnt == totalrowVec));
+                          (!passThru && (pageRespCnt == endPageID + 1 && pageReqCnt == endPageID + 1) ||
+                           (passThru && rowVecCnt == totalrowVec)));
+      $display("(%m) finishColRead, passThru = %d, (pageReqCnt, pageRespCnt, endPageID)=(%d,%d,%d), (rowVecCnt, totalrowVec)=(%d, %d)", passThru, pageReqCnt, pageRespCnt, endPageID, rowVecCnt, totalrowVec);
       colBytesReady <= False;
       paramReady <= False;
    endrule
@@ -246,6 +254,7 @@ module mkFirstColReader(FirstColReader);
       endmethod
 
       method Action setParameters(Vector#(4, Bit#(128)) paras) if ( colBytesReady && !paramReady );
+         $display("(%m) setParameters: basePage = %d, numRows = %d,  passThru = %d", paras[0], paras[1], paras[2][0]);
          basePageReg <= truncate(paras[0]);
    
          // max number of Rows
