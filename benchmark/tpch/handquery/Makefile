@@ -1,4 +1,4 @@
-targets := q01 q03
+targets := q01 q03 q06
 
 INC=. gdk common/stream common/options common/utils libbloom libbloom/murmur2
 INC_FLAGS=$(foreach d, $(INC), -I$d)
