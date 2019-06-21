@@ -192,20 +192,25 @@ module mkTb_FirstColReader(Empty);
    rule collectRowMask if ( state == Run);
       let d = colReader.streamOut.rowMask.first;
       colReader.streamOut.rowMask.deq();
-      maskRespCnt <= maskRespCnt + 1;
-      $display("RowMask, cnt = %d, mask = %b, rowAggr = %d, last = %d", maskRespCnt, d.mask, rowAggr, d.last);
-      let v <- inject_rowMask(d.mask);
+      case (d) matches
+         tagged Mask .maskD:
+            begin
+               maskRespCnt <= maskRespCnt + 1;
+               $display("RowMask, cnt = %d, mask = %b, rowAggr = %d", maskRespCnt, maskD.mask, rowAggr);
+               let v <- inject_rowMask(maskD.mask);
       
-      rowAggr <= rowAggr + pack(zeroExtend(countOnes(d.mask)));
-      if ( !v ) begin
-         $display("Error RowMask finish");
-         $finish;
-      end
-      
-      if ( d.last ) begin
-         $display("all RowMask done correctly");
-         maskDone <= True;
-      end
+               rowAggr <= rowAggr + pack(zeroExtend(countOnes(maskD.mask)));
+               if ( !v ) begin
+                  $display("Error RowMask finish");
+                  $finish;
+               end
+            end
+         tagged Last:
+            begin
+               $display("all RowMask done correctly");
+               maskDone <= True;
+            end
+      endcase
    endrule
    
    `ifndef PassThru

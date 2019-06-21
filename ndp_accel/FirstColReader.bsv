@@ -98,6 +98,7 @@ module mkFirstColReader(FirstColReader);
    endrule
 
    
+   FIFOF#(Tuple3#(Bit#(64), Bit#(32), Bool)) preRowMaskQ <- mkFIFOF;
    // generate row mask
    FIFOF#(RowMask) allRowMaskQ <- mkFIFOF;
    Reg#(Bit#(32)) lastMask <- mkRegU;
@@ -114,10 +115,11 @@ module mkFirstColReader(FirstColReader);
    //    $display("data ready from flash, passThru = %d, pageRespCnt = %d, endPageID = %d, ready = %d", passThru, pageRespCnt, endPageID, ready);
    // endrule
    
+   Reg#(Bit#(64)) rowVecId <- mkRegU;
    rule doFlashResp if (ready && !passThru && pageRespCnt <= endPageID);
       let flashWord <- toGet(flashRespQ).get;
       
-      Vector#(8, Bit#(32)) word_int = unpack(flashWord);
+      Vector#(8, Int#(32)) word_int = unpack(flashWord);
       $display("(%m) flashWord ", fshow(word_int));
       
       if ( pageBeatCnt == fromInteger(pageWords/2-1) ) begin
@@ -151,8 +153,14 @@ module mkFirstColReader(FirstColReader);
             end
             
             if (!discardData) begin
-               allRowMaskQ.enq(RowMask{mask:rowMask,
-                                       last: isLast});
+               // allRowMaskQ.enq(tagged Mask MaskData{rowVecId: rowVecId,
+               //                                      mask: rowMask});
+                                                    
+               preRowMaskQ.enq(tuple3(rowVecId,
+                                      rowMask,
+                                      isLast));
+               
+               rowVecId <= rowVecId + 1;
             end
          end
          
@@ -160,7 +168,23 @@ module mkFirstColReader(FirstColReader);
       end
    endrule
    
-   FIFO#(Tuple2#(Bool, RowMask)) tempMaskQ <- mkSizedFIFO(8);
+   Reg#(Bool) doLast <- mkReg(False);
+   
+   rule transformMask;
+      if ( !doLast ) begin
+         let {rowVecId, rowMask, isLast} <- toGet(preRowMaskQ).get;
+         doLast <= isLast;
+         allRowMaskQ.enq(tagged Mask MaskData{rowVecId: rowVecId,
+                                              mask: rowMask});
+      end
+      else begin
+         doLast <= False;
+         allRowMaskQ.enq(tagged Last);
+
+      end
+   endrule
+   
+   FIFO#(Tuple4#(Bool, Bit#(64), Bit#(32), Bool)) tempMaskQ <- mkSizedFIFO(8);
    
    rule doRowVecReserve if (ready && passThru && rowVecCnt < totalrowVec);
       Bool needReserve = False;
@@ -172,21 +196,32 @@ module mkFirstColReader(FirstColReader);
       end
       
       if ( rowVecCnt + 1 == totalrowVec ) begin
-         tempMaskQ.enq(tuple2(needReserve, RowMask{mask: lastMask,
-                                                   last: True}));
+         tempMaskQ.enq(tuple4(needReserve, rowVecCnt,lastMask,True));
       end
       else begin
-         tempMaskQ.enq(tuple2(needReserve, RowMask{mask: -1,
-                                                   last: False}));
-
+         tempMaskQ.enq(tuple4(needReserve, rowVecCnt,maxBound,False));
       end
    endrule
 
-   
-   rule doMaskGen;// if (ready && passThru && rowVecCnt < totalRowVec);
-      let {needResp, d} <- toGet(tempMaskQ).get();
-      if (needResp) reserveRespQ.deq;
-      allRowMaskQ.enq(d);
+   Reg#(Bool) doLast_Gen <- mkReg(False);
+   rule doMaskGen if ( passThru ); // if (ready && passThru && rowVecCnt < totalRowVec);
+      if ( !doLast_Gen ) begin
+         let {needResp, rowVecI, rowMask, isLast} <- toGet(tempMaskQ).get();
+         if (needResp) reserveRespQ.deq;
+         // preRowMaskQ.enq(tuple3(rowVecId,
+         //                        rowMask,
+         //                        isLast));
+         
+         allRowMaskQ.enq(tagged Mask MaskData{rowVecId: rowVecId,
+                                              mask: rowMask});
+
+         doLast_Gen <= isLast;
+      end
+      else begin
+         doLast <= False;
+         allRowMaskQ.enq(tagged Last);
+      end
+
    endrule
    
       
@@ -291,6 +326,7 @@ module mkFirstColReader(FirstColReader);
       pageRespCnt <= 0;
       flashBeatCnt <= 0;
       rowVecCnt <= 0;
+      rowVecId <= 0;
       // beatCnt <= 0;
    endmethod
    
