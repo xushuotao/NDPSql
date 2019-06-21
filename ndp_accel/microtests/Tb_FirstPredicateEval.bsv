@@ -139,7 +139,8 @@ module mkTb_FirstPredicateEval(Empty);
    Bit#(64) totalRows = getNumRows("l_shipdate")/100000;
    
    Vector#(NDPCount, ParamT) params = vec(vec(zeroExtend(getBaseAddr("l_shipdate")), zeroExtend(totalRows), isPassThru?1:0, ?),
-                                          vec(pack(zeroExtend(int_min)), 729999, 1, 1));
+                                          vec(728294, 728658, 1, 1));
+                                          // vec(pack(zeroExtend(int_min)), 729999, 1, 1));
    
    Reg#(Bit#(64)) numRowsReg <- mkRegU();
    
@@ -214,10 +215,27 @@ module mkTb_FirstPredicateEval(Empty);
       // end
    endrule
    
+   Reg#(Bit#(64)) prevRowVec <- mkReg(-1);
    rule doRowVecReq;
       ndp.rowVecReq.deq();
-      let {rnw, last} = ndp.rowVecReq.first;
-      if ( last) $finish();
+      let d = ndp.rowVecReq.first;
+      
+      // prevRowVec <= prevRowVec + 1;
+      $display(fshow(d));
+      case (d) matches
+         tagged RowVecId .rowVecId:
+            begin
+               // if ( prevRowVec + 1 != rowVecId ) begin
+               //    $display("FAILED:: FirstPredicateEva ~ RowVecId is not continous (%d vs %d)", prevRowVec+1, rowVecId);
+               //    $finish();
+               // end
+            end
+         tagged Last: 
+            begin
+               $display("Test Done, rowAggr = %d", rowAggr);
+               $finish();
+            end
+      endcase
    endrule
             
             
