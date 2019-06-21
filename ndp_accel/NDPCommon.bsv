@@ -14,9 +14,19 @@ typedef Bit#(256) RowData;
 // } RowData deriving (Bits, Eq, FShow); 
 
 typedef struct{
+   Bit#(64) rowVecId;
    Bit#(32) mask;
-   Bool last;
+   } MaskData deriving (Bits, Eq, FShow);
+
+typedef union tagged{
+   MaskData Mask;
+   void Last;
    } RowMask deriving (Bits, Eq, FShow);
+
+typedef union tagged{
+   Bit#(64) RowVecId;
+   void Last;
+   } RowVecFilter deriving (Bits, Eq, FShow);
 
 typedef struct{
    Bit#(256) data;

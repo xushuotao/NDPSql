@@ -8,7 +8,7 @@ bsvdir=%:+:..:$(connectal_dir):..:$(connectal_dir)/../lib/bsv/:../../bsvlib:$(BA
 
 bscflags=-aggressive-conditions -show-schedule -bdir build_dir/$@ -simdir build_dir/$@ -p $(bsvdir) +RTS -K1G -RTS  -D ClockDefaultParam -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -l boost_system
 
-targets := Compact FirstColReader OneToNRouter FirstPredicateEval
+targets := Compact FirstColReader OneToNRouter FirstPredicateEval Select
 
 cpp_targets := common emulatedflash
 
