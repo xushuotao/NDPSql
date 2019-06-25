@@ -18,15 +18,27 @@ typedef struct{
    Bit#(32) mask;
    } MaskData deriving (Bits, Eq, FShow);
 
-typedef union tagged{
-   MaskData Mask;
-   void Last;
+// typedef union tagged{
+//    MaskData Mask;
+//    void Last;
+//    } RowMask deriving (Bits, Eq, FShow);
+
+typedef struct{
+   Bit#(64) rowVecId;
+   Bit#(32) mask;
+   Bool isLast;
+   Bool hasData;
    } RowMask deriving (Bits, Eq, FShow);
 
-typedef union tagged{
-   Bit#(64) RowVecId;
-   void Last;
-   } RowVecFilter deriving (Bits, Eq, FShow);
+
+
+// typedef union tagged{
+//    } RowVecReq deriving (Bits, Eq, FShow);
+typedef struct{
+   Bit#(64) numRowVecs;
+   Bool maskZero;
+   Bool last;
+   } RowVecReq deriving (Bits, Eq, FShow);
 
 typedef struct{
    Bit#(256) data;
@@ -42,6 +54,37 @@ function ColType toColType(Bit#(5) colBytes);
              4: Int;
              8: Long;
              16: BigInt;
+          endcase;
+endfunction
+
+function Bit#(3) toLgColBytes(Bit#(5) colBytes);
+   return case (colBytes)
+             1: 0;
+             2: 1;
+             4: 2;
+             8: 3;
+             16: 4;
+          endcase;
+endfunction   
+
+function Bit#(8) toRowVecsPerPage(Bit#(5) colBytes);
+   return case (colBytes )
+             1: 256;
+             2: 128;
+             4: 64;
+             8: 32;
+             16: 16;
+          endcase;
+endfunction
+
+function Bit#(64) toEndPageId(Bit#(64) numRows, Bit#(5) colBytes);
+   Bit#(64) endRowId = numRows - 1;
+   return case (colBytes )
+             1: (endRowId >> 13);
+             2: (endRowId >> 12);
+             4: (endRowId >> 11);
+             8: (endRowId >> 10);
+             16:(endRowId >> 9); 
           endcase;
 endfunction
 

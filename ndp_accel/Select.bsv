@@ -44,11 +44,13 @@ module mkSelect(Select#(colBytes)) provisos(
    FIFOF#(RowMask) rowMaskQ <- mkFIFOF;
    
    Reg#(Bit#(lgColBytes)) maskSel <- mkReg(0);
-   FIFO#(Tuple3#(Bit#(64), Bool,  rowMaskT)) beatMaskQ <- mkFIFO;
+   // rowVecId, isLast, hasData, mask
+   FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) beatMaskQ <- mkFIFO;
    
    FIFOF#(RowData) rowDataQ <- mkSizedFIFOF((32/rowsPerBeat_int)+1);
 
-   FIFO#(Tuple3#(Bit#(64), Bool, rowMaskT)) outBeatMaskQ <- mkFIFO;
+   // rowVecId, isLast, hasData, mask
+   FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) outBeatMaskQ <- mkFIFO;
    FIFOF#(RowMask) outRowMaskQ <- mkFIFOF;   
    FIFOF#(RowData) outRowDataQ <- mkFIFOF;
    
@@ -69,23 +71,21 @@ module mkSelect(Select#(colBytes)) provisos(
 
    
    rule rowMask2beatMask;
-      case (rowMaskQ.first) matches
-         tagged Mask .maskData: 
-            begin
-               Vector#(colBytes, rowMaskT) maskV = unpack(maskData.mask);
-               maskSel <= maskSel + 1;
-               let rowVecId = maskData.rowVecId;
-               $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
-               if ( maskSel == maxBound ) rowMaskQ.deq;
-               beatMaskQ.enq(tuple3(rowVecId, False, maskV[maskSel]));
-            end
-         tagged Last:
-            begin
-               $display("(%m) rowMask2beatMask(%d) Last, maskSel = %d", valueOf(colBytes), maskSel);
-               beatMaskQ.enq(tuple3(?, True, ?));
-               rowMaskQ.deq;
-            end
-      endcase
+      let maskData = rowMaskQ.first;
+      let rowVecId = maskData.rowVecId;
+      let isLast = maskData.isLast;
+      if ( maskData.hasData ) begin
+         Vector#(colBytes, rowMaskT) maskV = unpack(maskData.mask);
+         maskSel <= maskSel + 1;
+
+         $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
+         if ( maskSel == maxBound ) rowMaskQ.deq;
+         beatMaskQ.enq(tuple4(rowVecId, isLast, True, maskV[maskSel]));
+      end
+      else begin
+         beatMaskQ.enq(tuple4(rowVecId, isLast, False, ?));
+         rowMaskQ.deq;
+      end
       
 
    endrule
@@ -93,9 +93,9 @@ module mkSelect(Select#(colBytes)) provisos(
 
    Reg#(Bit#(colWidth)) rowOffset <- mkReg(0);
    rule doSelect;
-      let {rowVecId, last, mask} <- toGet(beatMaskQ).get();
+      let {rowVecId, last, hasData, mask} <- toGet(beatMaskQ).get();
       rowMaskT newMask = ?;
-      if  ( !last ) begin
+      if  ( hasData ) begin
          let v <- toGet(rowDataQ).get();
          Vector#(rowsPerBeat, Bit#(colWidth)) data = unpack(v);
          let evalRes = evalPred(data, loBound, hiBound);
@@ -103,7 +103,8 @@ module mkSelect(Select#(colBytes)) provisos(
          Vector#(rowsPerBeat, Int#(colWidth)) data_int = unpack(v);
          $display("(%m) doSelect(%d) (lo, hi)=(%d, %d), dataV = ", valueOf(colBytes), loBound, hiBound, fshow(data_int));
          // $display("(%m) doSelect(%d) dataMask = %b, notallzero = %d", valueOf(colBytes), dataMask, pack(dataMask) != 0);
-         newMask = andNotOr? pack(dataMask) & mask : pack(dataMask) | mask;
+         // newMask = andNotOr? pack(dataMask) & mask : pack(dataMask) | mask;
+         newMask = pack(dataMask) & mask;
       
          rowOffset <= rowOffset + fromInteger(rowsPerBeat_int);
       
@@ -111,7 +112,7 @@ module mkSelect(Select#(colBytes)) provisos(
          
          outRowDataQ.enq(pack(rowIds));
       end 
-      outBeatMaskQ.enq(tuple3(rowVecId, last, newMask));
+      outBeatMaskQ.enq(tuple4(rowVecId, last, hasData, newMask));
    endrule
    
    Reg#(Bit#(lgColBytes)) maskCnt <- mkReg(0);
@@ -119,19 +120,23 @@ module mkSelect(Select#(colBytes)) provisos(
    Reg#(Bit#(32)) outMaskBuf <- mkRegU;
 
    rule rowMaskTomask;
-      
-      let {rowVecId, last, beatMask} <- toGet(outBeatMaskQ).get();
+      let {rowVecId, last, hasData, beatMask} <- toGet(outBeatMaskQ).get();
       Bit#(32) rowMask = truncateLSB({beatMask, outMaskBuf});
       $display("(%m) rowMaskTomask(%d) maskCnt = %d, mask = %b, rowMask = %b, last = %d", valueOf(colBytes), maskCnt, rowMask, beatMask, last);      
-      if ( !last ) begin
+      if ( hasData ) begin
          outMaskBuf <= rowMask;
          maskCnt <= maskCnt + 1;
          if ( maskCnt == maxBound ) 
-            outRowMaskQ.enq(tagged Mask MaskData{rowVecId: rowVecId,
-                                                 mask: rowMask});
+            outRowMaskQ.enq(RowMask{rowVecId: rowVecId,
+                                    mask: rowMask,
+                                    hasData: True,
+                                    isLast: last});
       end
       else begin
-          outRowMaskQ.enq(tagged Last);
+         outRowMaskQ.enq(RowMask{rowVecId: rowVecId,
+                                 mask: ?,
+                                 hasData: False,
+                                 isLast: last});
       end
    endrule
 

@@ -84,13 +84,13 @@ module mkTb_Select();
    endrule
    
    Reg#(Bit#(64)) maskCnt <- mkReg(0);
-   rule inputMask (state == Run && maskCnt <= testLength);
-      if ( maskCnt < testLength ) begin
-         testEng.streamIn.rowMask.enq(tagged Mask MaskData{mask: -1});
+   rule inputMask (state == Run && maskCnt < testLength);
+      if ( maskCnt + 1 < testLength ) begin
+         testEng.streamIn.rowMask.enq(RowMask{isLast:False, mask: -1, hasData:True, rowVecId:maskCnt});
          $display("Tb: inputMask mask");
       end
       else begin
-         testEng.streamIn.rowMask.enq(tagged Last);
+         testEng.streamIn.rowMask.enq(RowMask{isLast:True, mask: -1, hasData:True, rowVecId:maskCnt});
          $display("Tb: inputMask LAST");
       end
       
@@ -138,26 +138,52 @@ module mkTb_Select();
    rule outputMask;
       let d = testEng.streamOut.rowMask.first;
       testEng.streamOut.rowMask.deq;
-      case (d) matches
-         tagged Mask .v:
-            begin
-               count <= count + extend(pack(countOnes(v.mask)));
-               $display("Tb outMask = %b, count = %d", v.mask, count);
-               if ( !check_mask(v.mask) ) begin
-                  $display("FAILED: Select check mask wrong result");
-                  $finish();
-               end
-            end
-         tagged Last:
-            begin
-               $display("OUTMASK:: LAST");
-               if( check_count(count) )
-                  $display("Passed: SelectFilter");
-               else
-                  $display("Failed: WrongCount");
-               $finish();
-            end
-      endcase
+      
+      
+      
+      
+      // $display("Tb outMask = %b, count = %d", v.mask, count);
+      $display("Tb outMask count = %d, maskData = ", count, fshow(d));
+      
+      if ( d.hasData) begin
+         count <= count + extend(pack(countOnes(d.mask)));
+         if ( !check_mask(d.mask) ) begin
+            $display("FAILED: Select check mask wrong result");
+            $finish();
+         end
+      end
+      
+      
+      if (d.isLast) begin
+         $display("OUTMASK:: LAST");
+         if( check_count(count+extend(pack(countOnes(d.mask)))) )
+            $display("Passed: SelectFilter");
+         else
+            $display("Failed: WrongCount");
+         $finish();
+      end
+      
+
+      // case (d) matches
+      //    tagged Mask .v:
+      //       begin
+      //          count <= count + extend(pack(countOnes(v.mask)));
+      //          $display("Tb outMask = %b, count = %d", v.mask, count);
+      //          if ( !check_mask(v.mask) ) begin
+      //             $display("FAILED: Select check mask wrong result");
+      //             $finish();
+      //          end
+      //       end
+      //    tagged Last:
+      //       begin
+      //          $display("OUTMASK:: LAST");
+      //          if( check_count(count) )
+      //             $display("Passed: SelectFilter");
+      //          else
+      //             $display("Failed: WrongCount");
+      //          $finish();
+      //       end
+      // endcase
    endrule
    
    rule outputData;
