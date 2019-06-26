@@ -9,6 +9,7 @@ import RowMask::*;
 import FIFO::*;
 import ControllerTypes::*;
 import Vector::*;
+import ColReader::*;
 
 typedef struct{
    Bit#(64) firstRow;
@@ -28,11 +29,75 @@ interface FirstColReader;
    // set up parameter
    interface NDPConfigure configure;
    
-   method Action start();
+   // method Action start();
 endinterface
 
 
+(* synthesize *)
+module mkFirstColReader(FirstColReader);
+   let colReader <- mkColReader();
+   
+   Reg#(Bit#(64)) totalRowVecs <- mkRegU;
+   Reg#(Bool) busy <- mkReg(False);
+   Reg#(Bit#(64)) rowVecCnt <- mkRegU;
+   
+   Reg#(Bit#(9)) rowVecsPerPage <- mkRegU;
+   
+   FIFO#(Bit#(9)) reserveRowVecQ <- mkFIFO;
+   FIFO#(void) reserveRespQ <- mkFIFO;
+   
+   FIFO#(RowVecReq) rowVecReqQ <- mkFIFO;
+   
+   FIFO#(RowVecReq) rowVecReqOutQ <- mkFIFO;
+   rule genRowVecReq if ( busy );
+      rowVecCnt <= rowVecCnt + zeroExtend(rowVecsPerPage);
+      
+      Bool last = False;
+      if ( rowVecCnt +  extend(rowVecsPerPage) >= totalRowVecs) begin
+         busy <= False;
+         last = True;
+      end
+      
+      let rowVecsToReserve = min(zeroExtend(rowVecsPerPage), totalRowVecs - rowVecCnt);
+      
+      $display("(%m) rowVecsPerPage = %d, totalRowVecs = %d, rowVecCnt = %d, last = %d", rowVecsPerPage, totalRowVecs, rowVecCnt, last);
+      
+      rowVecReqQ.enq(RowVecReq{numRowVecs: rowVecsToReserve,
+                               maskZero: False,
+                               last: last});
+      
+      reserveRowVecQ.enq(truncate(rowVecsToReserve));
+   endrule
+   
+   rule issuRowVecReq;
+      reserveRespQ.deq;
+      let v <- toGet(rowVecReqQ).get;
+      colReader.rowVecReqIn.enq(v);
+   endrule
+   
+   interface Client flashRdClient = colReader.flashRdClient;
+   interface Client reserveRowVecs = toClient(reserveRowVecQ, reserveRespQ);
+   interface NDPStreamOut streamOut = colReader.streamOut;
+   interface NDPConfigure configure;
+      method Action setColBytes(Bit#(5) colBytes) if (!busy);
+         $display("(%m) setColBytes %d ", colBytes);
+         colReader.configure.setColBytes(colBytes);
+         rowVecsPerPage <= toRowVecsPerPage(colBytes);
+      endmethod
+      method Action setParameters(ParamT params) if (!busy);
+         $display("(%m) setParameters ", fshow(params));
+         colReader.configure.setParameters(params);
+         Bit#(64) numRows = truncate(params[0]);
+         rowVecCnt <= 0;
+         totalRowVecs <= (numRows + 31) >> 5;
+         busy <= True;
+      endmethod
 
+   endinterface
+endmodule
+
+
+/*
 (* synthesize *)
 module mkFirstColReader(FirstColReader);
    
@@ -331,3 +396,4 @@ module mkFirstColReader(FirstColReader);
    endmethod
    
 endmodule
+*/

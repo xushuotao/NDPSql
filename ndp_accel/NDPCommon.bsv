@@ -67,7 +67,7 @@ function Bit#(3) toLgColBytes(Bit#(5) colBytes);
           endcase;
 endfunction   
 
-function Bit#(8) toRowVecsPerPage(Bit#(5) colBytes);
+function Bit#(9) toRowVecsPerPage(Bit#(5) colBytes);
    return case (colBytes )
              1: 256;
              2: 128;
@@ -100,11 +100,14 @@ interface NDPStreamOut;
 endinterface
 
 
+// typedef Vector#(4, Bit#(128)) ParamT;
+// typedef Vector#(4, Bit#(128)) ParamT;
 typedef Vector#(4, Bit#(128)) ParamT;
 
 interface NDPConfigure;
    method Action setColBytes(Bit#(5) colBytes);
    method Action setParameters(ParamT paras);
+   // method Action set(Bit#(3) lgColbytes, ParamT param);
 endinterface
 
 

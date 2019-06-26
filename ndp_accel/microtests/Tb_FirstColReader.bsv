@@ -124,21 +124,30 @@ module mkTb_FirstColReader(Empty);
    endrule
    
    Reg#(Bit#(64)) numRowsReg <- mkRegU();
-
+   Reg#(Bit#(64)) totalBeat <- mkRegU;
+   
    rule init_param if ( state == Init1);
       Bit#(64) base = 0;
       let randv <- randu64(0);
       Bit#(64) numRows = randv%8192 + 1;
       numRowsReg <= numRows;
       Bool isMasked = False;
-      colReader.configure.setParameters(vec(extend(base), extend(numRows), isPassThru?1:0, ?));
+      Bit#(3) configBits = ?;
+      configBits[0] = 0; // maskRdPort
+      configBits[1] = 1;
+      configBits[2] = pack(isPassThru);
+      
+      colReader.configure.setParameters(vec(extend(numRows), extend(base), extend(configBits), ?));
       state <= Run;
-      reqCnt <= 1;
+      // reqCnt <= 1;
+      totalBeat <= ((numRows+31) >> 5) * fromInteger(colBytes);
       rand_seed();
+      init_test1(0, numRows-1);
+      $display("SetParam numRows = %d, base = %d, configBits = %b", numRows, base, configBits);
    endrule
    
    Reg#(Bit#(64)) vecCnt <- mkReg(0);
-   rule handeReserveReq;
+   rule handeReserveReq if ( state == Run) ;
       let req <- colReader.reserveRowVecs.request.get();
       vecCnt <= vecCnt + extend(req);
       $display("vecCnt = %d", vecCnt);
@@ -158,29 +167,29 @@ module mkTb_FirstColReader(Empty);
       colReader.reserveRowVecs.response.put(?);
    endrule
       
-   Reg#(Bit#(64)) totalBeat <- mkRegU;
 
-   rule sendReq if ( state == Run && reqCnt > 0);
-      colReader.start;
+
+   // rule sendReq if ( state == Run && reqCnt > 0);
+   //    colReader.start;
       
-      reqCnt <= reqCnt - 1;
-      init_test1(0, numRowsReg-1);
+   //    reqCnt <= reqCnt - 1;
+   //    init_test1(0, numRowsReg-1);
       
-      Bit#(4) lgRPP = case (colBytes)
-                         1: 13;
-                         2: 12;
-                         4: 10;
-                         8: 9;
-                         16: 8;
-                         endcase;
+   //    Bit#(4) lgRPP = case (colBytes)
+   //                       1: 13;
+   //                       2: 12;
+   //                       4: 10;
+   //                       8: 9;
+   //                       16: 8;
+   //                       endcase;
       
-      // Bit#(3) lg
+   //    // Bit#(3) lg
       
-      // let startpage = startRow >> lgRPP;
-      // let endpage = endRow >> lgRPP;
+   //    // let startpage = startRow >> lgRPP;
+   //    // let endpage = endRow >> lgRPP;
       
-      totalBeat <= ((numRowsReg+31) >> 5) * fromInteger(colBytes);
-   endrule
+   //    totalBeat <= ((numRowsReg+31) >> 5) * fromInteger(colBytes);
+   // endrule
    
    Reg#(Bool) maskDone <- mkReg(False);
    Reg#(Bool) dataDone <- mkReg(False);
@@ -192,25 +201,30 @@ module mkTb_FirstColReader(Empty);
    rule collectRowMask if ( state == Run);
       let d = colReader.streamOut.rowMask.first;
       colReader.streamOut.rowMask.deq();
-      case (d) matches
-         tagged Mask .maskD:
-            begin
-               maskRespCnt <= maskRespCnt + 1;
-               $display("RowMask, cnt = %d, mask = %b, rowAggr = %d", maskRespCnt, maskD.mask, rowAggr);
-               let v <- inject_rowMask(maskD.mask);
+      // case (d) matches
+      //    tagged Mask .maskD:
+      //       begin
+
       
-               rowAggr <= rowAggr + pack(zeroExtend(countOnes(maskD.mask)));
-               if ( !v ) begin
-                  $display("Error RowMask finish");
-                  $finish;
-               end
-            end
-         tagged Last:
-            begin
-               $display("all RowMask done correctly");
-               maskDone <= True;
-            end
-      endcase
+      
+      maskRespCnt <= maskRespCnt + 1;
+      if ( d.hasData ) begin
+         
+         $display("RowMask, cnt = %d, mask = %b, rowAggr = %d, numRows = %d", maskRespCnt, d.mask, rowAggr+pack(zeroExtend(countOnes(d.mask))), numRowsReg);
+         let v <- inject_rowMask(d.mask);
+      
+         rowAggr <= rowAggr + pack(zeroExtend(countOnes(d.mask)));
+         if ( !v ) begin
+            $display("Error RowMask finish");
+            $finish;
+         end
+      end
+      
+            
+      if ( d.isLast ) begin
+         $display("all RowMask done correctly");
+         maskDone <= True;
+      end
    endrule
    
    `ifndef PassThru
