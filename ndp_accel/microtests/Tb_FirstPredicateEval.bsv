@@ -138,9 +138,15 @@ module mkTb_FirstPredicateEval(Empty);
 
    Bit#(64) totalRows = getNumRows("l_shipdate")/100000;
    
-   Vector#(NDPCount, ParamT) params = vec(vec(zeroExtend(getBaseAddr("l_shipdate")), zeroExtend(totalRows), isPassThru?1:0, ?),
-                                          vec(728294, 728658, 1, 1));
-                                          // vec(pack(zeroExtend(int_min)), 729999, 1, 1));
+   Bit#(3) configBits = ?;
+   configBits[0] = 0; // maskRdPort
+   configBits[1] = 1; // allRows
+   configBits[2] = pack(isPassThru);
+   
+   Bit#(64) totalRowsExpected = 2810;
+
+   
+   Vector#(NDPCount, ParamT) params = vec(vec(zeroExtend(totalRows), zeroExtend(getBaseAddr("l_shipdate")), zeroExtend(configBits), ?),vec(728294, 728658, 1, 1));
    
    Reg#(Bit#(64)) numRowsReg <- mkRegU();
    
@@ -181,11 +187,11 @@ module mkTb_FirstPredicateEval(Empty);
       
    // Reg#(Bit#(64)) totalBeat <- mkRegU;
 
-   rule sendReq if ( state == Run && reqCnt > 0);
-      ndp.start;
-      reqCnt <= reqCnt - 1;
-      // $finish();
-   endrule
+   // rule sendReq if ( state == Run && reqCnt > 0);
+   //    ndp.start;
+   //    reqCnt <= reqCnt - 1;
+   //    // $finish();
+   // endrule
    
    // Reg#(Bool) maskDone <- mkReg(False);
    // Reg#(Bool) dataDone <- mkReg(False);
@@ -221,21 +227,33 @@ module mkTb_FirstPredicateEval(Empty);
       let d = ndp.rowVecReq.first;
       
       // prevRowVec <= prevRowVec + 1;
+      
       $display(fshow(d));
-      case (d) matches
-         tagged RowVecId .rowVecId:
-            begin
-               // if ( prevRowVec + 1 != rowVecId ) begin
-               //    $display("FAILED:: FirstPredicateEva ~ RowVecId is not continous (%d vs %d)", prevRowVec+1, rowVecId);
-               //    $finish();
-               // end
-            end
-         tagged Last: 
-            begin
-               $display("Test Done, rowAggr = %d", rowAggr);
-               $finish();
-            end
-      endcase
+      
+      if (d.numRowVecs != 1 ) begin
+         $display("Test Failed, numVecCnts should be 1 vs %d", d.numRowVecs);
+         $finish();
+      end
+      
+      if ( d.last ) begin
+         $display("Test Done, rowAggr = %d, expected = %d", rowAggr, totalRowsExpected);
+         $finish();
+      end
+
+      // case (d) matches
+      //    tagged RowVecId .rowVecId:
+      //       begin
+      //          // if ( prevRowVec + 1 != rowVecId ) begin
+      //          //    $display("FAILED:: FirstPredicateEva ~ RowVecId is not continous (%d vs %d)", prevRowVec+1, rowVecId);
+      //          //    $finish();
+      //          // end
+      //       end
+      //    tagged Last: 
+      //       begin
+      //          $display("Test Done, rowAggr = %d", rowAggr);
+      //          $finish();
+      //       end
+      // endcase
    endrule
             
             

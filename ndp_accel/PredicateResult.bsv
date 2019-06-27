@@ -8,7 +8,7 @@ import GetPut::*;
 interface PredicateResult;
    interface NDPStreamIn streamIn;
    interface Get#(RowMaskWrite) rowMaskWrite;
-   interface PipeOut#(RowVecFilter) rowVecReq;
+   interface PipeOut#(RowVecReq) rowVecReq;
 endinterface
 
 
@@ -23,29 +23,46 @@ module mkPredicateResult(PredicateResult);
    
    Reg#(Bit#(64)) rowVecCnt <- mkReg(0);
    
-   FIFOF#(RowVecFilter) rowVecReqQ <- mkFIFOF;
+   FIFOF#(RowVecReq) rowVecReqQ <- mkFIFOF;
    
    Reg#(Bool) doLast <- mkReg(False);
   
-
+ 
    // Reg#(Maybe#(RowMask)) maskRelay <- mkReg(tagged Invalid);
    
-   rule doRowMask if (!doLast);
+   Reg#(Bit#(64)) lastRowVecId <- mkReg(-1);
+   
+   rule doRowMask;// if (!doLast);
       let d <- toGet(rowMaskQ).get;
       
-      case (d) matches
-         tagged Mask .maskD:
-            begin
-               $display("(%m) doRowMask mask = %b, notVoid = %d,", maskD.mask, maskD.mask != 0);
-               maskWriteQ.enq(RowMaskWrite{id:truncate(maskD.rowVecId),
-                                           mask: maskD.mask});
-               if ( maskD.mask != 0 ) begin
-                  rowVecReqQ.enq(tagged RowVecId maskD.rowVecId );
-               end
-            end
-         tagged Last:
-            rowVecReqQ.enq(tagged Last);
-      endcase
+      rowVecReqQ.enq(RowVecReq{numRowVecs: d.rowVecId - lastRowVecId,
+                               maskZero: d.mask == 0,
+                               last: d.isLast});
+      
+      if ( d.isLast ) begin
+         lastRowVecId <= -1;
+      end
+      else begin
+         lastRowVecId <= d.rowVecId;
+      end
+      
+      maskWriteQ.enq(RowMaskWrite{id:truncate(d.rowVecId),
+                                  mask: d.mask});
+
+      
+      // case (d) matches
+      //    tagged Mask .maskD:
+      //       begin
+      //          $display("(%m) doRowMask mask = %b, notVoid = %d,", maskD.mask, maskD.mask != 0);
+      //          maskWriteQ.enq(RowMaskWrite{id:truncate(maskD.rowVecId),
+      //                                      mask: maskD.mask});
+      //          // if ( maskD.mask != 0 ) begin
+      //          rowVecReqQ.enq(tagged RowVecId maskD.rowVecId );
+      //          // end
+      //       end
+      //    tagged Last:
+      //       rowVecReqQ.enq(tagged Last);
+      // endcase
             
       // if ( d.last ) doLast <= True;
    endrule

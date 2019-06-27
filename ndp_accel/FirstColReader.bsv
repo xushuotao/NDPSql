@@ -23,6 +23,8 @@ interface FirstColReader;
    
    interface Client#(Bit#(9), void) reserveRowVecs;
    
+   interface PipeOut#(RowVecReq) rowVecReqOut;
+
    // outPipe to next Accel
    interface NDPStreamOut streamOut;
    
@@ -77,6 +79,7 @@ module mkFirstColReader(FirstColReader);
    
    interface Client flashRdClient = colReader.flashRdClient;
    interface Client reserveRowVecs = toClient(reserveRowVecQ, reserveRespQ);
+   interface PipeOut rowVecReqOut = colReader.rowVecReqOut;
    interface NDPStreamOut streamOut = colReader.streamOut;
    interface NDPConfigure configure;
       method Action setColBytes(Bit#(5) colBytes) if (!busy);
