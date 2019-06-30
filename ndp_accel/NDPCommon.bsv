@@ -37,6 +37,8 @@ typedef struct{
 typedef struct{
    Bit#(64) numRowVecs;
    Bool maskZero;
+   // Bit#(32) mask;
+   Bit#(64) rowAggr;
    Bool last;
    } RowVecReq deriving (Bits, Eq, FShow);
 

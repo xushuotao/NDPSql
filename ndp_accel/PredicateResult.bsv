@@ -37,6 +37,7 @@ module mkPredicateResult(PredicateResult);
       
       rowVecReqQ.enq(RowVecReq{numRowVecs: d.rowVecId - lastRowVecId,
                                maskZero: d.mask == 0,
+                               rowAggr: pack(zeroExtend(countOnes(d.mask))),
                                last: d.isLast});
       
       if ( d.isLast ) begin
@@ -46,7 +47,9 @@ module mkPredicateResult(PredicateResult);
          lastRowVecId <= d.rowVecId;
       end
       
-      maskWriteQ.enq(RowMaskWrite{id:truncate(d.rowVecId),
+      maskWriteQ.enq(RowMaskWrite{isMerge:False,
+                                  src:0,
+                                  id:truncate(d.rowVecId),
                                   mask: d.mask});
 
       
