@@ -30,7 +30,7 @@ typedef enum {Idle, SetParam, Forward, AllRows, PartialRows} ColReaderState deri
 interface ColReader;
    // interactions with flash and rowMasks
    interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
-   interface Client#(RowVectorId, RowVectorMask) maskRdPort;   
+   interface Client#(RowMaskRead, RowVectorMask) maskRdClient;   
       
    interface PipeIn#(RowVecReq) rowVecReqIn;
    // bypass rowVec
@@ -102,8 +102,11 @@ module mkColReader(ColReader);
       if (req.last ) begin
          dynamicAssert(rowVecCnt + req.numRowVecs == totalRowVecs, "(%m) (Forward) totalRows should be the same");
          state <= Idle;
+         rowVecCnt <= 0;
       end
-      
+      else begin
+         rowVecCnt <= rowVecCnt + req.numRowVecs;
+      end
       bypassRowVecReqQ.enq(req);
    endrule
 
@@ -126,6 +129,12 @@ module mkColReader(ColReader);
    
    Reg#(Bool) allRowVecsFinished <- mkRegU();
    
+   Reg#(Bool) needRead <- mkReg(False);
+      
+   FIFO#(DualFlashAddr) addrQ <- mkFIFO;
+   FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
+
+   
    rule doAllRows_flashReq if ( state == AllRows || state == PartialRows);
       let req = rowVecReqQ.first();
       
@@ -134,15 +143,17 @@ module mkColReader(ColReader);
       
       // make suring that we are increase rowVecs page by page
       // so that we don't miss a page request;
-      $display("rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
+      
+      Bool isLast = False;
+
       if ( rowVec_reqCnt + zeroExtend(rowVecsPerPage) >= req.numRowVecs ) begin
          rowVec_reqCnt <= 0;
          rowVecCnt <= rowVecCnt + req.numRowVecs;
          rowVecReqQ.deq;
          
          if ( req.last ) begin
-
-            dynamicAssert(rowVecCnt + req.numRowVecs == totalRowVecs, "(%m) (Forward) totalRows should equal");
+            isLast = True;
+            dynamicAssert(rowVecCnt + req.numRowVecs == totalRowVecs, "(%m) (Nonforward) totalRows should equal");
             allRowVecsFinished <= True;
             // state <= Idle;
          end
@@ -151,36 +162,60 @@ module mkColReader(ColReader);
          rowVec_reqCnt <= rowVec_reqCnt + rowVecIncr;
       end
       
-      lastRowVecId <= rowVecCnt + rowVec_reqCnt + rowVecIncr;
+
+      let nextPageId = rowVecToPageId(rowVecCnt + rowVec_reqCnt + rowVecIncr);
+      
+      // lastRowVecId <= rowVecCnt + rowVec_reqCnt + rowVecIncr;
       
       let currPageId = rowVecToPageId(rowVecCnt + rowVec_reqCnt);
       
-      lastPageId <= tagged Valid currPageId;
 
-      // issue flashRead request only when there is page change
-      if ( lastPageId !=  tagged Valid currPageId ) begin      
-         Bool cond = isValid(lastPageId) && (fromMaybe(?, lastPageId) + 1 == currPageId);
-         dynamicAssert( cond || currPageId == 0, "pageReq only increase by one");
-         Bool doRead = False;
-         if ( state == AllRows ) begin
+      
+      
+      Bool needRead_next = needRead || (state == AllRows || req.maskZero);
+      $display("(%m):gen flash req rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
+      $display("(%m): currPageId = %d, nextPageId = %d, needRead = %d, needRead_next = %d, isLast = %d", currPageId, nextPageId, needRead, needRead_next, isLast);
+      
+
+      // on last RowVec of a page;
+      if ( currPageId != nextPageId || isLast) begin
+         dynamicAssert( nextPageId - currPageId == 1 || isLast, "pageReq only increase by one, or it is last");
+         if ( needRead_next ) begin
             pageReqQ.enq(currPageId);
-            doRead = True;
+            // addrQ.enq(toDualFlashAddr(currPageId+basePageReg));
          end
-         else if ( !req.maskZero ) begin
-            pageReqQ.enq(currPageId);
-            doRead = True;
-         end
-         flashRespMetaQ.enq(doRead);
+         flashRespMetaQ.enq(needRead_next);
+         
+         needRead <= False;
       end
+      else begin
+         needRead <= needRead_next;
+      end
+      
+
+      // lastPageId <= tagged Valid currPageId;
+
+      // // issue flashRead request only when there is page change
+      // if ( lastPageId !=  tagged Valid currPageId ) begin      
+      //    Bool cond = isValid(lastPageId) && (fromMaybe(?, lastPageId) + 1 == currPageId);
+      //    dynamicAssert( cond || currPageId == 0, "pageReq only increase by one");
+      //    Bool doRead = False;
+      //    if ( state == AllRows ) begin
+      //       pageReqQ.enq(currPageId);
+      //       doRead = True;
+      //    end
+      //    else if ( !req.maskZero ) begin
+      //       pageReqQ.enq(currPageId);
+      //       doRead = True;
+      //    end
+      //    flashRespMetaQ.enq(doRead);
+      // end
    endrule
    
-   
-   FIFO#(DualFlashAddr) addrQ <- mkFIFO;
-   FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
    // issue page request only if when all the rowvec in the page has been seen;
-   rule issuePageReq if ( pageReqQ.first() < rowVecToPageId(lastRowVecId) || allRowVecsFinished);
+   rule issuePageReq;// if ( pageReqQ.first() < rowVecToPageId(lastRowVecId) || allRowVecsFinished);
       let pageId <- toGet(pageReqQ).get;
-      $display("(%m): issuing page Read Request for pageId = %d, lastRowVecId = %d", pageId, lastRowVecId);
+      $display("(%m): issuing page Read Request for basePageAddr = %d, pageId = %d, lastRowVecId = %d", basePage, pageId, lastRowVecId);
       addrQ.enq(toDualFlashAddr(pageId+basePage));
    endrule
 
@@ -302,7 +337,10 @@ module mkColReader(ColReader);
    endrule
    
    interface Client flashRdClient = toClient(addrQ, flashRespQ);
-
+   
+   interface Client maskRdClient = toClient(maskRdReqQ, rowMaskRespQ);
+   // interface Client maskRdClient = ?;//toClient(maskRdReqQ, rowMaskRespQ);
+   
    interface PipeIn rowVecReqIn = toPipeIn(rowVecReqQ);
    interface PipeOut rowVecReqOut = toPipeOut(bypassRowVecReqQ);
    
@@ -315,6 +353,7 @@ module mkColReader(ColReader);
          state <= SetParam;
       endmethod
       method Action setParameters(ParamT param) if (state == SetParam);
+         $display("(%m) setParameters ", fshow(param));
          Bit#(64) numRows = truncate(param[0]);
          Bit#(64) baseAddr = truncate(param[1]);
          Bit#(1) maskRdPort = param[2][0];
@@ -334,7 +373,9 @@ module mkColReader(ColReader);
    
          rowVecsPerPage <= toRowVecsPerPage(colBytes);
    
-         basePage <= baseAddr;
+         // basePage <= baseAddr;
+         dynamicAssert(baseAddr%8192 == 0, "baseAddr should be page alighed!");
+         basePage <= baseAddr>>13;
    
          pageReqCnt <= 0;
       
