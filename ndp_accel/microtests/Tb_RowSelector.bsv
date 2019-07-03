@@ -257,6 +257,7 @@ module mkTb_RowSelector(Empty);
          // $finish();
       end
       
+      rowMaskBuff.releaseRowVecs.put(truncate(d.numRowVecs));
       
       numRowVecs <= numRowVecs + d.numRowVecs;
       
@@ -264,6 +265,8 @@ module mkTb_RowSelector(Empty);
          $display("Test Done, rowAggr = %d, expected = %d, numRowVecs = %d, expected = %d", rowAggr + d.rowAggr, totalRowsExpected, numRowVecs + d.numRowVecs, (numRowsReg+31)/32);
          $finish();
       end
+      
+
 
       // case (d) matches
       //    tagged RowVecId .rowVecId:
