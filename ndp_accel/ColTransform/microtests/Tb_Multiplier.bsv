@@ -68,7 +68,7 @@ module mkTb_Multiplier();
       
       Bit#(128) testee = multiply_signed(truncate(operands[0]),truncate(operands[1]));
       
-      $display("Test[%d]: %d times %d = %d (expected %d)", resCnt, operands[0], operands[1], tester, testee);      
+      $display("(@%t) Test[%d]: %d times %d = %d (expected %d)", $time, resCnt, operands[0], operands[1], tester, testee);      
       if ( testee != tester ) begin
          $display("Failed: %h times %h = %h (expected %h)", operands[0], operands[1], tester, testee);
          $finish();
