@@ -33,24 +33,6 @@ import "BDPI" function Bit#(32) log2_c(Bit#(32) x);
 import "BDPI" function Action rand_seed();
 import "BDPI" function ActionValue#(Bit#(32)) randu32(Bit#(32) dummy);
 import "BDPI" function ActionValue#(Bit#(64)) randu64(Bit#(32) dummy);
-import "BDPI" function Action init_test(Bit#(64) lv, Bit#(64) hv, Bit#(8) bytes, Bool sign);
-import "BDPI" function Action inject_mask(Bit#(32) mask);
-import "BDPI" function Action inject_data(Bit#(256) data);
-import "BDPI" function Bool check_mask(Bit#(32) mask);
-import "BDPI" function Bool check_data(Bit#(256) data);
-import "BDPI" function Bool check_count(Bit#(64) v);
-Bool doRandSeq = False;
-                 
-function Bit#(w) mod(Bit#(w) a, Integer i);
-   return a%fromInteger(i);
-endfunction
-
-
-typedef 4 ColBytes;
-Integer colBytes = valueOf(ColBytes);
-Bool isSigned = False;
-                 
-typedef enum{ConfigColBytes, ConfigParam, Run} State deriving (Bits, Eq, FShow);
 
 
 (* synthesize *)
