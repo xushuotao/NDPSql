@@ -1,11 +1,15 @@
 import Vector::*;
+import FIFO::*;
 import FIFOF::*;
+import SpecialFIFOs::*;
 import Assert::*;
 
 export XilinxIntMulSign(..);
 export XilinxIntMul(..);
 export mkXilinxIntMul32;
+export mkXilinxIntMulUnified32;
 export mkXilinxIntMul64;
+export mkXilinxIntMulUnified64;
 
 // Xilinx int multiplier IP is a rigorous pipeline with a fixed latency. There
 // is no back pressure in the raw IP. We will wrap it with flow control. To do
@@ -144,8 +148,8 @@ module mkXilinxIntMul64(XilinxIntMul#(tagT, w)) provisos(
    Add#(w, w, w2),
    Add#(w, 0, 64),
    // credit based flow control types
-   // NumAlias#(TAdd#(IntMulLatency, 1), maxCredit),
-   NumAlias#(IntMulLatency, maxCredit),
+   NumAlias#(TAdd#(IntMulLatency, 2), maxCredit),
+   // NumAlias#(IntMulLatency, maxCredit),
    Alias#(Bit#(TLog#(TAdd#(maxCredit, 1))), creditT)
    );
    // different multilpliers: WaitAutoReset is not needed, since mul is a
@@ -206,6 +210,7 @@ module mkXilinxIntMul64(XilinxIntMul#(tagT, w)) provisos(
             dynamicAssert(False, "credit underflow");
          end
          nextCredit = nextCredit - 1;
+         $display("(%m) nextCredit = %d", nextCredit);
       end
       // update credit
       credit <= nextCredit;
@@ -242,7 +247,7 @@ module mkXilinxIntMul32(XilinxIntMul#(tagT, w)) provisos(
    Add#(w, w, w2),
    Add#(w, 0, 32),
    // credit based flow control types
-   NumAlias#(TAdd#(IntMulLatency, 1), maxCredit),
+   NumAlias#(TAdd#(IntMulLatency, 2), maxCredit),
    Alias#(Bit#(TLog#(TAdd#(maxCredit, 1))), creditT)
    );
    // different multilpliers: WaitAutoReset is not needed, since mul is a
@@ -334,3 +339,235 @@ module mkXilinxIntMul32(XilinxIntMul#(tagT, w)) provisos(
    endmethod
 endmodule
 
+module mkXilinxIntMulUnified32(XilinxIntMul#(tagT, w)) provisos(
+   Bits#(tagT, tagSz),
+   Add#(w, w, w2),
+   Add#(w, 0, 32),
+   // credit based flow control types
+   NumAlias#(TAdd#(IntMulLatency, 2), maxCredit),
+   Alias#(Bit#(TLog#(TAdd#(maxCredit, 1))), creditT)
+   );
+   // different multilpliers: WaitAutoReset is not needed, since mul is a
+   // pipeline with fixed latency
+   `ifdef BSIM
+   IntMulImport#(w) mulUnsigned <- mkIntMulSim(Unsigned);
+   `else
+   IntMulImport#(w) mulUnsigned <- mkIntMulUnsigned32Import;
+   `endif
+
+   // resp FIFO (unguarded) & flow ctrl credit
+   FIFOF#(Tuple2#(Bit#(w2), tagT)) respQ <- mkUGSizedFIFOF(valueof(maxCredit));
+   Reg#(creditT) credit <- mkReg(fromInteger(valueof(maxCredit)));
+
+   // shift regs for sign + tag
+   Vector#(IntMulLatency, Reg#(Maybe#(Tuple2#(Bool, tagT)))) pipe <- replicateM(mkReg(Invalid));
+
+   // wire to catch input req
+   RWire#(Tuple2#(Bool, tagT)) newReq <- mkRWire;
+
+   // wire to catch deq
+   PulseWire deqEn <- mkPulseWire;
+
+   (* fire_when_enabled, no_implicit_conditions *)
+   rule canon;
+      creditT nextCredit = credit;
+      // incr credit if resp FIFO is deq
+      if(deqEn) begin
+         if(nextCredit >= fromInteger(valueof(maxCredit))) begin
+            $fdisplay(stderr, "\n%m: ASSERT FAIL!!");
+            dynamicAssert(False, "credit overflow");
+         end
+         nextCredit = nextCredit + 1;
+      end
+      // enq resp FIFO if something is outputed from mul
+      if ( pipe[valueof(IntMulLatency) - 1] matches tagged Valid {.sign, .tag} ) begin
+         Bit#(w2) prod = mulUnsigned.product;
+         respQ.enq(tuple2(sign?-prod:prod, tag));
+      end
+      // shift pipe regs
+      for(Integer i = 1; i < valueof(IntMulLatency); i = i+1) begin
+         pipe[i] <= pipe[i - 1];
+      end
+      pipe[0] <= newReq.wget;
+      // decr credit if new req is taken
+      if(isValid(newReq.wget)) begin
+         if(nextCredit == 0) begin
+            $fdisplay(stderr, "\n%m: ASSERT FAIL!!");
+            dynamicAssert(False, "credit underflow");
+         end
+         nextCredit = nextCredit - 1;
+      end
+      // update credit
+      credit <= nextCredit;
+   endrule
+
+   method Action req(Bit#(w) a, Bit#(w) b,
+                     XilinxIntMulSign sign, tagT tag) if(credit > 0);
+   
+      Bool aIsNeg = unpack(msb(a));
+      Bool bIsNeg = unpack(msb(b));
+   
+      Bit#(w) aIn = ?;
+      Bit#(w) bIn = ?;
+      
+      Bool resultIsNeg = ?;
+      case(sign)
+         Signed: 
+         begin
+            aIn = aIsNeg ? -a:a;
+            bIn = bIsNeg ? -b:b;
+            resultIsNeg = unpack(pack(aIsNeg) ^ pack(bIsNeg));
+         end
+         Unsigned: 
+         begin
+            aIn = a;
+            bIn = b;
+            resultIsNeg = False;
+         end
+         SignedUnsigned:
+         begin
+            aIn = aIsNeg ? -a:a;
+            bIn = b;
+            resultIsNeg = aIsNeg;
+         end
+      endcase
+      mulUnsigned.req(aIn, bIn);
+      newReq.wset(tuple2(resultIsNeg, tag)); // notify new req
+   endmethod
+
+   method Action deqResp if(respQ.notEmpty);
+      respQ.deq;
+      deqEn.send; // notify deq resp
+   endmethod
+
+   method respValid = respQ.notEmpty;
+
+   method Bit#(w2) product if(respQ.notEmpty);
+      return tpl_1(respQ.first);
+   endmethod
+
+   method tagT respTag if(respQ.notEmpty);
+      return tpl_2(respQ.first);
+   endmethod
+endmodule
+
+module mkXilinxIntMulUnified64(XilinxIntMul#(tagT, w)) provisos(
+   Bits#(tagT, tagSz),
+   Add#(w, w, w2),
+   Add#(w, 0, 64),
+   // credit based flow control types
+   NumAlias#(TAdd#(IntMulLatency, 2), maxCredit),
+   Alias#(Bit#(TLog#(TAdd#(maxCredit, 1))), creditT)
+   );
+   // different multilpliers: WaitAutoReset is not needed, since mul is a
+   // pipeline with fixed latency
+   `ifdef BSIM
+   IntMulImport#(w) mulUnsigned <- mkIntMulSim(Unsigned);
+   `else
+   IntMulImport#(w) mulUnsigned <- mkIntMulUnsigned64Import;
+   `endif
+
+   // resp FIFO (unguarded) & flow ctrl credit
+   FIFOF#(Tuple2#(Bit#(w2), tagT)) respQ <- mkUGSizedFIFOF(valueof(maxCredit));
+   Reg#(creditT) credit <- mkReg(fromInteger(valueof(maxCredit)));
+
+   // shift regs for sign + tag
+   Vector#(IntMulLatency, Reg#(Maybe#(Tuple2#(Bool, tagT)))) pipe <- replicateM(mkReg(Invalid));
+
+   // wire to catch input req
+   RWire#(Tuple2#(Bool, tagT)) newReq <- mkRWire;
+
+   // wire to catch deq
+   PulseWire deqEn <- mkPulseWire;
+
+   (* fire_when_enabled, no_implicit_conditions *)
+   rule canon;
+      creditT nextCredit = credit;
+      // incr credit if resp FIFO is deq
+      if(deqEn) begin
+         if(nextCredit >= fromInteger(valueof(maxCredit))) begin
+            $fdisplay(stderr, "\n%m: ASSERT FAIL!!");
+            dynamicAssert(False, "credit overflow");
+         end
+         nextCredit = nextCredit + 1;
+      end
+      // enq resp FIFO if something is outputed from mul
+      if ( pipe[valueof(IntMulLatency) - 1] matches tagged Valid {.sign, .tag} ) begin
+         Bit#(w2) prod = mulUnsigned.product;
+         respQ.enq(tuple2(sign?-prod:prod, tag));
+      end
+      // shift pipe regs
+      for(Integer i = 1; i < valueof(IntMulLatency); i = i+1) begin
+         pipe[i] <= pipe[i - 1];
+      end
+      pipe[0] <= newReq.wget;
+      // decr credit if new req is taken
+      if(isValid(newReq.wget)) begin
+         if(nextCredit == 0) begin
+            $fdisplay(stderr, "\n%m: ASSERT FAIL!!");
+            dynamicAssert(False, "credit underflow");
+         end
+         nextCredit = nextCredit - 1;
+      end
+      // update credit
+      credit <= nextCredit;
+   endrule
+   
+   FIFO#(Tuple4#(Bit#(64), Bit#(64), Bool, tagT)) reqQ <- mkPipelineFIFO;
+   
+   rule doReq if(credit > 0);
+      let {aIn, bIn, resultIsNeg, tag} = reqQ.first;
+      reqQ.deq;
+      
+      mulUnsigned.req(aIn, bIn);
+      newReq.wset(tuple2(resultIsNeg, tag)); // notify new req
+   endrule
+
+   method Action req(Bit#(w) a, Bit#(w) b,
+                     XilinxIntMulSign sign, tagT tag);
+   
+      Bool aIsNeg = unpack(msb(a));
+      Bool bIsNeg = unpack(msb(b));
+   
+      Bit#(w) aIn = ?;
+      Bit#(w) bIn = ?;
+      
+      Bool resultIsNeg = ?;
+      case(sign)
+         Signed: 
+         begin
+            aIn = aIsNeg ? -a:a;
+            bIn = bIsNeg ? -b:b;
+            resultIsNeg = unpack(pack(aIsNeg) ^ pack(bIsNeg));
+         end
+         Unsigned: 
+         begin
+            aIn = a;
+            bIn = b;
+            resultIsNeg = False;
+         end
+         SignedUnsigned:
+         begin
+            aIn = aIsNeg ? -a:a;
+            bIn = b;
+            resultIsNeg = aIsNeg;
+         end
+      endcase
+      reqQ.enq(tuple4(aIn, bIn, resultIsNeg, tag));
+   endmethod
+
+   method Action deqResp if(respQ.notEmpty);
+      respQ.deq;
+      deqEn.send; // notify deq resp
+   endmethod
+
+   method respValid = respQ.notEmpty;
+
+   method Bit#(w2) product if(respQ.notEmpty);
+      return tpl_1(respQ.first);
+   endmethod
+
+   method tagT respTag if(respQ.notEmpty);
+      return tpl_2(respQ.first);
+   endmethod
+endmodule
