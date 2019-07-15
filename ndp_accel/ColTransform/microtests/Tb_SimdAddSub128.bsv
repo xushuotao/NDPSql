@@ -45,9 +45,9 @@ module mkTb_SimdAddSub128();
    
    Bit#(64) testLength = 1024;
    
-   FIFO#(Tuple3#(Vector#(2, Bit#(128)), Bool, SimdAddMode)) operandQ <- mkSizedFIFO(7);
+   FIFO#(Tuple3#(Vector#(2, Bit#(128)), Bool, SimdMode)) operandQ <- mkSizedFIFO(7);
    
-   Vector#(TestVecLength, Tuple3#(Vector#(2,Bit#(128)), Bool, SimdAddMode)) testVec = vec(tuple3(vec(1<<63,1<<63), True, BigInt));
+   Vector#(TestVecLength, Tuple3#(Vector#(2,Bit#(128)), Bool, SimdMode)) testVec = vec(tuple3(vec(1<<63,1<<63), True, BigInt));
 
    
    rule doTest if ( testCnt < testLength + testVecLength );

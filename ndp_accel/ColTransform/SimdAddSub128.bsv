@@ -3,10 +3,10 @@ import SpecialFIFOs::*;
 import GetPut::*;
 import Vector::*;
 
-typedef enum{Byte, Short, Int, Long, BigInt} SimdAddMode deriving (Bits, Eq, FShow);
+typedef enum{Byte, Short, Int, Long, BigInt} SimdMode deriving (Bits, Eq, FShow);
 
 interface SimdAddSub128;
-   method Action req(Bit#(128) a, Bit#(128) b, Bool isSub, SimdAddMode mode);
+   method Action req(Bit#(128) a, Bit#(128) b, Bool isSub, SimdMode mode);
    method Action deqResp;
    method Bool respValid;
    method Bit#(128) sum;
@@ -21,7 +21,7 @@ function Bit#(w) sub2(Bit#(w) x, Bit#(w) y);
    return x-y;
 endfunction
    
-function Bit#(128) combSimdAddSub128(Bit#(128) a, Bit#(128) b, Bool isSub, SimdAddMode mode);
+function Bit#(128) combSimdAddSub128(Bit#(128) a, Bit#(128) b, Bool isSub, SimdMode mode);
    Bit#(128) retval = ?;
    case (mode)
       Byte: 
@@ -77,9 +77,9 @@ function Bit#(TSub#(TAdd#(w,w),1)) concat(Bit#(w) lo, Bit#(w) hi) provisos( Add#
    return {hi,loo};
 endfunction
 
-module mkComputeStage#(FIFOF#(Tuple4#(Vector#(n, Bit#(w)), Bool, SimdAddMode, Bool)) inQ,
-                       FIFOF#(Tuple4#(Vector#(TDiv#(n,2), Bit#(TSub#(TAdd#(w,w),1))), Bool, SimdAddMode, Bool)) outQ,
-                       SimdAddMode myMode
+module mkComputeStage#(FIFOF#(Tuple4#(Vector#(n, Bit#(w)), Bool, SimdMode, Bool)) inQ,
+                       FIFOF#(Tuple4#(Vector#(TDiv#(n,2), Bit#(TSub#(TAdd#(w,w),1))), Bool, SimdMode, Bool)) outQ,
+                       SimdMode myMode
                        )(Empty) provisos(Add#(1, a__, w));
    rule doCompute;
       let {s_in, isSub, mode, bypass} <- toGet(inQ).get;
@@ -92,11 +92,11 @@ module mkComputeStage#(FIFOF#(Tuple4#(Vector#(n, Bit#(w)), Bool, SimdAddMode, Bo
 endmodule
 
 module mkSimdAddSub128(SimdAddSub128);
-   FIFOF#(Tuple4#(Vector#(16, Bit#(9)),   Bool, SimdAddMode, Bool)) bteResult <- mkPipelineFIFOF;
-   FIFOF#(Tuple4#(Vector#(8,  Bit#(17)),  Bool, SimdAddMode, Bool)) shtResult <- mkPipelineFIFOF;
-   FIFOF#(Tuple4#(Vector#(4,  Bit#(33)),  Bool, SimdAddMode, Bool)) intResult <- mkPipelineFIFOF;
-   FIFOF#(Tuple4#(Vector#(2,  Bit#(65)),  Bool, SimdAddMode, Bool)) lngResult <- mkPipelineFIFOF;
-   FIFOF#(Tuple4#(Vector#(1,  Bit#(129)), Bool, SimdAddMode, Bool)) bigResult <- mkPipelineFIFOF;
+   FIFOF#(Tuple4#(Vector#(16, Bit#(9)),   Bool, SimdMode, Bool)) bteResult <- mkPipelineFIFOF;
+   FIFOF#(Tuple4#(Vector#(8,  Bit#(17)),  Bool, SimdMode, Bool)) shtResult <- mkPipelineFIFOF;
+   FIFOF#(Tuple4#(Vector#(4,  Bit#(33)),  Bool, SimdMode, Bool)) intResult <- mkPipelineFIFOF;
+   FIFOF#(Tuple4#(Vector#(2,  Bit#(65)),  Bool, SimdMode, Bool)) lngResult <- mkPipelineFIFOF;
+   FIFOF#(Tuple4#(Vector#(1,  Bit#(129)), Bool, SimdMode, Bool)) bigResult <- mkPipelineFIFOF;
    
    mkComputeStage(bteResult, shtResult, Short);
    mkComputeStage(shtResult, intResult, Int);
@@ -104,7 +104,7 @@ module mkSimdAddSub128(SimdAddSub128);
    mkComputeStage(lngResult, bigResult, BigInt);
 
    
-   method Action req(Bit#(128) a, Bit#(128) b, Bool isSub, SimdAddMode mode);
+   method Action req(Bit#(128) a, Bit#(128) b, Bool isSub, SimdMode mode);
       Vector#(16, Bit#(8)) a_bytes = unpack(a);
       Vector#(16, Bit#(8)) b_bytes = unpack(b);
       Vector#(16, Bit#(9)) s_bytes = zipWith3(isSub?fs:fa, a_bytes, b_bytes, replicate(0));
