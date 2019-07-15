@@ -2,8 +2,7 @@ import FIFOF::*;
 import SpecialFIFOs::*;
 import GetPut::*;
 import Vector::*;
-
-typedef enum{Byte, Short, Int, Long, BigInt} SimdMode deriving (Bits, Eq, FShow);
+import SimdCommon::*;
 
 interface SimdAddSub128;
    method Action req(Bit#(128) a, Bit#(128) b, Bool isSub, SimdMode mode);
