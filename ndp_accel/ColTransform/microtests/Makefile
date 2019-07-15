@@ -8,7 +8,7 @@ bsvdir=%:+:..:$(connectal_dir):..:../../:$(connectal_dir)/../lib/bsv/:../../../b
 
 bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@ -p $(bsvdir) +RTS -K1G -RTS  -D ClockDefaultParam -D BSIM -D XILINX_INT_MUL_LATENCY=16 -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -l boost_system
 
-targets := Multiplier SimdMul64 SimdAdd128 SimdAddSub128
+targets := Multiplier SimdMul64 SimdAdd128 SimdAddSub128 SimdAlu256
 
 cpp_targets := common
 
