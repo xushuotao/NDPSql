@@ -4,12 +4,15 @@ import GetPut::*;
 import Vector::*;
 import SimdCommon::*;
 
+typedef 5 AddSubLatency;
+
 interface SimdAddSub128;
    method Action req(Bit#(128) a, Bit#(128) b, Bool isSub, SimdMode mode);
    method Action deqResp;
    method Bool respValid;
    method Bit#(128) sum;
 endinterface
+
 
 
 function Bit#(w) add2(Bit#(w) x, Bit#(w) y);
@@ -83,7 +86,7 @@ module mkComputeStage#(FIFOF#(Tuple4#(Vector#(n, Bit#(w)), Bool, SimdMode, Bool)
    rule doCompute;
       let {s_in, isSub, mode, bypass} <- toGet(inQ).get;
       
-      $display(fshow(s_in), " mode = ", fshow(mode), " myMode = ", fshow(myMode));
+      // $display(fshow(s_in), " mode = ", fshow(mode), " myMode = ", fshow(myMode));
       Vector#(TDiv#(n,2), Bit#(TSub#(TAdd#(w,w),1))) s_out = mapPairs(bypass?concat: (isSub?cascadeSub: cascadeAdd), ?, s_in);
       
       outQ.enq(tuple4(s_out, isSub, mode, bypass||mode==myMode));
