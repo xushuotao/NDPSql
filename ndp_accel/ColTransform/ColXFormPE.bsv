@@ -61,19 +61,20 @@ module mkColXFormPE(ColXFormPE);
    
    Reg#(Bit#(3)) pcMax <- mkRegU;
    
-   rule doFetch;
-      if ( pc <= pcMax )
+   // rule doFetch;
+      // f2e.enq(inst);
+   // endrule
+   
+   rule doFetchDecode;
+      if ( pc < pcMax )
          pc <= pc + 1;
       else
          pc <= 0;
-      
       let inst = iMem.sub(pc);
-      f2e.enq(inst);
-   endrule
-   
-   rule doDecode;
+      $display("%m, doFetch, pc = %d, inst =", pc, fshow(inst));
+
       let opVector <- toGet(inQ).get;
-      let inst <- toGet(f2e).get;
+      // let inst <- toGet(f2e).get;
       
       Bit#(256) imm = ?;
       case (inst.colType)
@@ -112,7 +113,7 @@ module mkColXFormPE(ColXFormPE);
                   isSigned: inst.isSigned});
 
       
-      if ( inst.iType == Copy ) begin
+      if ( inst.iType == Copy || inst.iType == Store ) begin
          operandQ.enq(opVector);
       end
    endrule
@@ -146,12 +147,15 @@ module mkColXFormPE(ColXFormPE);
          upBeat <= result[1];
       end
       
-      outQ.enq(outBeat);
+      doLower <= doLower_wire;
+      if ( d.iType != Store ) begin
+         outQ.enq(outBeat);
+      end
    endrule
    
    
    rule doUpWrite if (!doLower);
-      doLower <= !doLower;
+      doLower <= True;
       outQ.enq(upBeat);
    endrule
       
@@ -159,6 +163,7 @@ module mkColXFormPE(ColXFormPE);
    interface outPipe = toPipeOut(outQ);
    interface PipeIn programPort;// = toPipeIn(progQ);
       method Action enq(Tuple3#(Bit#(3), Bool, Bit#(32)) v);
+         $display("%m programPort, setting iMem = ", fshow(v));
          let {pc, setPcMax, inst} = v;
          if ( !setPcMax )
             iMem.upd(pc, unpack(inst));

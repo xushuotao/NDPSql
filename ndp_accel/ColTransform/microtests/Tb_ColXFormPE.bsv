@@ -24,108 +24,212 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import Vector::*;
 import BuildVector::*;
 import FIFO::*;
-import SimdCommon::*;
-import ColXFormPE::*;
-import SimdAddSub128::*;
-import SimdMul64::*;
+import SimdAlu256::*;
+import NDPCommon::*;
 import ColXFormPE::*;
 import GetPut::*;
 import Pipe::*;
+
+////////////////////////////////////////////////////////////////////////////////
+/// Test Vector Section
+////////////////////////////////////////////////////////////////////////////////
+typedef 6 NumTests;
+Integer numTests = valueOf(NumTests);
+Bit#(64) most_negative = 1<<63;
+////////////////////////////////////////////////////////////////////////////////
+/// End of Test Vector Section
+////////////////////////////////////////////////////////////////////////////////
+
 
 import "BDPI" function Bit#(32) log2_c(Bit#(32) x);
 import "BDPI" function Action rand_seed();
 import "BDPI" function ActionValue#(Bit#(32)) randu32(Bit#(32) dummy);
 import "BDPI" function ActionValue#(Bit#(64)) randu64(Bit#(32) dummy);
+                 
 
 (* synthesize *)
 module mkTb_ColXFormPE();
-   Bit#(64) most_negative = 1<<63;
+   ////////////////////////////////////////////////////////////////////////////////
+   /// Test Vector Section
+   ////////////////////////////////////////////////////////////////////////////////
+   Vector#(NumTests, Vector#(8, DecodeInst)) insts = ?;// vec(insts_0, insts_1);
+   Vector#(NumTests, Integer) progLength = ?;//vec(maxProg_0, maxProg_1);
+   Vector#(NumTests, Tuple2#(Integer, Integer)) ioRatio = ?;//vec(ratio_0, ratio_1);
+   Integer i = 0;
    
+   // test 0
+   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
+                                     ?,
+                                     ?,      
+                                     ?,
+                                     ?,
+                                     ?,
+                                     ?,
+                                     ?);
+   Integer numInsts = 1;
+   Tuple2#(Integer, Integer) ratio = tuple2(1,1);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+
+   // test 1                 
+   inst = vec(DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, colType: Int, imm: 1},
+              ?,      
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+   numInsts = 1;   
+   ratio = tuple2(1,1);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+   
+   // test 2
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+   numInsts = 2;   
+   ratio = tuple2(1,2);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+   
+   // test 3
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+   numInsts = 2;   
+   ratio = tuple2(1,1);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+   
+   // test 4
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+   numInsts = 2;   
+   ratio = tuple2(1,1);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+   
+      
+   // test 5
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+   numInsts = 2;   
+   ratio = tuple2(3,2);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// End of Test Vector Section
+////////////////////////////////////////////////////////////////////////////////
+
+
    ColXFormPE testEng <- mkColXFormPE;
    
-   Vector#(8, DecodeInst) insts_pass = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
-                                           ?,
-                                           ?,      
-                                           ?,
-                                           ?,
-                                           ?,
-                                           ?,
-                                           ?);
-   
-   
+   Reg#(Bit#(32)) testCnt <- mkReg(0);
    Reg#(Bit#(4)) prog_cnt <- mkReg(0);
    Integer maxProg = 1;
    Reg#(Bool) doProgram <- mkReg(True);
+   Reg#(Bool) doInput <- mkReg(False);
    rule doProgramPE if (doProgram);
-      prog_cnt <= prog_cnt + 1;
-      if ( prog_cnt + 1 < fromInteger(maxProg) ) begin
-         testEng.programPort.enq(tuple3(truncate(prog_cnt), False, pack(insts[prog_cnt])));
+
+      if ( prog_cnt  < fromInteger(progLength[testCnt]) ) begin
+         testEng.programPort.enq(tuple3(truncate(prog_cnt), False, pack(insts[testCnt][prog_cnt])));
+         prog_cnt <= prog_cnt + 1;
       end
-      else if (prog_cnt  == fromInteger(maxProg)) begin
-         testEng.programPort.enq(tuple3(?, True, fromInteger(maxProg)));
+      else if (prog_cnt  == fromInteger(progLength[testCnt])) begin
+         testEng.programPort.enq(tuple3(?, True, fromInteger(progLength[testCnt]-1)));
+         prog_cnt <= 0;
+         doProgram <= False;
+         doInput <= True;
       end
    endrule
    
-   Reg#(Bit#(64)) testCnt <- mkReg(0);
-   Reg#(Bit#(64)) resCnt <- mkReg(0);
+   Reg#(Bit#(64)) inputCnt <- mkReg(0);
+   Reg#(Bit#(64)) outputCnt <- mkReg(0);
    Bit#(64) testLength = 10;
-   rule doTest if ( testCnt < testLength );
-      testCnt <= testCnt + 1;
+   rule doTest if (!doProgram && doInput);
+      if ( inputCnt == testLength - 1 ) begin
+         inputCnt <= 0;
+         doInput <= False;
+      end
+      else begin
+         inputCnt <= inputCnt + 1;
+      end
 
       Vector#(4, Bit#(64)) rands <- mapM(randu64, genWith(fromInteger));
-      
       testEng.inPipe.enq(pack(rands));
-      $display("Response reqCnt = %d, streamIn = %h", testCnt, pack(rands));
+      $display("Input cnt = %d, streamIn = %h", inputCnt, pack(rands));
    endrule
    
 
-   rule doResult;
-      resCnt <= resCnt + 1;
-      
+   rule doOutput if (!doProgram);
       let tester = testEng.outPipe.first;
       testEng.outPipe.deq;
       
-      $display("Response resCnt = %d, tester = %h", resCnt, tester);
+      $display("Output cnt = %d, tester = %h", outputCnt, tester);
       
-      // let {operands, op, mode, isSigned} <- toGet(operandQ).get;
-      
-     //  Vector#(2, Bit#(256)) testee = ?;
-      
-     //  case (op)
-     //     Sub:
-     //     begin
-     //        let testee_0 = combSimdAddSub128(truncate(operands[0]),truncate(operands[1]), True, mode);
-     //        let testee_1 = combSimdAddSub128(truncateLSB(operands[0]),truncateLSB(operands[1]), True, mode);
-     //        testee[0] = {testee_1, testee_0};
-     //        $display("(@%t) Test: %h simd- %h = %h, testId = %d, mode = ", $time, operands[0], operands[1], tester[0], resCnt, fshow(mode));
-     //        $display("(@%t) Ref : %h simd- %h = %h, testId = %d, mode = ", $time, operands[0], operands[1], testee[0], resCnt, fshow(mode));
-     //     end
-     //     Add:
-     //     begin
-     //        let testee_0 = combSimdAddSub128(truncate(operands[0]),truncate(operands[1]), False, mode);
-     //        let testee_1 = combSimdAddSub128(truncateLSB(operands[0]),truncateLSB(operands[1]), False, mode);
-     //        testee[0] = {testee_1, testee_0};
-     //        $display("(@%t) Test: %h simd+ %h = %h, testId = %d, mode = ", $time, operands[0], operands[1], tester[0], resCnt, fshow(mode));
-     //        $display("(@%t) Ref : %h simd+ %h = %h, testId = %d, mode = ", $time, operands[0], operands[1], testee[0], resCnt, fshow(mode));
-     //     end
-     //     Mul:
-     //     begin
-     //        function Bit#(128) combSimdMul64_2(Bit#(64) a, Bit#(64) b) = combSimdMul64(a,b, pack(mode==Long), isSigned);
-     //        Vector#(4, Bit#(128)) testee_v = zipWith(combSimdMul64_2, unpack(operands[0]), unpack(operands[1]));
-     //        testee = unpack(pack(testee_v));
-     //        $display("(@%t) Test: %h simdx %h = %h, testId = %d, isSigned = %d, mode = ", $time, operands[0], operands[1], pack(tester), resCnt, isSigned, fshow(mode));
-     //        $display("(@%t) Ref : %h simdx %h = %h, testId = %d, isSigned = %d, mode = ", $time, operands[0], operands[1], pack(testee), resCnt, isSigned, fshow(mode));
-     //     end
-     //  endcase
-      
-     // if ( (half && (tester[0] != testee[0])) || (!half &&(tester != testee)) ) begin
-     //     $display("Failed: ColXFormPE");
-     //     $finish();
-     //  end
-      
-      if ( resCnt == testLength -1) begin
-         $display("Passed: ColXFormPE");
-         $finish();
+      if ( outputCnt == testLength*fromInteger(tpl_1(ioRatio[testCnt]))/fromInteger(tpl_2(ioRatio[testCnt])) -1) begin
+         $display("Passed: ColXFormPE test %d instCnt = %d", testCnt, fromInteger(progLength[testCnt]));
+         for ( Integer i = 0; i < fromInteger(progLength[testCnt]); i = i + 1) begin
+            $display("@ %d : ", i, fshow(insts[testCnt][i]));
+         end
+         doProgram <= True;
+         testCnt <= testCnt + 1;
+         if ( testCnt + 1 == fromInteger(numTests) ) begin
+            $finish();
+         end
+         outputCnt <= 0;
+      end
+      else begin
+         outputCnt <= outputCnt + 1;
       end
    endrule
    
