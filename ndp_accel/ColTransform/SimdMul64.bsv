@@ -53,6 +53,7 @@ function Bit#(128) combSimdMul64(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool mull
    return retval;
 endfunction
 
+(* synthesize *)
 module mkSimdMul64(SimdMul64);
    Vector#(4, XilinxIntMul#(void, 32)) muls <- replicateM(mkXilinxIntMulUnified32);
    

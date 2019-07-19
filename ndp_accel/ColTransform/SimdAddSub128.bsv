@@ -93,6 +93,7 @@ module mkComputeStage#(FIFOF#(Tuple4#(Vector#(n, Bit#(w)), Bool, SimdMode, Bool)
    endrule
 endmodule
 
+(* synthesize *)
 module mkSimdAddSub128(SimdAddSub128);
    FIFOF#(Tuple4#(Vector#(16, Bit#(9)),   Bool, SimdMode, Bool)) bteResult <- mkPipelineFIFOF;
    FIFOF#(Tuple4#(Vector#(8,  Bit#(17)),  Bool, SimdMode, Bool)) shtResult <- mkPipelineFIFOF;

@@ -15,7 +15,7 @@ interface SimdAlu256;
    method ActionValue#(Tuple2#(Vector#(2, Bit#(256)), Bool)) result;
 endinterface
 
-
+(* synthesize *)
 module mkSimdAlu256(SimdAlu256);
    
    Vector#(2, SimdAddSub128) addsub <- replicateM(mkSimdAddSub128);
