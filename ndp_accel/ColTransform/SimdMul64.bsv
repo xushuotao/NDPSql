@@ -3,11 +3,12 @@ import Vector::*;
 import FIFO::*;
 import FIFOF::*;
 
-typedef `XILINX_INT_MUL_LATENCY IntMulLatency;
+typedef `XILINX_INT_MUL_LATENCY XilinxIntMulLatency;
+
+typedef TAdd#(XilinxIntMulLatency,1) IntMulLatency;
 
 interface SimdMul64;
-   method Action req(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool isSigned);
-   
+   method Action req(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool mullo, Bool isSigned);
    method Action deqResp;
    method Bool respValid;
    method Bit#(128) product;
@@ -29,7 +30,7 @@ function Bit#(TAdd#(n,n)) multiply_signed( Bit#(n) a, Bit#(n) b );
 endfunction
 
 
-function Bit#(128) combSimdMul64(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool isSigned);
+function Bit#(128) combSimdMul64(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool mullo, Bool isSigned);
    Bit#(128) retval = ?;
    case (mode)
       0:
@@ -43,13 +44,19 @@ function Bit#(128) combSimdMul64(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool isSi
          retval = isSigned ? multiply_signed(a,b):multiply_unsigned(a,b);
       end
    endcase
+   
+   if ( mode == 0 && mullo) begin
+      Vector#(2,Bit#(64)) retvalV = unpack(retval);
+      Vector#(2,Bit#(32)) retvalV_truc = map(truncate, retvalV);
+      retval = zeroExtend(pack(retvalV_truc));
+   end
    return retval;
 endfunction
 
 module mkSimdMul64(SimdMul64);
    Vector#(4, XilinxIntMul#(void, 32)) muls <- replicateM(mkXilinxIntMulUnified32);
    
-   FIFO#(Tuple2#(Bit#(1),Bool)) modeQ <- mkSizedFIFO(valueOf(IntMulLatency)+2);
+   FIFO#(Tuple3#(Bit#(1),Bool,Bool)) modeQ <- mkSizedFIFO(valueOf(IntMulLatency)+1);
    
    function Bool mulIsReady(XilinxIntMul#(t, w) mul) = mul.respValid;
    
@@ -73,7 +80,7 @@ module mkSimdMul64(SimdMul64);
       // $display("pp10 = %b", pp10);
       // $display("pp11 = %b", pp11);
       
-      let {mode, isSigned} = modeQ.first;
+      let {mode, isSigned, mullo} = modeQ.first;
       
       Bit#(128) resp = {pp11,pp00};
       
@@ -83,10 +90,16 @@ module mkSimdMul64(SimdMul64);
          else
             resp = resp + (zeroExtend(pp10)<<32) + (zeroExtend(pp01)<<32);
       end
-      respQ.enq(resp);
+      
+      if ( mullo && mode == 0 ) begin
+         respQ.enq({?, pp11[31:0], pp00[31:0]});
+      end
+      else begin
+         respQ.enq(resp);
+      end
    endrule
    
-   method Action req(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool isSigned);
+   method Action req(Bit#(64) a, Bit#(64) b, Bit#(1) mode, Bool mullo, Bool isSigned);
       Bit#(32) a0 = truncate(a);
       Bit#(32) a1 = truncateLSB(a);
    
@@ -98,7 +111,7 @@ module mkSimdMul64(SimdMul64);
       muls[2].req(a1,b0,isSigned? SignedUnsigned: Unsigned,?);
       muls[3].req(a1,b1,isSigned? Signed: Unsigned,?);
       
-      modeQ.enq(tuple2(mode,isSigned));
+      modeQ.enq(tuple3(mode,isSigned, mullo));
    endmethod
    
    method Action deqResp = respQ.deq;

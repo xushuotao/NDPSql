@@ -46,13 +46,13 @@ module mkTb_SimdAlu256();
    
    Bit#(64) testLength = 1024;
    
-   FIFO#(Tuple4#(Vector#(2, Bit#(256)), Op, SimdMode, Bool)) operandQ <- mkSizedFIFO(128);
+   FIFO#(Tuple4#(Vector#(2, Bit#(256)), AluOp, SimdMode, Bool)) operandQ <- mkSizedFIFO(128);
    
    rule doTest if ( testCnt < testLength );
       testCnt <= testCnt + 1;
 
       Vector#(2, Bit#(256)) operands = ?;
-      Op op = ?;
+      AluOp op = ?;
       SimdMode mode = ?;
       Bool isSigned = ?;
 
@@ -61,12 +61,12 @@ module mkTb_SimdAlu256();
       let rand_32 <- randu32(0);
       let rand_32_1 <- randu32(1);
       mode = unpack(truncate(rand_32%5));
-      op = unpack(truncate(rand_32_1%3));
+      op = unpack(truncate(rand_32_1%4));
       isSigned = unpack(truncateLSB(rand_32));
       
       testEng.start(operands[0], operands[1], op, mode, isSigned);
-      $display("enqueing Test");
-      $display(operands[0], operands[1], op, mode, isSigned);
+      // $display("enqueing Test");
+      // $display(operands[0], operands[1], op, mode, isSigned);
       operandQ.enq(tuple4(operands,op,mode,isSigned));
    endrule
    
@@ -99,12 +99,20 @@ module mkTb_SimdAlu256();
          end
          Mul:
          begin
-            function Bit#(128) combSimdMul64_2(Bit#(64) a, Bit#(64) b) = combSimdMul64(a,b, pack(mode==Long), isSigned);
+            function Bit#(128) combSimdMul64_2(Bit#(64) a, Bit#(64) b) = combSimdMul64(a,b, pack(mode==Long), False, isSigned);
             Vector#(4, Bit#(128)) testee_v = zipWith(combSimdMul64_2, unpack(operands[0]), unpack(operands[1]));
             testee = unpack(pack(testee_v));
             $display("(@%t) Test: %h simdx %h = %h, testId = %d, isSigned = %d, mode = ", $time, operands[0], operands[1], pack(tester), resCnt, isSigned, fshow(mode));
             $display("(@%t) Ref : %h simdx %h = %h, testId = %d, isSigned = %d, mode = ", $time, operands[0], operands[1], pack(testee), resCnt, isSigned, fshow(mode));
          end
+         Mullo:
+         begin
+            function Bit#(64) combSimdMullo64_2(Bit#(64) a, Bit#(64) b) = truncate(combSimdMul64(a,b, pack(mode==Long), True, isSigned));
+            testee[0] = pack(zipWith(combSimdMullo64_2, unpack(operands[0]), unpack(operands[1])));
+            $display("(@%t) Test: %h simdxlo %h = %h, testId = %d, mode = ", $time, operands[0], operands[1], tester[0], resCnt, fshow(mode));
+            $display("(@%t) Ref : %h simdxlo %h = %h, testId = %d, mode = ", $time, operands[0], operands[1], testee[0], resCnt, fshow(mode));
+         end
+
       endcase
       
      if ( (half && (tester[0] != testee[0])) || (!half &&(tester != testee)) ) begin

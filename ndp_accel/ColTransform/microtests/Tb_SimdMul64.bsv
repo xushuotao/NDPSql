@@ -47,27 +47,28 @@ module mkTb_SimdMul64();
    
    Bit#(64) testLength = 1000;
    
-   FIFO#(Tuple3#(Vector#(2, Bit#(64)), Bit#(1), Bool)) operandQ <- mkSizedFIFO(64);
+   FIFO#(Tuple4#(Vector#(2, Bit#(64)), Bit#(1), Bool, Bool)) operandQ <- mkSizedFIFO(64);
    
-   Vector#(4, Tuple3#(Vector#(2, Bit#(64)), Bit#(1), Bool)) testVec = vec(tuple3(vec(most_negative, -1), 1, True),
-                                                                          tuple3(vec(most_negative, -1), 1, True),
-                                                                          tuple3(vec(-1,-1), 1, True),
-                                                                          tuple3(vec(most_negative-1, most_negative-1), 1, True));
+   Vector#(4, Tuple4#(Vector#(2, Bit#(64)), Bit#(1), Bool, Bool)) testVec = vec(tuple4(vec(most_negative, -1), 1, False, True),
+                                                                                tuple4(vec(most_negative, -1), 1, False, True),
+                                                                                tuple4(vec(-1,-1), 1, False, True),
+                                                                                tuple4(vec(most_negative-1, most_negative-1), 1, False, True));
    
    rule doTest if ( testCnt < testLength + 4) ;
       testCnt <= testCnt + 1;
       
-      let {operands, mode, isSigned} = testVec[testCnt];
+      let {operands, mode, mullo, isSigned} = testVec[testCnt];
       
       if ( testCnt >= 4) begin
          operands <- mapM(randu64, genWith(fromInteger));
          let rand_32 <- randu32(0);
          mode = rand_32[0];
          isSigned = unpack(rand_32[1]);
+         mullo = unpack(rand_32[2]);
       end
       // Vector#(2, Bit#(64)) operands = vec(1<<63,(1<<63)-1);
-      testEng.req(operands[0], operands[1], mode, isSigned);
-      operandQ.enq(tuple3(operands, mode, isSigned));
+      testEng.req(operands[0], operands[1], mode, mullo, isSigned);
+      operandQ.enq(tuple4(operands, mode, mullo, isSigned));
    endrule
    
 
@@ -77,15 +78,15 @@ module mkTb_SimdMul64();
       let tester = testEng.product;
       testEng.deqResp;
       
-      let {operands, mode, isSigned} <- toGet(operandQ).get;
+      let {operands, mode, mullo, isSigned} <- toGet(operandQ).get;
       
-      let testee = combSimdMul64(operands[0], operands[1], mode, isSigned);
+      let testee = combSimdMul64(operands[0], operands[1], mode, mullo, isSigned);
 
-      $display("(@%t) Test: %h simdx %h = %h, testId = %d, mode = %d, isSigned = %d", $time, operands[0], operands[1], tester, resCnt, mode, isSigned);
-      $display("(@%t) Ref : %h simdx %h = %h, testId = %d, mode = %d, isSigned = %d", $time, operands[0], operands[1], testee, resCnt, mode, isSigned);
+      $display("(@%t) Test: %h simdx %h = %h, testId = %d, mode = %d, mullo = %d, isSigned = %d", $time, operands[0], operands[1], tester, resCnt, mode, mullo, isSigned);
+      $display("(@%t) Ref : %h simdx %h = %h, testId = %d, mode = %d, mullo = %d, isSigned = %d", $time, operands[0], operands[1], testee, resCnt, mode, mullo, isSigned);
 
       // $display("(@%t) Test[%d]: %b times %b = %d (expected %b)", $time, resCnt, operands[0], operands[1], tester, testee);
-      if ( testee != tester ) begin
+      if ( (!mullo && testee != tester) || (mullo && testee[63:0] != tester[63:0]) ) begin
          $display("Failed: SimdMul64");
          $finish();
       end
