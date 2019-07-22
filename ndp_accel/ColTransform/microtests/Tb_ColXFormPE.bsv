@@ -33,7 +33,7 @@ import Pipe::*;
 ////////////////////////////////////////////////////////////////////////////////
 /// Test Vector Section
 ////////////////////////////////////////////////////////////////////////////////
-typedef 6 NumTests;
+typedef 10 NumTests;
 Integer numTests = valueOf(NumTests);
 Bit#(64) most_negative = 1<<63;
 ////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +58,7 @@ module mkTb_ColXFormPE();
    Integer i = 0;
    
    // test 0
-   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
+   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: ?, strType: ?, imm: ?},
                                      ?,
                                      ?,      
                                      ?,
@@ -75,7 +75,7 @@ module mkTb_ColXFormPE();
    i = i + 1;
 
    // test 1                 
-   inst = vec(DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, colType: Int, imm: 1},
+   inst = vec(DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, colType: Int, strType: ?, imm: 1},
               ?,      
               ?,
               ?,
@@ -93,8 +93,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
    
    // test 2
-   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, imm: 1},
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, strType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -111,8 +111,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
    
    // test 3
-   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, imm: 1},
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, strType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -129,8 +129,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
    
    // test 4
-   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, imm: 1},
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, strType: Int, imm: 1},
               ?,
               ?,
               ?,
@@ -148,8 +148,8 @@ module mkTb_ColXFormPE();
    
       
    // test 5
-   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: ?, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, imm: 1},
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, strType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -159,6 +159,83 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(3,2);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+   
+
+   // test 6
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: BigInt, strType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Long, strType: ?, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+   numInsts = 2;   
+   ratio = tuple2(2,3);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+   
+            
+   // test 7
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: BigInt, strType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Long, strType: ?, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+
+   numInsts = 2;   
+   ratio = tuple2(4,3);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+      
+   // test 8
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+
+   numInsts = 2;   
+   ratio = tuple2(1,2);
+
+   insts[i] = inst;
+   progLength[i] = numInsts;
+   ioRatio[i] = ratio;
+   i = i + 1;
+
+   // test 9
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: 1},
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?);
+
+
+   numInsts = 2;   
+   ratio = tuple2(1,1);
 
    insts[i] = inst;
    progLength[i] = numInsts;
@@ -194,7 +271,7 @@ module mkTb_ColXFormPE();
    
    Reg#(Bit#(64)) inputCnt <- mkReg(0);
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
-   Bit#(64) testLength = 10;
+   Bit#(64) testLength = 12;
    rule doTest if (!doProgram && doInput);
       if ( inputCnt == testLength - 1 ) begin
          inputCnt <= 0;

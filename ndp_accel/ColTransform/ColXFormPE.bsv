@@ -7,7 +7,9 @@ import Vector::*;
 import RegFile::*;
 import SimdAddSub128::*;
 import SimdMul64::*;
+import SimdTypeCast::*;
 import GetPut::*;
+import Assert::*;
 
 interface ColXFormPE;
    interface PipeIn#(RowData) inPipe;
@@ -20,15 +22,17 @@ typedef enum {
    Copy = 1, 
    Store = 2,
    AluImm = 3, 
-   Alu = 4
+   Alu = 4,
+   Cast = 5
    } InstType deriving (Bits, Eq, FShow);
 
 typedef struct {
    InstType iType;  // 3-bit
    AluOp aluOp;     // 2-bit
    Bool isSigned;   // 1-bit 
-   ColType colType; // 3-bit total 9-bit
-   Bit#(23) imm;    // 23-bit
+   ColType colType; // 3-bit
+   ColType strType; // 3-bit total 12-bit
+   Bit#(20) imm;    // 20-bit
    } DecodeInst deriving (Bits, Eq, FShow);  // 32-bit instr
 
 
@@ -46,7 +50,7 @@ typedef struct {
    Bit#(256) opVector;
    } E2W deriving (Bits, Eq, FShow);
 
-
+(* synthesize *)
 module mkColXFormPE(ColXFormPE);
    FIFOF#(RowData) inQ <- mkFIFOF;
    FIFOF#(RowData) outQ <- mkFIFOF;
@@ -61,20 +65,16 @@ module mkColXFormPE(ColXFormPE);
    
    Reg#(Bit#(3)) pcMax <- mkRegU;
    
-   // rule doFetch;
-      // f2e.enq(inst);
-   // endrule
+   Reg#(Bit#(1)) beatCnt <- mkReg(0);
+   Reg#(Bit#(128)) castTemp <- mkRegU;
+   Reg#(CastOp) castOp <- mkRegU;
+   Reg#(Bool) isCopy <- mkRegU;
    
-   rule doFetchDecode;
-      if ( pc < pcMax )
-         pc <= pc + 1;
-      else
-         pc <= 0;
+   rule doFetchDecode if ( beatCnt == 0);
       let inst = iMem.sub(pc);
       $display("%m, doFetch, pc = %d, inst =", pc, fshow(inst));
 
       let opVector <- toGet(inQ).get;
-      // let inst <- toGet(f2e).get;
       
       Bit#(256) imm = ?;
       case (inst.colType)
@@ -114,8 +114,51 @@ module mkColXFormPE(ColXFormPE);
 
       
       if ( inst.iType == Copy || inst.iType == Store ) begin
-         operandQ.enq(opVector);
+         if ( inst.strType == inst.colType) begin
+            operandQ.enq(opVector);
+         end
+         else if ( inst.strType == Long && inst.colType == BigInt ) begin
+            let d = downCastFunc(opVector, BigInt_Long);
+            castTemp <= fromMaybe(?, d);
+            castOp <= BigInt_Long;
+            isCopy <= (inst.iType == Copy);
+            beatCnt <= 1;
+         end
+         else if ( inst.strType == Int && inst.colType == Long ) begin
+            let d = downCastFunc(opVector, Long_Int);
+            castTemp <= fromMaybe(?, d);
+            castOp <= Long_Int;
+            isCopy <= (inst.iType == Copy);
+            beatCnt <= 1;
+         end
       end
+         
+      if ( pc < pcMax )
+         pc <= pc + 1;
+      else
+         pc <= 0;
+
+   endrule
+   
+   
+   rule doFetchSecondBeat if (beatCnt == 1);
+      beatCnt <= 0;
+      
+      let opVector <- toGet(inQ).get;
+      let d = downCastFunc(opVector, castOp);
+      $display("doFetchSecondBeat downcasting");
+      dynamicAssert(isValid(d), "DownCastOp is not supported");
+      operandQ.enq({fromMaybe(?, d), castTemp});
+      
+            
+      d2e.enq(D2E{iType:    isCopy? Copy: Store,
+                  aluOp:    ?,
+                  immVec:   ?,
+                  opVector: opVector,
+                  colType:  ?,
+                  isSigned: ?});
+
+      
    endrule
       
    rule doExecute;
@@ -151,12 +194,15 @@ module mkColXFormPE(ColXFormPE);
       if ( d.iType != Store ) begin
          outQ.enq(outBeat);
       end
+      
+      $display("doLowWrite");
    endrule
    
    
    rule doUpWrite if (!doLower);
       doLower <= True;
       outQ.enq(upBeat);
+      $display("doUpWrite");
    endrule
       
    interface inPipe = toPipeIn(inQ);
