@@ -6,28 +6,28 @@ BASEDIR=$(abspath ../../platform)
 
 bsvdir=%:+:..:$(connectal_dir):..:$(connectal_dir)/../lib/bsv/:../../bsvlib:$(BASEDIR)/xilinx/aurora_8b10b_fmc_vcu108:$(BASEDIR)/controller/src/common:$(BASEDIR)/controller/src/model_virtex:$(BASEDIR)/controller/src/hw_virtex:$(BASEDIR)/lib/
 
-bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@ -p $(bsvdir) +RTS -K1G -RTS  -D ClockDefaultParam -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -l boost_system
+bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@  -info-dir build_dir -p $(bsvdir) +RTS -K1G -RTS  -D ClockDefaultParam -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -l boost_system
 
 targets := Compact FirstColReader OneToNRouter FirstPredicateEval Select RowSelector
 
-cpp_targets := common emulatedflash
+cpp_targets := common
 
 cpp_objects = $(addprefix build_dir/bdpi_, $(addsuffix .o, $(cpp_targets)))
 
 
-# build_dir/bdpi_common.o: bdpi_common.cpp
-# 	mkdir -p build_dir
-# 	gcc -fPIC -c bdpi_common.cpp -o build_dir/bdpi_common.o
+build_dir/bdpi_emulatedflash.o: ../../cpp/bdpi_emulatedflash.cpp 
+	mkdir -p build_dir
+	gcc -fPIC -std=c++11 -c $^ -o $@
 
 $(cpp_objects): build_dir/%.o: %.cpp
 	mkdir -p build_dir
 	g++ -fPIC -std=c++11 -c $^ -o $@
 
 
-$(targets): %: Tb_%.bsv $(cpp_objects) bdpi_%.cpp
+$(targets): %: Tb_%.bsv $(cpp_objects) bdpi_%.cpp build_dir/bdpi_emulatedflash.o
 	mkdir -p build_dir/$@
 	bsc $(bscflags) -sim -u -g mkTb_$@ Tb_$@.bsv
-	bsc $(bscflags) -sim -u -e mkTb_$@ -o $@ $(cpp_objects) bdpi_$@.cpp
+	bsc $(bscflags) -sim -u -e mkTb_$@ -o $@ $(cpp_objects) build_dir/bdpi_emulatedflash.o bdpi_$@.cpp
 
 
 
