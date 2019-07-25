@@ -5,6 +5,10 @@ import GetPut::*;
 // Type definitions of the flash controller and submodules
 //**********************************************************
 
+`ifdef CntrlUndefBSIM
+`undef BSIM
+`endif
+
 //NAND geometry
 //Actual page size is 8640B
 //Valid Data: 2 x (243B x 16 + 224B) = 8224B; //8192+32B
@@ -85,7 +89,7 @@ typedef enum {
 	ERASE_ERROR, 
    ERASE_DONE, 
 	WRITE_DONE
-} StatusT deriving (Bits, Eq);
+} StatusT deriving (Bits, Eq, FShow);
 
 
 

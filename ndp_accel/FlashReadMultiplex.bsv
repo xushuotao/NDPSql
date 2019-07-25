@@ -65,7 +65,7 @@ module mkFlashReadMultiplex(FlashReadMultiplex#(nSlaves));
                                                          bus: req.bus,
                                                          chip: req.chip,
                                                          block: extend(req.block),
-                                                         page: req.page});
+                                                         page: extend(req.page)});
                        outstandingReqQ.enq(tuple3(req.card, req.bus, fromInteger(i)));
                     endmethod
                  endinterface

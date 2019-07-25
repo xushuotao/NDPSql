@@ -80,7 +80,13 @@ void print_map(){
 
 void loadfile_map(){
   if ( loaded ) return;
-  std::ifstream file("filemap.txt");
+  
+  std::string file_path = __FILE__;
+  std::string dir_path = file_path.substr(0, file_path.rfind("\/"));
+  std::cout<<file_path<<std::endl;
+  std::cout<<dir_path<<std::endl;
+  
+  std::ifstream file((dir_path+"/filemap.txt").c_str());
   std::string line;
   if ( file.good() ){
     std::string colname;
@@ -104,7 +110,10 @@ void loadfile_map(){
 
 uint64_t getBaseAddr(char* fname){
   loadfile_map();
-  return 0;
+  auto it = map.find(std::string(fname));
+  if ( it == map.end() ) return -1;
+  fprintf(stderr, "baseaddr for %s is %lu\n", fname, it->second.baseAddr);
+  return it->second.baseAddr;
 }
 
 uint64_t getNumRows(char* fname){
@@ -116,6 +125,7 @@ uint64_t getNumRows(char* fname){
 
 
 std::map<std::string,file_meta>::iterator findColumn(uint64_t pageAddr){
+  fprintf(stderr, "findColumn, pageaddr = %lu\n", pageAddr);
   auto it = map.begin();
   for ( ;it!=map.end(); ++it){
     auto baseByteAddr = it->second.baseAddr;
@@ -133,6 +143,8 @@ std::map<std::string,file_meta>::iterator findColumn(uint64_t pageAddr){
 
 void getData(uint32_t* resultptr, uint64_t pageaddr, uint32_t wordOffset){
   auto it = findColumn(pageaddr);
+  assert(it != map.end());
+  fprintf(stderr, "getData from %s\n", it->first.c_str());
   for ( uint32_t i = 0; i < 4; i++ ){
     resultptr[i] = 0xdeadbeaf;
   }

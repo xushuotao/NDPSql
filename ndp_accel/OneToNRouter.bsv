@@ -16,8 +16,12 @@ module mkOneToNRouterPipelined(OneToNRouter#(n,d)) provisos(
    Add#(n, d__, TMul#(TDiv#(n, 2), 2))
    );
 
+
    FIFOF#(Tuple2#(Bit#(TLog#(n)), d)) req <- mkFIFOF;
    UnFunnelPipe#(1, n, d, 1) unfunnel <- mkUnFunnelPipesPipelinedInternal(vec(toPipeOut(req)));
+   if ( valueOf(n) == 1 ) begin
+      unfunnel = cons(mapPipe(tpl_2, toPipeOut(req)), ?);
+   end
    interface PipeIn inPort = toPipeIn(req);
    // interface PipeIn inPort;
    //    method Action enq(Tuple2#(Bit#(TLog#(n)), d) v);

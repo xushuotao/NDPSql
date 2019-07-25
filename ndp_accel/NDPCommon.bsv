@@ -3,7 +3,7 @@ import Pipe::*;
 import Connectable::*;
 import FIFOF::*;
 
-typedef enum {Char, Short, Int, Long, BigInt} ColType deriving (Bits, FShow, Eq);
+typedef enum {Byte, Short, Int, Long, BigInt} ColType deriving (Bits, FShow, Eq);
 
 
 
@@ -51,7 +51,7 @@ typedef struct{
 
 function ColType toColType(Bit#(5) colBytes);
    return case (colBytes)
-             1: Char;
+             1: Byte;
              2: Short;
              4: Int;
              8: Long;
@@ -89,6 +89,39 @@ function Bit#(64) toEndPageId(Bit#(64) numRows, Bit#(5) colBytes);
              16:(endRowId >> 9); 
           endcase;
 endfunction
+
+function Bit#(64) toNumPages(Bit#(64) numRows, ColType colType);
+   Bit#(64) endRowId = numRows - 1;
+   Bit#(64) endPageId = case (colType)
+                           Byte  : (endRowId >> 13);
+                           Short : (endRowId >> 12);
+                           Int   : (endRowId >> 11);
+                           Long  : (endRowId >> 10);
+                           BigInt: (endRowId >> 9);
+                        endcase;
+   return endPageId + 1;
+endfunction
+
+function Bit#(6) toBeatsPerRowVec(ColType colType);
+   return case (colType)
+             Byte  : 1;
+             Short : 2;
+             Int   : 4;
+             Long  : 8;
+             BigInt: 16;
+          endcase;
+endfunction
+
+function Bit#(4) toLgBeatsPerRowVec(ColType colType);
+   return case (colType)
+             Byte  : 0;
+             Short : 1;
+             Int   : 2;
+             Long  : 3;
+             BigInt: 4;
+          endcase;
+endfunction
+
 
 
 interface NDPStreamIn;
