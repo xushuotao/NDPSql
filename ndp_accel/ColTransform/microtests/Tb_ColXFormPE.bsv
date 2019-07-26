@@ -54,6 +54,7 @@ module mkTb_ColXFormPE();
    ////////////////////////////////////////////////////////////////////////////////
    Vector#(NumTests, Vector#(8, DecodeInst)) insts = ?;// vec(insts_0, insts_1);
    Vector#(NumTests, Integer) progLength = ?;//vec(maxProg_0, maxProg_1);
+   Vector#(NumTests, Bit#(64)) testLengths = ?;//vec(ratio_0, ratio_1);
    Vector#(NumTests, Tuple2#(Integer, Integer)) ioRatio = ?;//vec(ratio_0, ratio_1);
    Integer i = 0;
    
@@ -68,10 +69,12 @@ module mkTb_ColXFormPE();
                                      ?);
    Integer numInsts = 1;
    Tuple2#(Integer, Integer) ratio = tuple2(1,1);
+   Bit#(64) testLength = 100;
 
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
 
    // test 1                 
@@ -86,10 +89,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 1;   
    ratio = tuple2(1,1);
-
+   testLength = 4*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
    
    // test 2
@@ -104,10 +109,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,2);
-
+   testLength = 8*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
    
    // test 3
@@ -122,10 +129,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,1);
+   testLength = 8*100;
 
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
    
    // test 4
@@ -140,10 +149,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,1);
-
+   testLength = 8*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
    
       
@@ -159,10 +170,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(3,2);
-
+   testLength = 8*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
    
 
@@ -178,10 +191,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(2,3);
+   testLength = 24*100;
 
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
    
             
@@ -198,10 +213,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(4,3);
-
+   testLength = 24*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
       
    // test 8
@@ -217,10 +234,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,2);
-
+   testLength = 16*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
 
    // test 9
@@ -236,10 +255,12 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,1);
-
+   testLength = 16*100;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   testLengths[i] = testLength;
    i = i + 1;
 
 
@@ -256,13 +277,12 @@ module mkTb_ColXFormPE();
    Reg#(Bool) doProgram <- mkReg(True);
    Reg#(Bool) doInput <- mkReg(False);
    rule doProgramPE if (doProgram);
-
       if ( prog_cnt  < fromInteger(progLength[testCnt]) ) begin
          testEng.programPort.enq(tuple3(truncate(prog_cnt), False, pack(insts[testCnt][prog_cnt])));
          prog_cnt <= prog_cnt + 1;
       end
       else if (prog_cnt  == fromInteger(progLength[testCnt])) begin
-         testEng.programPort.enq(tuple3(?, True, fromInteger(progLength[testCnt]-1)));
+         testEng.programPort.enq(tuple3(?, True, fromInteger(progLength[testCnt])));
          prog_cnt <= 0;
          doProgram <= False;
          doInput <= True;
@@ -271,9 +291,9 @@ module mkTb_ColXFormPE();
    
    Reg#(Bit#(64)) inputCnt <- mkReg(0);
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
-   Bit#(64) testLength = 12;
+
    rule doTest if (!doProgram && doInput);
-      if ( inputCnt == testLength - 1 ) begin
+      if ( inputCnt == testLengths[testCnt] - 1 ) begin
          inputCnt <= 0;
          doInput <= False;
       end
@@ -293,7 +313,7 @@ module mkTb_ColXFormPE();
       
       $display("Output cnt = %d, tester = %h", outputCnt, tester);
       
-      if ( outputCnt == testLength*fromInteger(tpl_1(ioRatio[testCnt]))/fromInteger(tpl_2(ioRatio[testCnt])) -1) begin
+      if ( outputCnt == testLengths[testCnt]*fromInteger(tpl_1(ioRatio[testCnt]))/fromInteger(tpl_2(ioRatio[testCnt])) -1) begin
          $display("Passed: ColXFormPE test %d instCnt = %d", testCnt, fromInteger(progLength[testCnt]));
          for ( Integer i = 0; i < fromInteger(progLength[testCnt]); i = i + 1) begin
             $display("@ %d : ", i, fshow(insts[testCnt][i]));

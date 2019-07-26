@@ -61,20 +61,25 @@ module mkColXFormPE(ColXFormPE);
    FIFO#(D2E) d2e <- mkFIFO;
    SimdAlu256 alu <- mkSimdAlu256;
    FIFO#(E2W) e2w <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),1)));
-   FIFO#(RowData) operandQ <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),1)));
+   FIFO#(RowData) operandQ <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),17)));
    
    Reg#(Bit#(3)) pcMax <- mkRegU;
    
-   Reg#(Bit#(1)) beatCnt <- mkReg(0);
+   // Reg#(Bit#(1)) beatCnt <- mkReg(0);
    Reg#(Bit#(128)) castTemp <- mkRegU;
    Reg#(CastOp) castOp <- mkRegU;
    Reg#(Bool) isCopy <- mkRegU;
    
-   rule doFetchDecode if ( beatCnt == 0);
+   Reg#(Bit#(5)) beatCnt <- mkReg(0);
+   
+   // Reg#(Bit#(4)) beatCnt 
+   
+   rule doFetchDecode;// if ( beatCnt == 0);
       let inst = iMem.sub(pc);
       $display("%m, doFetch, pc = %d, inst =", pc, fshow(inst));
 
       let opVector <- toGet(inQ).get;
+      
       
       Bit#(256) imm = ?;
       case (inst.colType)
@@ -120,46 +125,55 @@ module mkColXFormPE(ColXFormPE);
          else if ( inst.strType == Long && inst.colType == BigInt ) begin
             let d = downCastFunc(opVector, BigInt_Long);
             castTemp <= fromMaybe(?, d);
-            castOp <= BigInt_Long;
-            isCopy <= (inst.iType == Copy);
-            beatCnt <= 1;
+            if ( beatCnt[0] == 1) begin
+               dynamicAssert(isValid(d), "DownCastOp is not supported");
+               operandQ.enq({fromMaybe(?, d), castTemp});
+            end
          end
          else if ( inst.strType == Int && inst.colType == Long ) begin
             let d = downCastFunc(opVector, Long_Int);
             castTemp <= fromMaybe(?, d);
-            castOp <= Long_Int;
-            isCopy <= (inst.iType == Copy);
-            beatCnt <= 1;
+            if ( beatCnt[0] == 1) begin
+               dynamicAssert(isValid(d), "DownCastOp is not supported");
+               operandQ.enq({fromMaybe(?, d), castTemp});
+            end
          end
       end
-         
-      if ( pc < pcMax )
-         pc <= pc + 1;
-      else
-         pc <= 0;
+      
+      Bit#(6) numBeats = toBeatsPerRowVec(inst.colType);
+      if ( zeroExtend(beatCnt) + 1 == numBeats ) begin
+         beatCnt <= 0;
+         if ( pc < pcMax )
+            pc <= pc + 1;
+         else
+            pc <= 0;
+      end
+      else begin
+         beatCnt <= beatCnt + 1;
+      end
 
    endrule
    
    
-   rule doFetchSecondBeat if (beatCnt == 1);
-      beatCnt <= 0;
+   // rule doFetchSecondBeat if (beatCnt == 1);
+   //    beatCnt <= 0;
       
-      let opVector <- toGet(inQ).get;
-      let d = downCastFunc(opVector, castOp);
-      $display("doFetchSecondBeat downcasting");
-      dynamicAssert(isValid(d), "DownCastOp is not supported");
-      operandQ.enq({fromMaybe(?, d), castTemp});
+   //    let opVector <- toGet(inQ).get;
+   //    let d = downCastFunc(opVector, castOp);
+   //    $display("doFetchSecondBeat downcasting");
+   //    dynamicAssert(isValid(d), "DownCastOp is not supported");
+   //    operandQ.enq({fromMaybe(?, d), castTemp});
       
             
-      d2e.enq(D2E{iType:    isCopy? Copy: Store,
-                  aluOp:    ?,
-                  immVec:   ?,
-                  opVector: opVector,
-                  colType:  ?,
-                  isSigned: ?});
+   //    d2e.enq(D2E{iType:    isCopy? Copy: Store,
+   //                aluOp:    ?,
+   //                immVec:   ?,
+   //                opVector: opVector,
+   //                colType:  ?,
+   //                isSigned: ?});
 
       
-   endrule
+   // endrule
       
    rule doExecute;
       let eInst <- toGet(d2e).get;
@@ -214,7 +228,7 @@ module mkColXFormPE(ColXFormPE);
          if ( !setPcMax )
             iMem.upd(pc, unpack(inst));
          else
-            pcMax <= truncate(inst);
+            pcMax <= truncate(inst-1);
       endmethod
       method Bool notFull = True;
    endinterface
