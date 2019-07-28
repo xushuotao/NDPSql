@@ -17,6 +17,9 @@ typedef 8 MaxNumCol;
 typedef Bit#(TLog#(MaxNumCol)) ColIdT;
 typedef Bit#(TLog#(TAdd#(MaxNumCol,1))) ColNumT;
 
+typedef 128 NumPageBufs;
+typedef Bit#(TLog#(NumPageBufs)) BufIdT;
+
 interface ColProcReader;
    interface PipeIn#(RowVecReq) rowVecReq;
    //interface Client#(RowMaskRead, RowVectorMask) rowMaskReadClient;
@@ -35,6 +38,12 @@ endinterface
 typedef enum{SetRow, SetCol, Normalize, Ready} State deriving (FShow, Bits, Eq);
 
 (* synthesize *)
+module mkColReadEng128(ColReadEng#(BufIdT));
+   ColReadEng#(BufIdT) m <- mkColReadEng;
+   return m;
+endmodule
+
+(* synthesize *)
 module mkColProcReader(ColProcReader);
    
    Reg#(State) state <- mkReg(SetRow);
@@ -50,13 +59,13 @@ module mkColProcReader(ColProcReader);
    Reg#(Bit#(4)) minLgColBeatsPerIter <- mkReg(maxBound);
    Vector#(MaxNumCol, Reg#(Bit#(6))) colBeatsPerIter_V <- replicateM(mkRegU);
 
-   Vector#(MaxNumCol, ColReadEng) colReadEng_V <- replicateM(mkColReadEng);
+   Vector#(MaxNumCol, ColReadEng#(BufIdT)) colReadEng_V <- replicateM(mkColReadEng128);
    
-   PageBuffer#(128) pageBuffer <- mkUGPageBuffer;
+   PageBuffer#(NumPageBufs) pageBuffer <- mkUGPageBuffer;
    
    Reg#(Bit#(5)) pageReqCnt <- mkReg(0);
    
-   FIFO#(Tuple2#(ColIdT, Bit#(7))) colScheduleQ <- mkFIFO;
+   FIFO#(Tuple2#(ColIdT, BufIdT)) colScheduleQ <- mkFIFO;
    
    FIFO#(DualFlashAddr) flashReqQ <- mkFIFO;
    FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
@@ -64,16 +73,21 @@ module mkColProcReader(ColProcReader);
    // tagId, busId
    // RegFile#(Bit#(7), Bit#(4)) tagInfo <- mkRegFileFull;
    // assumes that page request returns in order
-   FIFO#(Bit#(7)) outstandingReadQ <- mkSizedFIFO(128);
+   FIFO#(BufIdT) outstandingReadQ <- mkSizedFIFO(valueOf(NumPageBufs));
    
    rule schedulePageReq if ( state == Ready );
       let tag <- pageBuffer.reserveBuf;
-      colReadEng_V[colCnt].getNextPageAddr(tag);
-      colScheduleQ.enq(tuple2(truncate(colCnt), tag));
+      let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag);
+      
+      $display("issue flash page request for col = %d, tag = %d, addr = ", colCnt, tag, fshow(addr));
+      flashReqQ.enq(addr);
+      outstandingReadQ.enq(tag);
+
+      // colScheduleQ.enq(tuple2(truncate(colCnt), tag));
 
       // scheduling logic
       // make sure that same amount of row vecs are issued per iteration
-      if ( zeroExtend(pageReqCnt) + 1 == colBeatsPerIter_V[colCnt] ) begin
+      if ( zeroExtend(pageReqCnt) + 1 == colBeatsPerIter_V[colCnt] || last ) begin
          pageReqCnt <= 0;
          if ( zeroExtend(colCnt) + 1 < colNum ) begin
             colCnt <= colCnt + 1;
@@ -94,17 +108,15 @@ module mkColProcReader(ColProcReader);
       else begin
          pageReqCnt <= pageReqCnt + 1;
       end
-      
+
    endrule
-   
+   /*
    rule issuePageReq;
       colScheduleQ.deq;
       let {col, tag} = colScheduleQ.first;
       let addr <- colReadEng_V[col].pageAddrResp;
-      $display("issue flash page request for col = %d, tag = %d, addr = ", col, tag, fshow(addr));
-      flashReqQ.enq(addr);
-      outstandingReadQ.enq(tag);
    endrule
+    */
 
    // // maxbeat > 256
    // Vector#(16, Reg#(Bit#(9))) flashBeatCnts <- replicateM(mkReg(0));
@@ -134,10 +146,10 @@ module mkColProcReader(ColProcReader);
    // maxbeat = 256
    Vector#(MaxNumCol, Reg#(Bit#(8))) colBeatCnts <- replicateM(mkReg(0));
    
-   FIFO#(Tuple2#(Bit#(7), Bool)) needDeqQ <- mkPipelineFIFO;
+   FIFO#(Tuple3#(Bit#(7), Bool, Bool)) flashRespMetaQ <- mkPipelineFIFO;
    
    rule deqFlashResp;
-      let tag = colReadEng_V[colId].firstInflightTag;
+      let {tag, maxBeats} = colReadEng_V[colId].firstInflightTag;
       
       colBeatCnts[colId] <= colBeatCnts[colId] + 1;
             
@@ -157,16 +169,17 @@ module mkColProcReader(ColProcReader);
       pageBuffer.deqRequest(tag);
       
       Bool needDeqTag = (colBeatCnts[colId] == maxBound);
-      needDeqQ.enq(tuple2(tag, needDeqTag));
+      flashRespMetaQ.enq(tuple3(tag, needDeqTag, zeroExtend(beatCnt) < maxBeats));
       if ( needDeqTag ) colReadEng_V[colId].doneFirstInflight;
       $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b", tag, colId, colBeatCnts[colId]);
    endrule
    
    FIFOF#(Bit#(256)) dataOutQ <- mkFIFOF;
    rule flashRespData;
-      let {tag, needDeq} <- toGet(needDeqQ).get;
+      let {tag, needDeq, needEnq} <- toGet(flashRespMetaQ).get;
       let d <- pageBuffer.deqResponse;
-      dataOutQ.enq(d);
+      if ( needEnq)
+         dataOutQ.enq(d);
       
       if ( needDeq ) 
          pageBuffer.doneBuffer(tag);
