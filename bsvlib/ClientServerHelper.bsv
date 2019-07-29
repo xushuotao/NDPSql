@@ -2,6 +2,7 @@ import ClientServer::*;
 import GetPut::*;
 import FIFO::*;
 import FIFOF::*;
+import Assert::*;
 
 typeclass ToClientServer#(type fifo1, type fifo2, type req_type, type resp_type);
    function Client#(req_type, resp_type) toClient(fifo1 reqQ, fifo2 respQ);
@@ -40,3 +41,28 @@ instance ToClientServer#(FIFOF#(req_type), FIFOF#(resp_type), req_type, resp_typ
    endfunction
 endinstance
 
+module mkEmptyClient(Client#(req_type, resp_type));
+   interface Get request;
+      method ActionValue#(req_type) get() if (False);
+         return ?;
+      endmethod
+   endinterface
+   interface Put response;
+      method Action put(resp_type resp);
+         dynamicAssert(True, "(%m) Empty Client should never expect any response data");
+      endmethod
+   endinterface
+endmodule
+
+module mkEmptyServer(Server#(req_type, resp_type));
+   interface Put request;
+      method Action put(req_type);
+         dynamicAssert(True, "(%m) Empty Server should never expect any request data");
+      endmethod
+   endinterface
+   interface Get response;
+         method ActionValue#(resp_type) get() if (False);
+         return ?;
+      endmethod
+   endinterface
+endmodule

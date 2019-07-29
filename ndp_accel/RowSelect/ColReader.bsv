@@ -213,10 +213,12 @@ module mkColReader(ColReader);
    endrule
    
    // issue page request only if when all the rowvec in the page has been seen;
+   Reg#(Bit#(64)) totalPageIssued <- mkReg(0);
    rule issuePageReq;// if ( pageReqQ.first() < rowVecToPageId(lastRowVecId) || allRowVecsFinished);
       let pageId <- toGet(pageReqQ).get;
-      $display("(%m): issuing page Read Request for basePageAddr = %d, pageId = %d, lastRowVecId = %d", basePage, pageId, lastRowVecId);
+      $display("(%m): issuing page Read Request for basePageAddr = %d, pageId = %d, lastRowVecId = %d, totalPageIssued = %d", basePage, pageId, lastRowVecId, totalPageIssued);
       addrQ.enq(toDualFlashAddr(pageId+basePage));
+      totalPageIssued <= totalPageIssued + 1;
    endrule
 
 ////////////////////////////////////////////////////////////////////////////////

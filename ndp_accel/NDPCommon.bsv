@@ -61,23 +61,34 @@ endfunction
 
 function Bit#(3) toLgColBytes(Bit#(5) colBytes);
    return case (colBytes)
-             1: 0;
-             2: 1;
-             4: 2;
-             8: 3;
+             1:  0;
+             2:  1;
+             4:  2;
+             8:  3;
              16: 4;
           endcase;
 endfunction   
 
 function Bit#(9) toRowVecsPerPage(Bit#(5) colBytes);
    return case (colBytes )
-             1: 256;
-             2: 128;
-             4: 64;
-             8: 32;
+             1:  256;
+             2:  128;
+             4:  64;
+             8:  32;
              16: 16;
           endcase;
 endfunction
+
+function Bit#(3) toLgRowVecsPerPage(ColType colType);
+   return case (colType )
+             Byte  : 8;
+             Short : 7;
+             Int   : 6;
+             Long  : 5;
+             BigInt: 4;
+          endcase;
+endfunction
+
 
 function Bit#(64) toEndPageId(Bit#(64) numRows, Bit#(5) colBytes);
    Bit#(64) endRowId = numRows - 1;
@@ -101,6 +112,22 @@ function Bit#(64) toNumPages(Bit#(64) numRows, ColType colType);
                         endcase;
    return endPageId + 1;
 endfunction
+
+function Bit#(64) toNumRowVecs(Bit#(64) numRows);
+   return (numRows + 31) >> 5;
+endfunction
+
+function Bit#(8) lastPageBeats(Bit#(64) numRows, ColType colType);
+   Bit#(64) totalRowVecs = toNumRowVecs(numRows);
+   return truncate(case (colType)
+                      Byte  : (totalRowVecs);
+                      Short : (totalRowVecs << 1);
+                      Int   : (totalRowVecs << 2);
+                      Long  : (totalRowVecs << 3);
+                      BigInt: (totalRowVecs << 4);
+                   endcase);
+endfunction
+
 
 function Bit#(6) toBeatsPerRowVec(ColType colType);
    return case (colType)

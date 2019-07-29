@@ -60,7 +60,7 @@ module mkColXFormPE(ColXFormPE);
    FIFO#(DecodeInst) f2e <- mkFIFO;
    FIFO#(D2E) d2e <- mkFIFO;
    SimdAlu256 alu <- mkSimdAlu256;
-   FIFO#(E2W) e2w <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),1)));
+   FIFO#(E2W) e2w <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),17)));
    FIFO#(RowData) operandQ <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),17)));
    
    Reg#(Bit#(3)) pcMax <- mkRegU;
