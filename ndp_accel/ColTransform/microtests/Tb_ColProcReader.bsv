@@ -126,6 +126,7 @@ module mkTb_ColProcReader();
 
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
    Reg#(Bit#(64)) cnt <- mkReg(0);
+   Bit#(64) gap = 10000;
 
    rule doOutput if (state == Run);
       let tester = colProcReader.outPipe.first;
@@ -143,12 +144,12 @@ module mkTb_ColProcReader();
       end
    endrule
    
-   rule doIncrCont if (state == CheckResult && cnt < 1000);
+   rule doIncrCont if (state == CheckResult && cnt < gap);
       cnt <= cnt + 1;
    endrule
       
   
-   rule doCheckResult if (state == CheckResult && cnt == 1000);
+   rule doCheckResult if (state == CheckResult && cnt == gap);
       if ( colProcReader.outPipe.notEmpty ) begin
          $display( "Failed:: ColProcReader produced more beats than expected");
       end

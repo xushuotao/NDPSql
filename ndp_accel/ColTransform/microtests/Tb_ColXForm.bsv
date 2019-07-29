@@ -57,13 +57,7 @@ import Assert::*;
 ////////////////////////////////////////////////////////////////////////////////
 /// ColEng Instruction Section
 ////////////////////////////////////////////////////////////////////////////////
-typedef 1 NumColEngs;
-Integer numColEngs = valueOf(NumColEngs);
-Bit#(64) most_negative = 1<<63;
-Vector#(8, DecodeInst) peProg = replicate(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: ?, strType: ?, imm: ?});
-Vector#(NumColEngs, Vector#(8, DecodeInst)) pePrograms = replicate(peProg);
-Vector#(NumColEngs, Integer) progLength = replicate(1);
-Vector#(NumColEngs, Integer) numInsts = replicate(1);
+typedef 4 NumColEngs;
 ////////////////////////////////////////////////////////////////////////////////
 /// End of ColEng Instruction Section
 ////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +67,7 @@ Vector#(NumColEngs, Integer) numInsts = replicate(1);
 ////////////////////////////////////////////////////////////////////////////////
 typedef 6 NumCols; 
 Integer numCols = valueOf(NumCols);
-Bit#(64) totalRows = 8192;//getNumRows("l_shipdate")/100000;
+
 Tuple2#(ColType, Bit#(64)) colInfo_returnflag  = tuple2(Byte, getBaseAddr("l_returnflag"));
 Tuple2#(ColType, Bit#(64)) colInfo_linestatus  = tuple2(Byte, getBaseAddr("l_linestatus"));
 Tuple2#(ColType, Bit#(64)) colInfo_quantity    = tuple2(Int, getBaseAddr("l_quantity"));
@@ -91,9 +85,76 @@ Vector#(NumCols, Tuple2#(ColType, Bit#(64))) colInfos = vec(colInfo_returnflag  
 ////////////////////////////////////////////////////////////////////////////////
 
 
-typedef enum{Prog_Reader, Prog_ColX, Run} State deriving (Bits, Eq, FShow);
+typedef enum{Prog_Reader, Prog_ColX, Run, CheckResult} State deriving (Bits, Eq, FShow);
 (* synthesize *)
 module mkTb_ColXForm();
+   
+   Bit#(64) totalRows = getNumRows("l_shipdate")/100000;
+   
+////////////////////////////////////////////////////////////////////////////////
+/// ColEng Instruction Section
+////////////////////////////////////////////////////////////////////////////////
+
+   Integer numColEngs = valueOf(NumColEngs);
+   Bit#(64) most_negative = 1<<63;
+   Vector#(NumColEngs, Vector#(8, DecodeInst)) pePrograms = ?;//replicate(peProg);
+   Vector#(NumColEngs, Integer) progLength = ?;//replicate(1);
+   Integer i = 0;
+   
+   Vector#(8, DecodeInst) peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
+                                              DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
+                                              DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
+                                              DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // extended_price
+                                              DecodeInst{iType: AluImm, aluOp: Sub, isSigned: True, colType: Long, strType: ?, imm: 100}, // 1 - discount
+                                              DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, colType: Long, strType: ?, imm: 100}), // 1 + tax
+                                          ?);
+                                              
+   pePrograms[i] = peProg;
+   progLength[i] = 6;
+   i = i + 1;
+
+      
+   peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
+                       DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?}, // copy extended_price
+                       DecodeInst{iType: Alu,  aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: 100}, // 1 - discount * extended_price
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}), // pass 1 + tax
+                   ?);
+      
+   pePrograms[i] = peProg;
+   progLength[i] = 6;
+   i = i + 1;
+   
+   
+   peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // pass extended_price
+                       DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?}, // copy 1 - discount * extended_price
+                       DecodeInst{iType: Alu,  aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: ?}), // (1 + tax) * (1 - discount * extended_price)
+                   ?);
+      
+   pePrograms[i] = peProg;
+   progLength[i] = 6;
+   i = i + 1;
+
+   peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // pass extended_price
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // pass 1 - discount * extended_price
+                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}), // pass (1 + tax) * (1 - discount * extended_price)
+                   ?);
+      
+   pePrograms[i] = peProg;
+   progLength[i] = 6;
+   i = i + 1;
+
+////////////////////////////////////////////////////////////////////////////////
+/// End of ColEng Instruction Section
+////////////////////////////////////////////////////////////////////////////////
+
    
    Vector#(2,FlashCtrlVirtexIfc) flashCtrls <- mapM(mkEmulatedFlashCtrl, genWith(fromInteger));
    
@@ -166,16 +227,41 @@ module mkTb_ColXForm();
    endrule
 
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
+   Reg#(Bit#(64)) cnt <- mkReg(0);
+   Bit#(64) gap = 10000;
+   
+   // Vector#(Bit#(6) 
 
    rule doOutput if (state == Run);
       let tester = testEng.outPipe.first;
       testEng.outPipe.deq;
+      
+      if ( outputCnt + 1 == (toNumRowVecs(totalRows) * (1+1+4+8+8+8) )) begin
+         cnt <= 0;
+         state <= CheckResult;
+      end
       
       $display("Output cnt = %d, tester = %h", outputCnt, tester);
       
       outputCnt <= outputCnt + 1;
    endrule
   
+   rule doIncrCont if (state == CheckResult && cnt < gap);
+      cnt <= cnt + 1;
+   endrule
+      
+  
+   rule doCheckResult if (state == CheckResult && cnt == gap);
+      if ( colProcReader.outPipe.notEmpty ) begin
+         $display( "Failed:: ColXForm produced more beats than expected");
+      end
+      else begin
+         $display( "Pass:: ColXForm");
+      end
+         
+      $finish;
+   endrule
+
 
    rule fakeDrive;
       flashCtrls[0].aurora.rxn_in(?);

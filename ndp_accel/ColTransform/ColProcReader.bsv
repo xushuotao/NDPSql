@@ -155,11 +155,13 @@ module mkColProcReader(ColProcReader);
             
       if ( beatCnt + 1 == beatsPerRowVec_V[colId] ) begin
          beatCnt <= 0;         
-         if ( zeroExtend(colId) + 1 == colNum ) begin
-            colId <= 0;
-         end
-         else begin
-            colId <= colId + 1;
+         if ( zeroExtend(colBeatCnts[colId]) < maxBeats || colBeatCnts[colId] == maxBound ) begin
+            if ( zeroExtend(colId) + 1 == colNum ) begin
+               colId <= 0;
+            end
+            else begin
+               colId <= colId + 1;
+            end
          end
       end
       else begin
