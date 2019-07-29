@@ -75,7 +75,7 @@ Vector#(NumCols, Tuple2#(ColType, Bit#(64))) colInfos = vec(colInfo_returnflag  
 ////////////////////////////////////////////////////////////////////////////////
 
 
-typedef enum{Prog_Reader, Run} State deriving (Bits, Eq, FShow);
+typedef enum{Prog_Reader, Run, CheckResult} State deriving (Bits, Eq, FShow);
 (* synthesize *)
 module mkTb_ColProcReader();
 
@@ -125,6 +125,7 @@ module mkTb_ColProcReader();
    endrule
 
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
+   Reg#(Bit#(64)) cnt <- mkReg(0);
 
    rule doOutput if (state == Run);
       let tester = colProcReader.outPipe.first;
@@ -135,11 +136,28 @@ module mkTb_ColProcReader();
       outputCnt <= outputCnt + 1;
       
       if ( outputCnt + 1 == (toNumRowVecs(totalRows) * (1+1+4+8+8+8) )) begin
-         $display( "Passed:: ColProcReader");
-         $finish;
+
+         // $finish;
+         state <= CheckResult;
+         cnt <= 0;
       end
    endrule
+   
+   rule doIncrCont if (state == CheckResult && cnt < 1000);
+      cnt <= cnt + 1;
+   endrule
+      
   
+   rule doCheckResult if (state == CheckResult && cnt == 1000);
+      if ( colProcReader.outPipe.notEmpty ) begin
+         $display( "Failed:: ColProcReader produced more beats than expected");
+      end
+      else begin
+         $display( "Pass:: ColProcReader");
+      end
+         
+      $finish;
+   endrule
 
    rule fakeDrive;
       flashCtrls[0].aurora.rxn_in(?);

@@ -38,13 +38,13 @@ import "BDPI" function ActionValue#(Bit#(64)) randu64(Bit#(32) dummy);
 (* synthesize *)
 module mkTb_Multiplier();
    // Multiplier#(64) testEng <- mkPipelinedMultiplier;
-   // Multiplier#(64) testEng <- mkRadix4UnsignedMultiplier;
-   Multiplier#(64) testEng <- mkRadix4SignedMultiplier;
+   Multiplier#(64) testEng <- mkRadix4UnsignedMultiplier;
+   // Multiplier#(64) testEng <- mkRadix4SignedMultiplier;
    
    Reg#(Bit#(64)) testCnt <- mkReg(0);
    Reg#(Bit#(64)) resCnt <- mkReg(0);
    
-   Bit#(64) testLength = 128;
+   Bit#(64) testLength = 1000;
    
    FIFO#(Vector#(2, Bit#(64))) operandQ <- mkSizedFIFO(64);
    
@@ -52,7 +52,7 @@ module mkTb_Multiplier();
       testCnt <= testCnt + 1;
       
       Vector#(2, Bit#(64)) operands <- mapM(randu64, genWith(fromInteger));
-      // Vector#(2, Bit#(64)) operands = vec(5,9);
+      // Vector#(2, Bit#(64)) operands = vec('b110001100011,'b110001100011);
       testEng.start(truncate(operands[0]), truncate(operands[1]));
       operandQ.enq(operands);
       // resultQ.enq(multiply_unsigned(operands[0],operands[1]));
@@ -66,9 +66,9 @@ module mkTb_Multiplier();
       
       let operands <- toGet(operandQ).get;
       
-      Bit#(128) testee = multiply_signed(truncate(operands[0]),truncate(operands[1]));
+      Bit#(128) testee = multiply_unsigned(truncate(operands[0]),truncate(operands[1]));
       
-      $display("(@%t) Test[%d]: %d times %d = %d (expected %d)", $time, resCnt, operands[0], operands[1], tester, testee);      
+      $display("(@%t) Test[%d]: %b times %b = %d (expected %b)", $time, resCnt, operands[0], operands[1], tester, testee);      
       if ( testee != tester ) begin
          $display("Failed: %h times %h = %h (expected %h)", operands[0], operands[1], tester, testee);
          $finish();

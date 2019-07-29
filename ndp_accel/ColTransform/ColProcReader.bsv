@@ -17,7 +17,7 @@ typedef 8 MaxNumCol;
 typedef Bit#(TLog#(MaxNumCol)) ColIdT;
 typedef Bit#(TLog#(TAdd#(MaxNumCol,1))) ColNumT;
 
-typedef 128 NumPageBufs;
+typedef 64 NumPageBufs;
 typedef Bit#(TLog#(NumPageBufs)) BufIdT;
 
 interface ColProcReader;
@@ -38,7 +38,7 @@ endinterface
 typedef enum{SetRow, SetCol, Normalize, Ready} State deriving (FShow, Bits, Eq);
 
 (* synthesize *)
-module mkColReadEng128(ColReadEng#(BufIdT));
+module mkColReadEng_synth(ColReadEng#(BufIdT));
    ColReadEng#(BufIdT) m <- mkColReadEng;
    return m;
 endmodule
@@ -59,7 +59,7 @@ module mkColProcReader(ColProcReader);
    Reg#(Bit#(4)) minLgColBeatsPerIter <- mkReg(maxBound);
    Vector#(MaxNumCol, Reg#(Bit#(6))) colBeatsPerIter_V <- replicateM(mkRegU);
 
-   Vector#(MaxNumCol, ColReadEng#(BufIdT)) colReadEng_V <- replicateM(mkColReadEng128);
+   Vector#(MaxNumCol, ColReadEng#(BufIdT)) colReadEng_V <- replicateM(mkColReadEng_synth);
    
    PageBuffer#(NumPageBufs) pageBuffer <- mkUGPageBuffer;
    
@@ -146,7 +146,7 @@ module mkColProcReader(ColProcReader);
    // maxbeat = 256
    Vector#(MaxNumCol, Reg#(Bit#(8))) colBeatCnts <- replicateM(mkReg(0));
    
-   FIFO#(Tuple3#(Bit#(7), Bool, Bool)) flashRespMetaQ <- mkPipelineFIFO;
+   FIFO#(Tuple3#(BufIdT, Bool, Bool)) flashRespMetaQ <- mkPipelineFIFO;
    
    rule deqFlashResp;
       let {tag, maxBeats} = colReadEng_V[colId].firstInflightTag;
@@ -169,9 +169,9 @@ module mkColProcReader(ColProcReader);
       pageBuffer.deqRequest(tag);
       
       Bool needDeqTag = (colBeatCnts[colId] == maxBound);
-      flashRespMetaQ.enq(tuple3(tag, needDeqTag, zeroExtend(beatCnt) < maxBeats));
+      flashRespMetaQ.enq(tuple3(tag, needDeqTag, zeroExtend(colBeatCnts[colId]) < maxBeats));
       if ( needDeqTag ) colReadEng_V[colId].doneFirstInflight;
-      $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b", tag, colId, colBeatCnts[colId]);
+      $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b, maxBeats = %d", tag, colId, colBeatCnts[colId], maxBeats);
    endrule
    
    FIFOF#(Bit#(256)) dataOutQ <- mkFIFOF;
