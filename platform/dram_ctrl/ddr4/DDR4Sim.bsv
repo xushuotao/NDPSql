@@ -12,6 +12,8 @@ typedef Bit#(28) DDR4Address;
 typedef Bit#(80) ByteEn;
 typedef Bit#(640) DDR4Data;
 
+Bool debug = False;
+
 module mkDDR4Simulator(DDR4_User_VCU108);
    RegFile#(Bit#(25), DDR4Data) data <- mkRegFileFull();
    //Vector#(TExp#(26), Reg#(DDR4Data)) data <- replicateM(mkReg(0));
@@ -45,6 +47,7 @@ module mkDDR4Simulator(DDR4_User_VCU108);
    method Bool init_done() = True;
    
    method Action request(DDR4Address addr, ByteEn writeen, DDR4Data datain);
+      if (debug) $display("%m, ddr req %h, %b, %h", addr, writeen, datain);
       Bit#(25) burstaddr = addr[27:3];
       Bit#(3) offset = addr[2:0];
       
@@ -82,6 +85,7 @@ module mkDDR4Simulator(DDR4_User_VCU108);
       //let v <- toGet(responses).get();
       let v <- toGet(delayQs[31]).get();
       //$display("last, %d, %h", $time, v);
+      if (debug) $display("%m, ddr resp %h", v);
       return v;
    endmethod
       

@@ -456,7 +456,7 @@ module mkXilinxIntMulUnified64(XilinxIntMul#(tagT, w)) provisos(
    Add#(w, w, w2),
    Add#(w, 0, 64),
    // credit based flow control types
-   NumAlias#(TAdd#(IntMulLatency, 2), maxCredit),
+   NumAlias#(TAdd#(IntMulLatency, 1), maxCredit),
    Alias#(Bit#(TLog#(TAdd#(maxCredit, 1))), creditT)
    );
    // different multilpliers: WaitAutoReset is not needed, since mul is a

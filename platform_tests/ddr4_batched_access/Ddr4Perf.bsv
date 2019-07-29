@@ -24,6 +24,7 @@
 
 `include "ConnectalProjectConfig.bsv"
 
+import Arith::*;
 import FIFO::*;
 import Vector::*;
 import DRAMController::*;
@@ -184,16 +185,21 @@ module mkDdr4Perf#(HostInterface host, Ddr4PerfIndication indication)(Ddr4Perf);
          if ( cntRd < cntRdMax ) begin
             Vector#(BatchSz, Bit#(32)) vrand32<- mapM(getRandV, vrandAddrGen);
          
-            Vector#(BatchSz, Bit#(10)) vcolAddr = map(truncate, vrand32);
-            Vector#(BatchSz, Bit#(15)) vrowAddr = map(truncateLSB, vrand32);
+            Vector#(BatchSz, Bit#(10)) vcolAddr = map(truncate, zipWith(bitwiseand, 
+                                                                        vrand32,
+                                                                        replicate('b1000)));
+            Vector#(BatchSz, Bit#(15)) vrowAddr = replicate(truncate(cntRd));//map(truncateLSB, vrand32);
             Vector#(BatchSz, Bit#(3)) vbankAddr = zipWith(add,
                                                           replicate(truncate(baseBankAddr)), 
                                                           map(fromInteger, genVector)); 
             baseBankAddr <= baseBankAddr + fromInteger(valueOf(BatchSz));
          
             Vector#(BatchSz, Bit#(28)) vAddr = zipWith3(concat3, vbankAddr, vrowAddr, vcolAddr);
-         
+
+            $display("ctrl_%d, vcolAddr =  ", i, fshow(vcolAddr));         
+            $display("ctrl_%d, vrowAddr =  ", i, fshow(vrowAddr));
             $display("ctrl_%d, baseBandaddr = %h  ", i, baseBankAddr, fshow(vbankAddr));
+
             //reqs[i].enq(DDRRequest{address: extend(cntRd<<(3+strideReg)), writeen: 80'b0, datain:?});
             DRAMBatchRdRequest#(BatchSz, 28, 6) batchreq = DRAMBatchRdRequest{addrV: vAddr,
                                                                               sftV: replicate(0)};
