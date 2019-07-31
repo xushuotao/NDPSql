@@ -82,7 +82,7 @@ module mkTb_Aggregate();
       Vector#(TDiv#(32, ColBytes), Bit#(TMul#(ColBytes, 8))) dataV = unpack(dataQ.first);
       dataQ.deq;
       
-      Bit#(32) cnt_tester = 0;
+      Bit#(64) cnt_tester = 0;
       Bit#(TMul#(ColBytes, 8)) min_tester = isSigned? (1<<(valueOf(TMul#(ColBytes,8))-1))-1 : maxBound;
       Bit#(TMul#(ColBytes, 8)) max_tester = isSigned? (1<<(valueOf(TMul#(ColBytes,8))-1))   : minBound;
       Bit#(129) sum_tester = 0;

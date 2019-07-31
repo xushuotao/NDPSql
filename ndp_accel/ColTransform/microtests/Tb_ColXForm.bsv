@@ -31,6 +31,8 @@ import ColXFormPE::*;
 import ColXForm::*;
 import GetPut::*;
 import Pipe::*;
+import AlgFuncs::*;
+import Aggregate::*;
 
 
 // flash releted
@@ -89,7 +91,7 @@ typedef enum{Prog_Reader, Prog_ColX, Run, CheckResult} State deriving (Bits, Eq,
 (* synthesize *)
 module mkTb_ColXForm();
    
-   Bit#(64) totalRows = getNumRows("l_shipdate")/100000;
+   Bit#(64) totalRows = (getNumRows("l_shipdate")/100000)/32*32;
    
 ////////////////////////////////////////////////////////////////////////////////
 /// ColEng Instruction Section
@@ -230,13 +232,84 @@ module mkTb_ColXForm();
    Reg#(Bit#(64)) cnt <- mkReg(0);
    Bit#(64) gap = 10000;
    
-   // Vector#(Bit#(6) 
+   // Vector#(Bit#(6)
+   
+   Reg#(Bit#(6)) beatCnt <- mkReg(0);
+   
+   Vector#(6, Bit#(64)) beatMax = vec(1, 1, 4, 8, 8, 8);
+   
+   Vector#(4, Reg#(Bit#(128))) sumV <- replicateM(mkReg(0));
+   Vector#(4, Reg#(Bit#(64))) cntV <- replicateM(mkReg(0));
+   
+   Aggregate#(4) aggr_quantity <- mkAggregate(True);
+   Aggregate#(8) aggr_extended_price <- mkAggregate(True);
+   Aggregate#(8) aggr_discount_price <- mkAggregate(True);
+   Aggregate#(8) aggr_charge_price <- mkAggregate(True);
+   
+   Vector#(4, NDPStreamIn) inStreams = vec(aggr_quantity.streamIn,
+                                           aggr_extended_price.streamIn,
+                                           aggr_discount_price.streamIn,
+                                           aggr_charge_price.streamIn);
+      
+   rule runAggr;
+      Integer i = 0;
+      if ( aggr_quantity.aggrResp.notEmpty) begin
+         aggr_quantity.aggrResp.deq;
+         let aggr = aggr_quantity.aggrResp.first;
+         cntV[i] <= cntV[i] + aggr.cnt;
+         sumV[i] <= sumV[i] + truncate(aggr.sum);
+      end
+      i = i + 1;
+
+      if ( aggr_extended_price.aggrResp.notEmpty) begin
+         aggr_extended_price.aggrResp.deq;
+         let aggr = aggr_extended_price.aggrResp.first;
+         cntV[i] <= cntV[i] + aggr.cnt;
+         sumV[i] <= sumV[i] + truncate(aggr.sum);
+      end
+      i = i + 1;
+
+      if ( aggr_discount_price.aggrResp.notEmpty) begin
+         aggr_discount_price.aggrResp.deq;
+         let aggr = aggr_discount_price.aggrResp.first;
+         cntV[i] <= cntV[i] + aggr.cnt;
+         sumV[i] <= sumV[i] + truncate(aggr.sum);
+      end
+      i = i + 1;
+
+      if ( aggr_charge_price.aggrResp.notEmpty) begin
+         aggr_charge_price.aggrResp.deq;
+         let aggr = aggr_charge_price.aggrResp.first;
+         cntV[i] <= cntV[i] + aggr.cnt;
+         sumV[i] <= sumV[i] + truncate(aggr.sum);
+      end
+      i = i + 1;
+   endrule
+   
 
    rule doOutput if (state == Run);
       let tester = testEng.outPipe.first;
       testEng.outPipe.deq;
       
-      if ( outputCnt + 1 == (toNumRowVecs(totalRows) * (1+1+4+8+8+8) )) begin
+      if ( beatCnt + 1 == truncate(beatMax[colCnt]) ) begin
+         beatCnt <= 0;
+         colCnt <= (colCnt + 1) % 6;
+      end
+      else begin
+         beatCnt <= beatCnt + 1;
+      end
+      
+      if ( colCnt > 1 ) begin
+         inStreams[colCnt-2].rowData.enq(tester);
+         if ( beatCnt + 1 == truncate(beatMax[colCnt]) ) begin
+            inStreams[colCnt-2].rowMask.enq(RowMask{rowVecId:?,
+                                                    hasData:True,
+                                                    isLast: False,
+                                                    mask: maxBound});   
+         end
+      end
+      
+      if ( outputCnt + 1 == (toNumRowVecs(totalRows) * fold(add2, beatMax) )) begin
          cnt <= 0;
          state <= CheckResult;
       end
@@ -250,13 +323,24 @@ module mkTb_ColXForm();
       cnt <= cnt + 1;
    endrule
       
+   Vector#(4, Bit#(128)) expectedSum = vec(460501, 69015402074, 6558152859838, 682286850929479);
+   Vector#(4, Bit#(64)) expectedCnt = replicate(17984);
   
    rule doCheckResult if (state == CheckResult && cnt == gap);
       if ( colProcReader.outPipe.notEmpty ) begin
          $display( "Failed:: ColXForm produced more beats than expected");
       end
       else begin
-         $display( "Pass:: ColXForm");
+         $display("Columns:: \tquantity, \textended_price, \tdiscount_price, \tcharge_price");
+         $display("ColXForm_Sums:: \t%32d, \t%32d, \t%32d, \t%32d", sumV[0], sumV[1], sumV[2], sumV[3]);
+         $display("Expected_Sums:: \t%32d, \t%32d, \t%32d, \t%32d", expectedSum[0], expectedSum[1], expectedSum[2], expectedSum[3]);
+         $display("ColXForm_Cnts:: \t%32d, \t%32d, \t%32d, \t%32d", cntV[0], cntV[1], cntV[2], cntV[3]);
+         $display("Expected_Cnts:: \t%32d, \t%32d, \t%32d, \t%32d", expectedCnt[0], expectedCnt[1], expectedCnt[2], expectedCnt[3]);
+
+         if ( readVReg(sumV) == expectedSum && readVReg(cntV) == expectedCnt)
+            $display("Pass:: ColXForm");
+         else
+            $display("Fail:: ColXForm, aggregate result doesn't match");
       end
          
       $finish;

@@ -4,7 +4,7 @@ connectal_dir := ../../../platform/build_tools/connectal/bsv/
 
 BASEDIR=$(abspath ../../../platform)
 
-bsvdir=%:+:..:$(connectal_dir):..:../../:$(connectal_dir)/../lib/bsv/:../../../bsvlib:$(BASEDIR)/xilinx/aurora_8b10b_fmc_vcu108:$(BASEDIR)/controller/src/common:$(BASEDIR)/controller/src/model_virtex:$(BASEDIR)/controller/src/hw_virtex:$(BASEDIR)/lib/:$(BASEDIR)/xilinx/lib
+bsvdir=%:+:..:$(connectal_dir):..:../../:$(connectal_dir)/../lib/bsv/:../../../bsvlib:../../Aggregate:$(BASEDIR)/xilinx/aurora_8b10b_fmc_vcu108:$(BASEDIR)/controller/src/common:$(BASEDIR)/controller/src/model_virtex:$(BASEDIR)/controller/src/hw_virtex:$(BASEDIR)/lib/:$(BASEDIR)/xilinx/lib
 
 bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@ -info-dir build_dir/ -p $(bsvdir) +RTS -K1G -RTS  -D ClockDefaultParam -D CntrlUndefBSIM -D BSIM -D XILINX_INT_MUL_LATENCY=16 -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -l boost_system
 

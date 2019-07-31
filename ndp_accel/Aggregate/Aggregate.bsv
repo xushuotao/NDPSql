@@ -12,7 +12,7 @@ import Vector::*;
 
 typedef struct {
    Bit#(129) sum;
-   Bit#(32) cnt;
+   Bit#(64) cnt;
    Bit#(TMul#(colBytes,8)) min;
    Bit#(TMul#(colBytes,8)) max;
    } AggrResult#(numeric type colBytes) deriving (Bits, Eq, FShow);
@@ -76,7 +76,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
    NumAlias#(TDiv#(32, colBytes), rowsPerBeat),
    Alias#(Bit#(rowsPerBeat), rowMaskT),
    Bits#(Vector::Vector#(colBytes, Bit#(TDiv#(32, colBytes))), 32),
-   Add#(b__, TLog#(TAdd#(1, TDiv#(32, colBytes))), 32),
+   Add#(b__, TLog#(TAdd#(1, TDiv#(32, colBytes))), 64),
    Add#(1, c__, TLog#(TAdd#(1, TDiv#(32, colBytes)))),
    Add#(1, d__, TDiv#(32, colBytes)),
    Add#(e__, TAdd#(TMul#(8, colBytes), TLog#(TDiv#(32, colBytes))), 129),
