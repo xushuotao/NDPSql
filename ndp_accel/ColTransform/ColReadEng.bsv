@@ -4,7 +4,7 @@ import SpecialFIFOs::*;
 import FlashCtrlIfc::*;
 
 interface ColReadEng#(type tagT);
-   method ActionValue#(Tuple2#(DualFlashAddr, Bool)) getNextPageAddr(tagT tag);
+   method ActionValue#(Tuple2#(DualFlashAddr, Bool)) getNextPageAddr(tagT tag, Bool needRead);
    method Tuple2#(tagT, Bit#(9)) firstInflightTag;
    method Action doneFirstInflight;
    
@@ -43,11 +43,12 @@ module mkColReadEng(ColReadEng#(tagT)) provisos (Bits#(tagT, tagTsz));
       addrQ.enq(tuple3(toDualFlashAddr(basePage + pageCnt), usefulBeats, last));
    endrule
    
-   method ActionValue#(Tuple2#(DualFlashAddr, Bool)) getNextPageAddr(tagT tag);
+   method ActionValue#(Tuple2#(DualFlashAddr, Bool)) getNextPageAddr(tagT tag, Bool needRead);
       let {addr, beats, last} = addrQ.first;
       addrQ.deq;
-      $display("(%m) queuedepth = %d", valueOf(TExp#(tagTsz)));
-      inflightTagQ.enq(tuple2(tag, beats));
+      // $display("(%m) queuedepth = %d", valueOf(TExp#(tagTsz)));
+      if ( needRead )
+         inflightTagQ.enq(tuple2(tag, beats));
       // respQ.enq(addr);
       return tuple2(addr, last);
    endmethod
