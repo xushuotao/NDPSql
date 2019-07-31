@@ -81,7 +81,7 @@ Bool isPassThru = False;
 typedef 4 ColBytes;
 `endif
 
-typedef 3 ColCount;                 
+typedef 4 ColCount;                 
 typedef TMul#(ColCount,2) NDPCount;
                  
 
@@ -133,7 +133,7 @@ module mkTb_RowSelector(Empty);
    
    Integer ndpCount = valueOf(NDPCount);
    
-   Vector#(NDPCount, Bit#(5)) colBytesV = vec(4, 4, 8, 8, 4, 4);
+   Vector#(NDPCount, Bit#(5)) colBytesV = vec(4, 4, 8, 8, 4, 4, ?, ?);
    
    rule init_colWidth if (state == Init0);
       if (ndpCnt == 0) rand_seed();
@@ -165,7 +165,9 @@ module mkTb_RowSelector(Empty);
                                           vec(zeroExtend(totalRows), zeroExtend(getBaseAddr("l_discount")), zeroExtend(3'b000), ?),
                                           vec(5, 7, 1, 1),
                                           vec(zeroExtend(totalRows), zeroExtend(getBaseAddr("l_quantity")), zeroExtend(3'b000), ?),
-                                          vec(zeroExtend(pack(int_min)), 23, 1, 1));
+                                          vec(zeroExtend(pack(int_min)), 23, 1, 1),
+                                          vec(zeroExtend(totalRows), 0, zeroExtend(3'b100), ?),
+                                          vec(?, ?, ?, ?));
    
    Reg#(Bit#(64)) numRowsReg <- mkRegU();
    
