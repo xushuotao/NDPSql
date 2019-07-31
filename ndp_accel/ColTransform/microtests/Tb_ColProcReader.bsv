@@ -123,6 +123,16 @@ module mkTb_ColProcReader();
          colProcReader.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
       end
    endrule
+   
+   Reg#(Bit#(64)) rowVecCnt <- mkReg(0);
+   rule doInput if ( state == Run && rowVecCnt < toNumRowVecs(totalRows) );
+      rowVecCnt <= rowVecCnt + 1;
+      colProcReader.rowVecReq.enq(RowVecReq{numRowVecs: 1,
+                                            maskZero: False,
+                                            rowAggr: 32,
+                                            last: rowVecCnt + 1 == toNumRowVecs(totalRows)});
+      
+   endrule
 
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
    Reg#(Bit#(64)) cnt <- mkReg(0);

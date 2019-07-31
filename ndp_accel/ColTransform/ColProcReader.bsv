@@ -11,6 +11,7 @@ import GetPut::*;
 import ControllerTypes::*;
 import SpecialFIFOs::*;
 import FIFOF::*;
+import Assert::*;
 
 typedef 8 MaxNumCol;
 
@@ -50,6 +51,8 @@ module mkColProcReader(ColProcReader);
    
    Reg#(Bit#(64)) rowCnt <- mkReg(0);
    Reg#(Bit#(64)) rowsPerIter <- mkRegU;
+   // max rowVecPerIter = 256 lg.. = 8
+   Reg#(Bit#(4)) lgRowVecsPerIter <- mkRegU;
    
    Reg#(Bit#(64)) rowNum <- mkReg(0);
    
@@ -65,25 +68,55 @@ module mkColProcReader(ColProcReader);
    
    Reg#(Bit#(5)) pageReqCnt <- mkReg(0);
    
-   FIFO#(Tuple2#(ColIdT, BufIdT)) colScheduleQ <- mkFIFO;
-   
    FIFO#(DualFlashAddr) flashReqQ <- mkFIFO;
    FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
    
    // tagId, busId
    // RegFile#(Bit#(7), Bit#(4)) tagInfo <- mkRegFileFull;
    // assumes that page request returns in order
+   
+   FIFOF#(RowVecReq) rowVecReqQ <- mkFIFOF;
+   
+   Reg#(Bool) hasData <- mkReg(False);
+   
+   FIFO#(Bool) pageBatchQ <- mkFIFO;
+   
+   function Bit#(64) toIterId(Bit#(64) rowVecCnt);
+      return rowVecCnt >> lgRowVecsPerIter;
+   endfunction
+   
+   Reg#(Bit#(64)) rowVecCnt <- mkReg(0);
+   rule collectRowReq if ( state == Ready);
+      let req = rowVecReqQ.first;
+      rowVecReqQ.deq;
+      dynamicAssert(req.numRowVecs == 1, "numRowVecs needs to be one");
+      rowVecCnt <= rowVecCnt + 1;
+      $display("%m, rowVecCnt = %d, rowVecReq = ", rowVecCnt, fshow(req));
+      if ( (toIterId(rowVecCnt) != toIterId(rowVecCnt + 1)) || req.last ) begin
+         hasData <= False;
+         $display("%m, issue pageBatch = %d", hasData || !req.maskZero);
+         pageBatchQ.enq(hasData || !req.maskZero);
+      end
+      else begin
+         hasData <= hasData || !req.maskZero ; 
+      end
+   endrule
+   
+   
    FIFO#(BufIdT) outstandingReadQ <- mkSizedFIFO(valueOf(NumPageBufs));
    
    rule schedulePageReq if ( state == Ready );
-      let tag <- pageBuffer.reserveBuf;
-      let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag);
+      let needRead = pageBatchQ.first;
+      let tag = ?;
+      if ( needRead ) begin
+         tag <- pageBuffer.reserveBuf;
+      end
+      
+      let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag, needRead);
       
       $display("issue flash page request for col = %d, tag = %d, addr = ", colCnt, tag, fshow(addr));
       flashReqQ.enq(addr);
       outstandingReadQ.enq(tag);
-
-      // colScheduleQ.enq(tuple2(truncate(colCnt), tag));
 
       // scheduling logic
       // make sure that same amount of row vecs are issued per iteration
@@ -93,6 +126,7 @@ module mkColProcReader(ColProcReader);
             colCnt <= colCnt + 1;
          end
          else begin
+            pageBatchQ.deq;
             colCnt <= 0;
 
             if ( rowCnt + rowsPerIter >= rowNum ) begin
@@ -110,16 +144,8 @@ module mkColProcReader(ColProcReader);
       end
 
    endrule
-   /*
-   rule issuePageReq;
-      colScheduleQ.deq;
-      let {col, tag} = colScheduleQ.first;
-      let addr <- colReadEng_V[col].pageAddrResp;
-   endrule
-    */
 
-   // // maxbeat > 256
-   // Vector#(16, Reg#(Bit#(9))) flashBeatCnts <- replicateM(mkReg(0));
+   // maxbeat > 256
    Reg#(Bit#(9)) flashBeatCnt <- mkReg(0);
    rule enqFlashResp;
       // assumes that flash return is continous
@@ -196,12 +222,13 @@ module mkColProcReader(ColProcReader);
       
       $display("%m doNormalize, minLgColBeatsPerIter = %d, colBeatsPerIter_V <= ", minLgColBeatsPerIter, fshow(map(normalize, readVReg(colBeatsPerIter_V))));
       rowsPerIter <= 8192 >> minLgColBeatsPerIter;
+      lgRowVecsPerIter <= (8 >> minLgColBeatsPerIter);
       state <= Ready;
    endrule
    
    
    // TODO:: 
-   interface PipeIn rowVecReq = ?;
+   interface PipeIn rowVecReq = toPipeIn(rowVecReqQ);
    //interface Client#(RowMaskRead, RowVectorMask) rowMaskReadClient;
 
    interface PipeOut outPipe = toPipeOut(dataOutQ);

@@ -286,6 +286,16 @@ module mkTb_ColXForm();
       i = i + 1;
    endrule
    
+   Reg#(Bit#(64)) rowVecCnt <- mkReg(0);
+   rule doInput if ( state == Run && rowVecCnt < toNumRowVecs(totalRows) );
+      rowVecCnt <= rowVecCnt + 1;
+      colProcReader.rowVecReq.enq(RowVecReq{numRowVecs: 1,
+                                            maskZero: False,
+                                            rowAggr: 32,
+                                            last: rowVecCnt + 1 == toNumRowVecs(totalRows)});
+      
+   endrule
+   
 
    rule doOutput if (state == Run);
       let tester = testEng.outPipe.first;
