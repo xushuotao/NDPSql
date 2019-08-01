@@ -4,9 +4,6 @@
 [submodule "platform/build_tools/buildcache"]
 	path = platform/build_tools/buildcache
 	url = git://github.com/cambridgehackers/buildcache
-[submodule "MonetDB"]
-	path = MonetDB
-	url = git@github.mit.edu:shuotao/MonetDB.git
 [submodule "platform/build_tools/connectal"]
 	path = platform/build_tools/connectal
 	url = https://github.com/xushuotao/connectal.git
