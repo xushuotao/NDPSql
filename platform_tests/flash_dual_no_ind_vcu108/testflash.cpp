@@ -99,7 +99,8 @@ void checkReadData(int tag) {
       goldenData = hashAddrToData(e.card, e.bus, e.chip, e.block, word);
       if (goldenData != readBuffers[tag][word]) {
         // DEBUG_PRINT( "LOG: **ERROR: read data mismatch! Expected: %x, read: %x\n", goldenData, readBuffers[tag][word]);
-        fprintf(stderr, "LOG: **ERROR: read data mismatch! tag = %d, (card, bus, chip, block, word) = (%d, %d, %d, %d, %d), Expected: %x, read: %x\n", tag, e.card, e.bus, e.chip, e.block, word, goldenData, readBuffers[tag][word]);
+        if ( numErrors < 10) 
+          fprintf(stderr, "LOG: **ERROR: read data mismatch! tag = %d, (card, bus, chip, block, word) = (%d, %d, %d, %d, %d), Expected: %x, read: %x\n", tag, e.card, e.bus, e.chip, e.block, word, goldenData, readBuffers[tag][word]);
         numErrors++; 
         testPass = 0;
       }
@@ -114,10 +115,10 @@ void checkReadData(int tag) {
       DEBUG_PRINT( "LOG: Read check pass on erased block!\n");
     }
     else if (readBuffers[tag][0]==0) {
-      DEBUG_PRINT( "LOG: Warning: potential bad block, read erased data 0\n");
+      fprintf(stderr,"LOG: Warning: potential bad block, read erased data 0\n");
     }
     else {
-      DEBUG_PRINT( "LOG: **ERROR: read data mismatch! Expected: ERASED, read: %x\n", readBuffers[tag][0]);
+      fprintf(stderr,"LOG: **ERROR: read data mismatch! Expected: ERASED, read: %x\n", readBuffers[tag][0]);
       testPass = 0;
     }
   }
@@ -132,24 +133,35 @@ void checkReadData(int tag) {
 class FlashIndication : public FlashIndicationWrapper{
 public:
   virtual void readDone(unsigned int tag, uint64_t cycles) {
-
     fprintf(stderr, "ERROR: pagedone: no indication should be really sent");
-
   }
 
   virtual void writeDone(unsigned int tag, uint64_t cycles) {
-    DEBUG_PRINT("LOG: writedone, tag=%d, FPGA cycles = %lu\n", tag, cycles); 
+    DEBUG_PRINT("LOG: writedone, tag=%d, FPGA cycles = %lu\n", tag, cycles);
+
     //TODO probably should use a diff lock
     pthread_mutex_lock(&flashReqMutex);
     curWritesInFlight--;
     if ( curWritesInFlight < 0 ) {
-      DEBUG_PRINT( "LOG: **ERROR: Write requests in flight cannot be negative %d\n", curWritesInFlight );
+      fprintf(stderr,"LOG: **ERROR: Write requests in flight cannot be negative %d\n", curWritesInFlight );
       curWritesInFlight = 0;
     }
     if ( writeTagTable[tag].busy == false ) {
-      DEBUG_PRINT( "LOG: **ERROR: received unused buffer Write done %d\n", tag);
+      fprintf(stderr, "LOG: **ERROR: received unused buffer Write done %d\n", tag);
       testPass = 0;
     }
+        
+    int card = writeTagTable[tag].card;
+    int bus = writeTagTable[tag].bus;
+    int chip = writeTagTable[tag].chip;
+    int block = writeTagTable[tag].block;
+    DEBUG_PRINT("LOG: writedone, (card,bus,chip,block) = (%d,%d,%d,%d)\n", card, bus,chip,block);
+    
+    if ( flashStatus[card][bus][chip][block] == WRITTEN ) {
+      fprintf(stderr, "LOG:: **ERROR (card,bus,chip,block) = (%d,%d,%d,%d) has been written before\n", card, bus,chip,block);
+    }
+    flashStatus[card][bus][chip][block] = WRITTEN;
+    
     writeTagTable[tag].busy = false;
     pthread_mutex_unlock(&flashReqMutex);
   }
@@ -229,15 +241,6 @@ int waitIdleWriteBuffer() {
       }
     }
 	pthread_mutex_unlock(&flashReqMutex);
-    /*
-      if (tag < 0) {
-      pthread_cond_wait(&flashFreeTagCond, &flashReqMutex);
-      }
-      else {
-      pthread_mutex_unlock(&flashReqMutex);
-      return tag;
-      }
-    */
   }
   return tag;
 }
@@ -268,11 +271,11 @@ void eraseBlock(int card, int bus, int chip, int block, int tag) {
   pthread_mutex_lock(&flashReqMutex);
   curErasesInFlight ++;
   // flashStatus[card][bus][chip][block] = ERASED;
-  pthread_mutex_unlock(&flashReqMutex);
   eraseTagTable[tag].card = card;
   eraseTagTable[tag].bus = bus;
   eraseTagTable[tag].chip = chip;
   eraseTagTable[tag].block = block;
+  pthread_mutex_unlock(&flashReqMutex);
   DEBUG_PRINT( "LOG: sending erase block request with tag=%d @%d %d %d %d 0\n", tag, card, bus, chip, block );
   device->eraseBlock(card,bus,chip,(blockBase+block)%4096,tag);
 }
@@ -283,15 +286,20 @@ void writePage(int card, int bus, int chip, int block, int page, int tag) {
   pthread_mutex_lock(&flashReqMutex);
   curWritesInFlight ++;
   if ( flashStatus[card][bus][chip][block] == ERASED ) {
-    flashStatus[card][bus][chip][block] = WRITTEN;
-    pthread_mutex_unlock(&flashReqMutex);
-
+    writeTagTable[tag].card = card;
+    writeTagTable[tag].bus = bus;
+    writeTagTable[tag].chip = chip;
+    writeTagTable[tag].block = block;
     DEBUG_PRINT( "LOG: sending write page request with tag=%d @%d %d %d %d %d\n", tag, card, bus, chip, block, page );
+    
     DEBUG_PRINT( "LOG: currNumWrite =%d\n", curWritesInFlight);
+    pthread_mutex_unlock(&flashReqMutex);
     device->writePage(card,bus,chip,(blockBase+block)%4096,page,tag);
   } else {
     printf("LOG: skipping write flash block (card,bus,chip,block) = (%d,%d,%d,%d)", card, bus, chip, block);
+    pthread_mutex_unlock(&flashReqMutex);
   }
+
 }
 
 void readPage(int card, int bus, int chip, int block, int page, int tag) {
@@ -514,7 +522,7 @@ int main(int argc, const char **argv){
 
 
   // check card 0::
-  for (int repeat = 0; repeat < num_repeats; repeat++){
+  // for (int repeat = 0; repeat < num_repeats; repeat++){
     for (int blk = 0; blk < BLOCKS_PER_CHIP; blk++){
       for (int chip = 0; chip < CHIPS_PER_BUS; chip++){
         for (int bus = 0; bus < NUM_BUSES; bus++){
@@ -529,7 +537,7 @@ int main(int argc, const char **argv){
         }
       }
     }
-  }
+  // }
 
   while (true) {
     usleep(100);

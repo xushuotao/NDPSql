@@ -2,6 +2,7 @@ import RWBramCore::*;
 import RegFile::*;
 import FIFO::*;
 import GetPut::*;
+import SpecialFIFOs::*;
 
 
 interface RenameTable#(numeric type numTags, type dataT);
@@ -24,7 +25,7 @@ module mkRenameTable(RenameTable#(numTags, dataT)) provisos(
    `ifdef USE_BRAM
    RWBramCore#(Bit#(TLog#(numTags)), dataT) tb <- mkRWBramCore;
    `else
-   FIFO#(Bit#(TLog#(numTags))) readReqQ <- mkFIFO;
+   FIFO#(Bit#(TLog#(numTags))) readReqQ <- mkPipelineFIFO;
    RegFile#(Bit#(TLog#(numTags)), dataT) tb <- mkRegFileFull;
    `endif
    
