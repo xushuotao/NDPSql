@@ -1,8 +1,8 @@
 SHELL:=/bin/bash
 
-connectal_dir := ../../../platform/build_tools/connectal/bsv/
+connectal_dir := ../../../../platform/build_tools/connectal/bsv/
 
-bsc_flags:= -aggressive-conditions -show-schedule -bdir build_dir/$@ -simdir build_dir/$@ -info-dir build_dir -p %:+:..:$(connectal_dir):../../
+bsc_flags:= -aggressive-conditions -show-schedule -bdir build_dir/$@ -simdir build_dir/$@ -info-dir build_dir -p %:+:..:$(connectal_dir):../../../
 
 build_dir/bdpi.o: bdpi.cpp
 	mkdir -p build_dir
