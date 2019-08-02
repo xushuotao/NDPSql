@@ -21,19 +21,20 @@ typedef Bit#(TLog#(TAdd#(MaxNumCol,1))) ColNumT;
 typedef 64 NumPageBufs;
 typedef Bit#(TLog#(NumPageBufs)) BufIdT;
 
+interface ProgramColProcReader;
+   // step 1
+   method Action setRowNums(Bit#(64) numRows, ColNumT numCols);
+   // step 2
+   //TODO:: For now we assume that the col file sits on continuous pages;
+   interface PipeIn#(Tuple4#(ColIdT, ColType, Bit#(64), Bool)) colInfoPort;
+endinterface
+
 interface ColProcReader;
    interface PipeIn#(RowVecReq) rowVecReq;
    //interface Client#(RowMaskRead, RowVectorMask) rowMaskReadClient;
- 
    interface PipeOut#(RowData) outPipe;
-
-   // For now we assume that the col file sits on continuous pages;
-   interface PipeIn#(Tuple4#(ColIdT, ColType, Bit#(64), Bool)) colInfoPort;
-
    interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
-   
-   method Action setRowNums(Bit#(64) numRows, ColNumT numCols);
-   
+   interface ProgramColProcReader programIfc;
 endinterface
 
 typedef enum{SetRow, SetCol, Normalize, Ready} State deriving (FShow, Bits, Eq);
@@ -227,33 +228,30 @@ module mkColProcReader(ColProcReader);
    endrule
    
    
-   // TODO:: 
    interface PipeIn rowVecReq = toPipeIn(rowVecReqQ);
-   //interface Client#(RowMaskRead, RowVectorMask) rowMaskReadClient;
-
    interface PipeOut outPipe = toPipeOut(dataOutQ);
-
-   interface PipeIn colInfoPort;
-      method Action enq(Tuple4#(ColIdT, ColType, Bit#(64), Bool) v) if ( state == SetCol );
-         let {colIdT, colType, baseAddr, isLast } = v;
-         $display("%m colInfo set:: colIdT = %d, baseAddr = %d, isLast = %d, colType = ", colIdT, baseAddr, isLast, fshow(colType));
-         colBeatsPerIter_V[colIdT] <= toBeatsPerRowVec(colType);
-         minLgColBeatsPerIter <= min(toLgBeatsPerRowVec(colType), minLgColBeatsPerIter);
-         beatsPerRowVec_V[colIdT] <= toBeatsPerRowVec(colType);
-         colReadEng_V[colIdT].setParam(rowNum, colType, baseAddr);
-         if ( isLast ) state <= Normalize;
-      endmethod
-      method Bool notFull;
-         return state == SetCol;
-      endmethod
-   endinterface
-
    interface Client flashRdClient = toClient(flashReqQ, flashRespQ);
-   
-   method Action setRowNums(Bit#(64) numRows, ColNumT numCols) if (state == SetRow);
-      $display("%m setRowNums:: numRows = %d, numCols = %d", numRows, numCols);
-      rowNum <= numRows;
-      colNum <= numCols;
-      state <= SetCol;
-   endmethod   
+
+   interface ProgramColProcReader programIfc;
+      method Action setRowNums(Bit#(64) numRows, ColNumT numCols) if (state == SetRow);
+         $display("%m setRowNums:: numRows = %d, numCols = %d", numRows, numCols);
+         rowNum <= numRows;
+         colNum <= numCols;
+         state <= SetCol;
+      endmethod   
+      interface PipeIn colInfoPort;
+         method Action enq(Tuple4#(ColIdT, ColType, Bit#(64), Bool) v) if ( state == SetCol );
+            let {colIdT, colType, baseAddr, isLast } = v;
+            $display("%m colInfo set:: colIdT = %d, baseAddr = %d, isLast = %d, colType = ", colIdT, baseAddr, isLast, fshow(colType));
+            colBeatsPerIter_V[colIdT] <= toBeatsPerRowVec(colType);
+            minLgColBeatsPerIter <= min(toLgBeatsPerRowVec(colType), minLgColBeatsPerIter);
+            beatsPerRowVec_V[colIdT] <= toBeatsPerRowVec(colType);
+            colReadEng_V[colIdT].setParam(rowNum, colType, baseAddr);
+            if ( isLast ) state <= Normalize;
+         endmethod
+         method Bool notFull;
+            return state == SetCol;
+         endmethod
+      endinterface
+   endinterface
 endmodule

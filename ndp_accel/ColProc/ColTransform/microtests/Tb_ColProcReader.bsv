@@ -105,7 +105,7 @@ module mkTb_ColProcReader();
    
    Reg#(Bool) rowSet <- mkReg(False);
    rule doProgramReader_0 if (state == Prog_Reader && !rowSet);
-      colProcReader.setRowNums(totalRows, fromInteger(numCols));
+      colProcReader.programIfc.setRowNums(totalRows, fromInteger(numCols));
       rowSet <= True;
    endrule
    
@@ -116,11 +116,11 @@ module mkTb_ColProcReader();
          colCnt <= 0;
          state <= Run;
          rowSet <= False;
-         colProcReader.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
+         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
       end
       else begin
          colCnt <= colCnt + 1;
-         colProcReader.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
+         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
       end
    endrule
    

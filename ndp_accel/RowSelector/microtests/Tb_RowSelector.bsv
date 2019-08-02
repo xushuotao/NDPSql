@@ -46,7 +46,6 @@ import EmulatedFlash::*;
 
 
 import Connectable::*;
-import OneToNRouter::*;
 import RowMask::*;
 
 import FlashSwitch::*;
@@ -119,12 +118,6 @@ module mkTb_RowSelector(Empty);
    
    zipWithM_(mkConnection, ndp.rowMaskWrites, rowMaskBuff.writePorts);
    zipWithM_(mkConnection, ndp.rowMaskReads, rowMaskBuff.readPorts);
-   
-   OneToNRouter#(NDPCount, Bit#(5)) setBytePort <- mkOneToNRouterPipelined;
-   OneToNRouter#(NDPCount, ParamT) setParamPort <- mkOneToNRouterPipelined;
-   
-   zipWithM_(mkConnection, setBytePort.outPorts, ndp.configures);
-   zipWithM_(mkConnection, setParamPort.outPorts, ndp.configures);
 
    Reg#(StatusT) state <- mkReg(Init0);
    Reg#(Bit#(32)) reqCnt <- mkReg(0);
@@ -138,7 +131,7 @@ module mkTb_RowSelector(Empty);
    rule init_colWidth if (state == Init0);
       if (ndpCnt == 0) rand_seed();
       // ndp.configure.setColBytes(fromInteger(colBytes));
-      setBytePort.inPort.enq(tuple2(truncate(ndpCnt), colBytesV[ndpCnt]));
+      ndp.programIfc.setColBytesPort.enq(tuple2(truncate(ndpCnt), colBytesV[ndpCnt]));
       // init_test(fromInteger(colBytes));
       if ( ndpCnt + 1 == fromInteger(ndpCount) ) begin
          ndpCnt <= 0;
@@ -172,7 +165,7 @@ module mkTb_RowSelector(Empty);
    Reg#(Bit#(64)) numRowsReg <- mkRegU();
    
    rule init_param if ( state == Init1);
-      setParamPort.inPort.enq(tuple2(truncate(ndpCnt), params[ndpCnt]));
+      ndp.programIfc.setParamPort.enq(tuple2(truncate(ndpCnt), params[ndpCnt]));
       if ( ndpCnt + 1 == fromInteger(ndpCount) ) begin
          ndpCnt <= 0;
          reqCnt <= 1;
@@ -184,72 +177,13 @@ module mkTb_RowSelector(Empty);
       end
    endrule
    
-   
-   // Reg#(Bit#(64)) vecCnt <- mkReg(0);
-   // rule handeReserveReq;
-   //    let req <- ndp.reserveRowVecs.request.get();
-   //    vecCnt <= vecCnt + extend(req);
-   //    $display("vecCnt = %d", vecCnt);
-      
-   //    if ( vecCnt + fromInteger(8192/colBytes/32) >= ((numRowsReg+31)>>5) ) begin
-   //       if ( req != truncate(((numRowsReg+31)>>5) - vecCnt) ) begin
-   //          $display("WARNING: Wrong row vector reserved (%d, %d), %d", req, ((numRowsReg+31)>>5) - vecCnt, ((numRowsReg+31)>>5));
-   //          $finish();
-   //       end
-   //    end
-   //    else begin
-   //       if ( req != fromInteger(8192/colBytes/32) ) begin
-   //          $display("WARNING: Wrong row vector reserved (%d, %d)", req, 8192/colBytes);
-   //          $finish();
-   //       end
-   //    end
-   //    ndp.reserveRowVecs.response.put(?);
-   // endrule
-      
-   // // Reg#(Bit#(64)) totalBeat <- mkRegU;
-
-   // // rule sendReq if ( state == Run && reqCnt > 0);
-   // //    ndp.start;
-   // //    reqCnt <= reqCnt - 1;
-   // //    // $finish();
-   // // endrule
-   
-   // // Reg#(Bool) maskDone <- mkReg(False);
-   // // Reg#(Bool) dataDone <- mkReg(False);
-   
-   
-   // // Reg#(Bit#(32)) maskRespCnt <- mkReg(0);
-   
    Reg#(Bit#(64)) rowAggr <- mkReg(0);
-   // rule collectRowMask if ( state == Run);
-   //    let d <- ndp.rowMaskWrite.get();
-      
-   //    // ndp.streamOut.rowMask.deq();
-   //    // maskRespCnt <= maskRespCnt + 1;
-   //    $display("RowMask, rowAddr = %d, mask = %b, rowAggr = %d", d.id, d.mask, rowAggr+pack(zeroExtend(countOnes(d.mask))));
-   //    // let v <- inject_rowMask(d.mask);
-      
-   //    rowAggr <= rowAggr + pack(zeroExtend(countOnes(d.mask)));
-   //    // if ( !v ) begin
-   //    //    $display("Error RowMask finish");
-   //    //    $finish;
-   //    // end
-      
-   //    // if ( d.last ) begin
-   //    //    $display("all RowMask done correctly");
-   //    //    maskDone <= True;
-   //    //    $display("total rows = %d", rowAggr+pack(zeroExtend(countOnes(d.mask))));
-   //    // end
-   // endrule
-   
    Reg#(Bit#(64)) prevRowVec <- mkReg(-1);
    
    Reg#(Bit#(64)) numRowVecs <- mkReg(0);
    rule doRowVecReq;
       ndp.rowVecReq.deq();
       let d = ndp.rowVecReq.first;
-      
-      // prevRowVec <= prevRowVec + 1;
       
       $display(fshow(d));
       rowAggr <= rowAggr + d.rowAggr;
@@ -269,56 +203,8 @@ module mkTb_RowSelector(Empty);
       end
       
 
-
-      // case (d) matches
-      //    tagged RowVecId .rowVecId:
-      //       begin
-      //          // if ( prevRowVec + 1 != rowVecId ) begin
-      //          //    $display("FAILED:: FirstPredicateEva ~ RowVecId is not continous (%d vs %d)", prevRowVec+1, rowVecId);
-      //          //    $finish();
-      //          // end
-      //       end
-      //    tagged Last: 
-      //       begin
-      //          $display("Test Done, rowAggr = %d", rowAggr);
-      //          $finish();
-      //       end
-      // endcase
    endrule
             
-            
-   // // `ifndef PassThru
-   // // Reg#(Bit#(64)) dataRespCnt <- mkReg(0);
-   // // rule collectRowData if ( state == Run);
-   // //    let d = ndp.streamOut.rowData.first;
-   // //    ndp.streamOut.rowData.deq();
-   // //    dataRespCnt <= dataRespCnt + 1;
-   // //    $display("RowData, cnt = %d, data = %h", dataRespCnt, d);
-   // //    let v <- inject_rowData(d);
-   // //    if ( !v ) $finish;
-      
-   // //    if ( dataRespCnt + 1 == totalBeat ) begin
-   // //       $display("all RowData done correctly");
-   // //       dataDone <= True;
-   // //    end
-         
-   // // endrule
-   // // `endif
-
-   // // rule passTest if (maskDone 
-   // //                  `ifndef PassThru
-   // //                  && dataDone
-   // //                  `endif
-   // //                   );
-      
-   // //    $display("RowAggr = %d, numRows = %d", rowAggr, numRowsReg);
-   // //    if ( rowAggr == numRowsReg) 
-   // //       $display("Test Passed");
-   // //    else
-   // //       $display("Test Failed");
-   // //    $finish();
-   // // endrule
-   // // (* always_enabled, always_ready *)
    rule fakeDrive;
       flashCtrls[0].aurora.rxn_in(?);
       flashCtrls[1].aurora.rxn_in(?);
@@ -327,11 +213,4 @@ module mkTb_RowSelector(Empty);
       flashCtrls[1].aurora.rxp_in(?);
  
    endrule
-
-   // (* always_enabled, always_ready *)
-   // rule fakeDrive;
-   //    flashCtrls[0].aurora.rxn_in(?);
-   //    flashCtrls[1].aurora.rxn_in(?);
-   // endrule
-
 endmodule

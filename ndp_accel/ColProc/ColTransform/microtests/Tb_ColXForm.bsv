@@ -189,13 +189,13 @@ module mkTb_ColXForm();
 
    rule doProgramColX if (state == Prog_ColX);
       if ( prog_cnt  < fromInteger(progLength[colXEngCnt]) ) begin
-         testEng.programPorts.enq(tuple2(truncate(colXEngCnt),
+         testEng.programIfc.enq(tuple2(truncate(colXEngCnt),
                                          tuple3(truncate(prog_cnt), False, pack(pePrograms[colXEngCnt][prog_cnt]))));
          prog_cnt <= prog_cnt + 1;
       end
       else if ( prog_cnt  == fromInteger(progLength[colXEngCnt])) begin
          prog_cnt <= 0;
-         testEng.programPorts.enq(tuple2(truncate(colXEngCnt),
+         testEng.programIfc.enq(tuple2(truncate(colXEngCnt),
                                          tuple3(?, True, extend(prog_cnt))));
          if ( colXEngCnt + 1 == fromInteger(numColEngs)) begin
             state <= Prog_Reader;
@@ -209,7 +209,7 @@ module mkTb_ColXForm();
    
    Reg#(Bool) rowSet <- mkReg(False);
    rule doProgramReader_0 if (state == Prog_Reader && !rowSet);
-      colProcReader.setRowNums(totalRows, fromInteger(numCols));
+      colProcReader.programIfc.setRowNums(totalRows, fromInteger(numCols));
       rowSet <= True;
    endrule
    
@@ -220,11 +220,11 @@ module mkTb_ColXForm();
          colCnt <= 0;
          state <= Run;
          rowSet <= False;
-         colProcReader.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
+         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
       end
       else begin
          colCnt <= colCnt + 1;
-         colProcReader.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
+         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
       end
    endrule
 

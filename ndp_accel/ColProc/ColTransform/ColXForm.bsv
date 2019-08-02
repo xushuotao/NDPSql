@@ -5,10 +5,12 @@ import OneToNRouter::*;
 import Vector::*;
 import Connectable::*;
 
+typedef PipeIn#(Tuple2#(Bit#(TLog#(engs)), Tuple3#(Bit#(3), Bool, Bit#(32)))) ProgramColXForm#(numeric type engs);
+
 interface ColXForm#(numeric type engs);
    interface PipeIn#(RowData) inPipe;
    interface PipeOut#(RowData) outPipe;
-   interface PipeIn#(Tuple2#(Bit#(TLog#(engs)), Tuple3#(Bit#(3), Bool, Bit#(32)))) programPorts;
+   interface ProgramColXForm#(engs) programIfc;
 endinterface
 
 
@@ -32,8 +34,7 @@ module mkColXForm(ColXForm#(engs)) provisos(
    
    zipWithM_(mkConnection, programRouter.outPorts, map(getProgramPort, vPE));
    
-   interface PipeIn inPipe = vPE[0].inPipe;
-   interface PipeOut outPipe = last(vPE).outPipe;
-   interface PipeIn programPorts = programRouter.inPort;
-   
+   interface inPipe = vPE[0].inPipe;
+   interface outPipe = last(vPE).outPipe;
+   interface programIfc = programRouter.inPort;
 endmodule

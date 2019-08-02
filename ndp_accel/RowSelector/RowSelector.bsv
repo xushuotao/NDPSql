@@ -10,6 +10,14 @@ import FlashCtrlIfc::*;
 import RowMask::*;
 import GetPut::*;
 import PredicateEval::*;
+import OneToNRouter::*;
+
+
+interface ProgramRowSelector#(numeric type num);
+   interface PipeIn#(Tuple2#(Bit#(TLog#(num)), Bit#(5))) setColBytesPort;
+   interface PipeIn#(Tuple2#(Bit#(TLog#(num)), ParamT)) setParamPort;
+endinterface
+
 
 interface RowSelector#(numeric type num);
    interface Vector#(num, Client#(DualFlashAddr, Bit#(256))) flashRdClients;
@@ -19,12 +27,15 @@ interface RowSelector#(numeric type num);
    
    interface PipeOut#(RowVecReq) rowVecReq;
    
-   interface Vector#(TMul#(num,2), NDPConfigure) configures;
+   interface ProgramRowSelector#(TMul#(num,2)) programIfc;
 endinterface
 
 
 module mkRowSelector(RowSelector#(n)) provisos (
-   Add#(1, a__, n));
+   Add#(1, a__, n),
+   Add#(TMul#(n, 2), b__, TMul#(TDiv#(TMul#(n, 2), 2), 2)),
+   Add#(1, c__, TMul#(TDiv#(TMul#(n, 2), 2), 2)),
+   Add#(1, d__, TMul#(n, 2)));
    
    let firstColFilter <- mkFirstPredicateEval;
    
@@ -42,7 +53,15 @@ module mkRowSelector(RowSelector#(n)) provisos (
    
    // function to assemble configures;   
    function Vector#(2, NDPConfigure) getNDPConfigure(PredicateEval ifc) = ifc.configurePorts;
-   Vector#(n, Vector#(2, NDPConfigure)) configurePorts = cons(firstColFilter.configurePorts, map(getNDPConfigure, colFilters));
+   Vector#(n, Vector#(2, NDPConfigure)) configureV = cons(firstColFilter.configurePorts, map(getNDPConfigure, colFilters));
+   
+   let configurePorts = concat(configureV);
+      
+   OneToNRouter#(TMul#(n,2), Bit#(5)) setByteRouter <- mkOneToNRouterPipelined;
+   OneToNRouter#(TMul#(n,2), ParamT) setParamRouter <- mkOneToNRouterPipelined;
+   
+   zipWithM_(mkConnection, setByteRouter.outPorts, configurePorts);
+   zipWithM_(mkConnection, setParamRouter.outPorts, configurePorts);
    
    // Connection RowVecReqs
    function PipeIn#(RowVecReq) getRowVecReqIn(PredicateEval ifc) = ifc.rowVecReqIn;
@@ -58,6 +77,8 @@ module mkRowSelector(RowSelector#(n)) provisos (
    interface rowMaskReads = cons(emptyRowMaskRead, map(getRowMaskRead, colFilters));
    interface rowMaskWrites = cons(firstColFilter.rowMaskWrite, map(getRowMaskWrite, colFilters));
    interface rowVecReq = last(outPipes);
-   interface configures = concat(configurePorts);
-   
+   interface ProgramRowSelector programIfc;
+      interface setColBytesPort = setByteRouter.inPort;
+      interface setParamPort = setParamRouter.inPort;
+   endinterface
 endmodule

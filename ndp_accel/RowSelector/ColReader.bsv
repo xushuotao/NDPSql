@@ -107,6 +107,7 @@ module mkColReader(ColReader);
       else begin
          rowVecCnt <= rowVecCnt + req.numRowVecs;
       end
+      $display("%m, doBypass forwarding, req = ", fshow(req));
       bypassRowVecReqQ.enq(req);
    endrule
 
