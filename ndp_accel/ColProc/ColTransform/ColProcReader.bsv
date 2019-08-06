@@ -18,7 +18,7 @@ typedef 8 MaxNumCol;
 typedef Bit#(TLog#(MaxNumCol)) ColIdT;
 typedef Bit#(TLog#(TAdd#(MaxNumCol,1))) ColNumT;
 
-typedef 64 NumPageBufs;
+typedef 32 NumPageBufs;
 typedef Bit#(TLog#(NumPageBufs)) BufIdT;
 
 interface ProgramColProcReader;
@@ -114,47 +114,58 @@ module mkColProcReader(ColProcReader);
    
    FIFO#(BufIdT) outstandingReadQ <- mkSizedFIFO(valueOf(NumPageBufs));
    
+   Reg#(Bit#(6)) max_colBeatsPerIter <- mkRegU;
+   
+   Vector#(MaxNumCol, Reg#(Bool)) colDones <- replicateM(mkRegU);
+   
    rule schedulePageReq if ( state == Ready );
-      let needRead = pageBatchQ.first;
-      let tag = ?;
+      if ( zeroExtend(pageReqCnt) < colBeatsPerIter_V[colCnt] && !colDones[colCnt] ) begin
+         let needRead = pageBatchQ.first;
+         let tag = ?;
       
+         if ( needRead ) begin
+            tag <- pageBuffer.reserveBuf;
+         end
 
+         let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag, needRead);      
+         colDones[colCnt] <= last;
       
-      if ( needRead ) begin
-         tag <- pageBuffer.reserveBuf;
+         if (needRead) begin
+            $display("issue flash page request for col = %d, tag = %d, addr = ", colCnt, tag, fshow(addr));
+            flashReqQ.enq(addr);
+            outstandingReadQ.enq(tag);
+         end
       end
-
-      let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag, needRead);      
-      
-      if (needRead) begin
-         $display("issue flash page request for col = %d, tag = %d, addr = ", colCnt, tag, fshow(addr));
-         flashReqQ.enq(addr);
-         outstandingReadQ.enq(tag);
+      else begin
+         $display("skipping flash page request this time, colCnt = %d, pageReqCnt = %d", colCnt, pageReqCnt);
       end
+      $display("schedulePageReq colCnt = %d, pageReqCnt = %d, rowCnt = %d, rowsPerIter = %d, rowNum = %d", colCnt, pageReqCnt, rowCnt, rowsPerIter, rowNum);
       
       // scheduling logic
       // make sure that same amount of row vecs are issued per iteration
-      if ( zeroExtend(pageReqCnt) + 1 == colBeatsPerIter_V[colCnt] || last ) begin
-         pageReqCnt <= 0;
-         if ( zeroExtend(colCnt) + 1 < colNum ) begin
-            colCnt <= colCnt + 1;
-         end
-         else begin
+      if ( zeroExtend(colCnt) + 1 == colNum ) begin
+         colCnt <= 0;
+         if ( zeroExtend(pageReqCnt) + 1 == max_colBeatsPerIter ) begin
+            pageReqCnt <= 0;
             pageBatchQ.deq;
-            colCnt <= 0;
-
+            
             if ( rowCnt + rowsPerIter >= rowNum ) begin
                state <= SetRow;
                rowCnt <= 0;
+               max_colBeatsPerIter <= 0;
                minLgColBeatsPerIter <= maxBound;
             end
             else begin
                rowCnt <= rowCnt + rowsPerIter;
             end
+
+         end
+         else begin
+            pageReqCnt <= pageReqCnt + 1;
          end
       end
       else begin
-         pageReqCnt <= pageReqCnt + 1;
+         colCnt <= colCnt + 1;
       end
 
    endrule
@@ -258,10 +269,12 @@ module mkColProcReader(ColProcReader);
       endfunction
 
       writeVReg(colBeatsPerIter_V, map(normalize, readVReg(colBeatsPerIter_V)));
-      
-      $display("%m doNormalize, minLgColBeatsPerIter = %d, colBeatsPerIter_V <= ", minLgColBeatsPerIter, fshow(map(normalize, readVReg(colBeatsPerIter_V))));
+
+      $display("%m doNormalize, minLgColBeatsPerIter = %d, max_colBeatsPerIter = %d, colBeatsPerIter_V <= ", minLgColBeatsPerIter, max_colBeatsPerIter >> minLgColBeatsPerIter,  fshow(map(normalize, readVReg(colBeatsPerIter_V))));
+      max_colBeatsPerIter <= max_colBeatsPerIter >> minLgColBeatsPerIter;
       rowsPerIter <= 8192 >> minLgColBeatsPerIter;
       lgRowVecsPerIter <= (8 >> minLgColBeatsPerIter);
+      
       state <= Ready;
    endrule
    
@@ -284,8 +297,10 @@ module mkColProcReader(ColProcReader);
             $display("%m colInfo set:: colIdT = %d, baseAddr = %d, isLast = %d, colType = ", colIdT, baseAddr, isLast, fshow(colType));
             colBeatsPerIter_V[colIdT] <= toBeatsPerRowVec(colType);
             minLgColBeatsPerIter <= min(toLgBeatsPerRowVec(colType), minLgColBeatsPerIter);
+            max_colBeatsPerIter <= max(toBeatsPerRowVec(colType), max_colBeatsPerIter);
             beatsPerRowVec_V[colIdT] <= toBeatsPerRowVec(colType);
             colReadEng_V[colIdT].setParam(rowNum, colType, baseAddr);
+            writeVReg(colDones, replicate(False));
             if ( isLast ) state <= Normalize;
          endmethod
          method Bool notFull;
