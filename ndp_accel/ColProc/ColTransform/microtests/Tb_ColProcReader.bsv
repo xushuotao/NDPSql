@@ -79,7 +79,7 @@ typedef enum{Prog_Reader, Run, CheckResult} State deriving (Bits, Eq, FShow);
 (* synthesize *)
 module mkTb_ColProcReader();
 
-   Bit#(64) totalRows = getNumRows("l_shipdate")/100000;   
+   Bit#(64) totalRows = getNumRows("l_shipdate")/100000/32*32;   
    
    Vector#(2,FlashCtrlVirtexIfc) flashCtrls <- mapM(mkEmulatedFlashCtrl, genWith(fromInteger));
    
@@ -124,6 +124,11 @@ module mkTb_ColProcReader();
       end
    endrule
    
+   Reg#(Bit#(64)) cycleCnt <- mkReg(0);
+   rule incrCnt if (state == Run);
+      cycleCnt <= cycleCnt + 1;
+   endrule
+   
    Reg#(Bit#(64)) rowVecCnt <- mkReg(0);
    rule doInput if ( state == Run && rowVecCnt < toNumRowVecs(totalRows) );
       rowVecCnt <= rowVecCnt + 1;
@@ -142,7 +147,7 @@ module mkTb_ColProcReader();
       let tester = colProcReader.outPipe.first;
       colProcReader.outPipe.deq;
       
-      $display("Output cnt = %d, tester = %h", outputCnt, tester);
+      $display("(@%t) Output cnt = %d, tester = %h", $time, outputCnt, tester);
       
       outputCnt <= outputCnt + 1;
       
@@ -152,6 +157,12 @@ module mkTb_ColProcReader();
          state <= CheckResult;
          cnt <= 0;
       end
+   endrule
+   
+   rule doRowVec;
+      let rowVec = colProcReader.rowVecOut.first;
+      colProcReader.rowVecOut.deq;
+      $display("(@%t) RowVecId = %d", $time, rowVec);
    endrule
    
    rule doIncrCont if (state == CheckResult && cnt < gap);
@@ -164,7 +175,7 @@ module mkTb_ColProcReader();
          $display( "Failed:: ColProcReader produced more beats than expected");
       end
       else begin
-         $display( "Pass:: ColProcReader");
+         $display( "Pass:: ColProcReader, total Data Beats = %d, cycle = %d", toNumRowVecs(totalRows) * (1+1+4+8+8+8), cycleCnt);
       end
          
       $finish;

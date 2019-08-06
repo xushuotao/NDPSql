@@ -54,12 +54,14 @@ module mkTb_ColXFormPE();
    ////////////////////////////////////////////////////////////////////////////////
    Vector#(NumTests, Vector#(8, DecodeInst)) insts = ?;// vec(insts_0, insts_1);
    Vector#(NumTests, Integer) progLength = ?;//vec(maxProg_0, maxProg_1);
+   Vector#(NumTests, Bit#(64)) beatsPerRowVec = ?;//vec(ratio_0, ratio_1);
+   Vector#(NumTests, Bit#(64)) rowVecLengths = ?;//vec(ratio_0, ratio_1);
    Vector#(NumTests, Bit#(64)) testLengths = ?;//vec(ratio_0, ratio_1);
    Vector#(NumTests, Tuple2#(Integer, Integer)) ioRatio = ?;//vec(ratio_0, ratio_1);
    Integer i = 0;
    
    // test 0
-   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: ?, strType: ?, imm: ?},
+   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?},
                                      ?,
                                      ?,      
                                      ?,
@@ -69,11 +71,15 @@ module mkTb_ColXFormPE();
                                      ?);
    Integer numInsts = 1;
    Tuple2#(Integer, Integer) ratio = tuple2(1,1);
-   Bit#(64) testLength = 100;
+   Bit#(64) numRowVecs = 100;
+   Bit#(64) beatsPerIter = zeroExtend(toBeatsPerRowVec(Int));
+   Bit#(64) testLength = numRowVecs*beatsPerIter;
 
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
 
@@ -89,11 +95,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 1;   
    ratio = tuple2(1,1);
-   testLength = 4*100;
+   numRowVecs = 100;
+   beatsPerIter = zeroExtend(toBeatsPerRowVec(Int));
+   testLength = numRowVecs*beatsPerIter;
    
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
    
@@ -109,11 +119,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,2);
-   testLength = 8*100;
+   numRowVecs = 100;
+   beatsPerIter = 2*zeroExtend(toBeatsPerRowVec(Int));
+   testLength = numRowVecs*beatsPerIter;
    
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
    
@@ -129,11 +143,16 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,1);
-   testLength = 8*100;
+   numRowVecs = 100;
+   beatsPerIter = 2*zeroExtend(toBeatsPerRowVec(Int));
+   testLength = numRowVecs*beatsPerIter;
+
 
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
    
@@ -149,11 +168,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,1);
-   testLength = 8*100;
+   numRowVecs = 100;
+   beatsPerIter = 2*zeroExtend(toBeatsPerRowVec(Int));
+   testLength = numRowVecs*beatsPerIter;
    
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
    
@@ -170,11 +193,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(3,2);
-   testLength = 8*100;
-   
+   numRowVecs = 100;
+   beatsPerIter = 2*zeroExtend(toBeatsPerRowVec(Int));
+   testLength = numRowVecs*beatsPerIter;
+      
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
    
@@ -191,11 +218,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(2,3);
-   testLength = 24*100;
-
+   numRowVecs = 100;
+   beatsPerIter = zeroExtend(toBeatsPerRowVec(Long)) + zeroExtend(toBeatsPerRowVec(BigInt));
+   testLength = numRowVecs*beatsPerIter;
+   
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
    
@@ -213,11 +244,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(4,3);
-   testLength = 24*100;
+   numRowVecs = 100;
+   beatsPerIter = zeroExtend(toBeatsPerRowVec(Long)) + zeroExtend(toBeatsPerRowVec(BigInt));
+   testLength = numRowVecs*beatsPerIter;
    
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
       
@@ -234,11 +269,15 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,2);
-   testLength = 16*100;
+   numRowVecs = 100;
+   beatsPerIter = 2*zeroExtend(toBeatsPerRowVec(Long));
+   testLength = numRowVecs*beatsPerIter;
    
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
 
@@ -255,14 +294,17 @@ module mkTb_ColXFormPE();
 
    numInsts = 2;   
    ratio = tuple2(1,1);
-   testLength = 16*100;
+   numRowVecs = 100;
+   beatsPerIter = 2*zeroExtend(toBeatsPerRowVec(Long));
+   testLength = numRowVecs*beatsPerIter;
    
    insts[i] = inst;
    progLength[i] = numInsts;
    ioRatio[i] = ratio;
+   beatsPerRowVec[i] = beatsPerIter;
+   rowVecLengths[i] = numRowVecs;
    testLengths[i] = testLength;
    i = i + 1;
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// End of Test Vector Section
@@ -303,7 +345,12 @@ module mkTb_ColXFormPE();
 
       Vector#(4, Bit#(64)) rands <- mapM(randu64, genWith(fromInteger));
       testEng.inPipe.enq(pack(rands));
-      $display("Input cnt = %d, streamIn = %h", inputCnt, pack(rands));
+      $display("(@%t) Input cnt = %d, streamIn = %h", $time, inputCnt, pack(rands));
+      if ( inputCnt % beatsPerRowVec[testCnt] == 0 ) begin
+         testEng.rowVecIn.enq(inputCnt/beatsPerRowVec[testCnt]);
+         $display("Input RowVecId = %d, beatsPerRowVec = %d", inputCnt/beatsPerRowVec[testCnt], beatsPerRowVec[testCnt]);
+      end
+
    endrule
    
 
@@ -311,7 +358,12 @@ module mkTb_ColXFormPE();
       let tester = testEng.outPipe.first;
       testEng.outPipe.deq;
       
-      $display("Output cnt = %d, tester = %h", outputCnt, tester);
+      $display("(@%t) Output cnt = %d, tester = %h", $time, outputCnt, tester);
+      
+      // if ( outputCnt % (beatsPerRowVec[testCnt]*fromInteger(tpl_1(ioRatio[testCnt]))/fromInteger(tpl_2(ioRatio[testCnt]))) == 0) begin
+      //    let rowVec = testEng.rowVecOut.first;
+      //    testEng.rowVecOut.deq;
+      // end
       
       if ( outputCnt == testLengths[testCnt]*fromInteger(tpl_1(ioRatio[testCnt]))/fromInteger(tpl_2(ioRatio[testCnt])) -1) begin
          $display("Passed: ColXFormPE test %d instCnt = %d", testCnt, fromInteger(progLength[testCnt]));
@@ -328,6 +380,12 @@ module mkTb_ColXFormPE();
       else begin
          outputCnt <= outputCnt + 1;
       end
+   endrule
+   
+   rule doRowVecOut;
+      let rowVec = testEng.rowVecOut.first;
+      testEng.rowVecOut.deq;
+      $display("(@%t) Output RowVecId = %d", $time, rowVec);
    endrule
    
 endmodule

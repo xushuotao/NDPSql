@@ -2,6 +2,7 @@ import XilinxIntMul::*;
 import Vector::*;
 import FIFO::*;
 import FIFOF::*;
+import SpecialFIFOs::*;
 
 typedef `XILINX_INT_MUL_LATENCY XilinxIntMulLatency;
 
@@ -61,7 +62,7 @@ module mkSimdMul64(SimdMul64);
    
    function Bool mulIsReady(XilinxIntMul#(t, w) mul) = mul.respValid;
    
-   FIFOF#(Bit#(128)) respQ <- mkFIFOF;
+   FIFOF#(Bit#(128)) respQ <- mkPipelineFIFOF;
    
    rule constructResult if ( all(mulIsReady, muls) );
       muls[0].deqResp;

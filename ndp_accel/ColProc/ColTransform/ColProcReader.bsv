@@ -32,6 +32,7 @@ endinterface
 interface ColProcReader;
    interface PipeIn#(RowVecReq) rowVecReq;
    //interface Client#(RowMaskRead, RowVectorMask) rowMaskReadClient;
+   interface PipeOut#(Bit#(64)) rowVecOut;
    interface PipeOut#(RowData) outPipe;
    interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
    interface ProgramColProcReader programIfc;
@@ -44,6 +45,13 @@ module mkColReadEng_synth(ColReadEng#(BufIdT));
    ColReadEng#(BufIdT) m <- mkColReadEng;
    return m;
 endmodule
+
+(* synthesize *)
+module mkPageBuffer_synth(PageBuffer#(NumPageBufs));
+   let m <- mkUGPageBuffer;
+   return m;
+endmodule
+
 
 (* synthesize *)
 module mkColProcReader(ColProcReader);
@@ -65,7 +73,7 @@ module mkColProcReader(ColProcReader);
 
    Vector#(MaxNumCol, ColReadEng#(BufIdT)) colReadEng_V <- replicateM(mkColReadEng_synth);
    
-   PageBuffer#(NumPageBufs) pageBuffer <- mkUGPageBuffer;
+   let pageBuffer <- mkPageBuffer_synth;
    
    Reg#(Bit#(5)) pageReqCnt <- mkReg(0);
    
@@ -109,16 +117,21 @@ module mkColProcReader(ColProcReader);
    rule schedulePageReq if ( state == Ready );
       let needRead = pageBatchQ.first;
       let tag = ?;
+      
+
+      
       if ( needRead ) begin
          tag <- pageBuffer.reserveBuf;
       end
-      
-      let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag, needRead);
-      
-      $display("issue flash page request for col = %d, tag = %d, addr = ", colCnt, tag, fshow(addr));
-      flashReqQ.enq(addr);
-      outstandingReadQ.enq(tag);
 
+      let {addr, last} <- colReadEng_V[colCnt].getNextPageAddr(tag, needRead);      
+      
+      if (needRead) begin
+         $display("issue flash page request for col = %d, tag = %d, addr = ", colCnt, tag, fshow(addr));
+         flashReqQ.enq(addr);
+         outstandingReadQ.enq(tag);
+      end
+      
       // scheduling logic
       // make sure that same amount of row vecs are issued per iteration
       if ( zeroExtend(pageReqCnt) + 1 == colBeatsPerIter_V[colCnt] || last ) begin
@@ -161,8 +174,10 @@ module mkColProcReader(ColProcReader);
          flashBeatCnt <= flashBeatCnt + 1;
       end
       // filter out unwanted data;
-      if ( flashBeatCnt < fromInteger(8192/32) )
+      if ( flashBeatCnt < fromInteger(8192/32) ) begin
+         $display("(@%t) pageBuffer flashBeatCnt = %d, tag = %d", $time, flashBeatCnt, tag);
          pageBuffer.enqRequest(d, tag);
+      end
    endrule
    
    Reg#(ColIdT) colId <- mkReg(0);
@@ -173,12 +188,16 @@ module mkColProcReader(ColProcReader);
    // maxbeat = 256
    Vector#(MaxNumCol, Reg#(Bit#(8))) colBeatCnts <- replicateM(mkReg(0));
    
-   FIFO#(Tuple3#(BufIdT, Bool, Bool)) flashRespMetaQ <- mkPipelineFIFO;
+   FIFO#(Tuple4#(BufIdT, Bool, Bool, Maybe#(Bit#(64)))) flashRespMetaQ <- mkSizedFIFO(3);
+   
+   Reg#(Bit#(9)) rowVecCnt_fRsp <- mkReg(0);
    
    rule deqFlashResp;
-      let {tag, maxBeats} = colReadEng_V[colId].firstInflightTag;
+      let {tag, maxBeats, baseRowVecId} = colReadEng_V[colId].firstInflightTag;
       
       colBeatCnts[colId] <= colBeatCnts[colId] + 1;
+      
+
             
       if ( beatCnt + 1 == beatsPerRowVec_V[colId] ) begin
          beatCnt <= 0;         
@@ -194,21 +213,40 @@ module mkColProcReader(ColProcReader);
       else begin
          beatCnt <= beatCnt + 1;
       end
+
+      Bit#(64) rowVecId = baseRowVecId + zeroExtend(rowVecCnt_fRsp);
+      Maybe#(Bit#(64)) maybeRowVec = tagged Invalid;
+
+      if ( colId == 0 && beatCnt == 0) begin
+         maybeRowVec = tagged Valid rowVecId;
+         if (colBeatCnts[0] == maxBound ) begin
+            rowVecCnt_fRsp <= 0;
+         end
+         else begin
+            rowVecCnt_fRsp <= rowVecCnt_fRsp + 1;
+         end
+      end
+
       
       pageBuffer.deqRequest(tag);
       
       Bool needDeqTag = (colBeatCnts[colId] == maxBound);
-      flashRespMetaQ.enq(tuple3(tag, needDeqTag, zeroExtend(colBeatCnts[colId]) < maxBeats));
+      flashRespMetaQ.enq(tuple4(tag, needDeqTag, zeroExtend(colBeatCnts[colId]) < maxBeats, maybeRowVec));
       if ( needDeqTag ) colReadEng_V[colId].doneFirstInflight;
-      $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b, maxBeats = %d", tag, colId, colBeatCnts[colId], maxBeats);
+      $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b, maxBeats = %d, needDeqTag = %d, maybeRowVec = ", tag, colId, colBeatCnts[colId], maxBeats, needDeqTag, fshow(maybeRowVec));
    endrule
    
+   FIFOF#(Bit#(64)) rowVecOutQ <- mkFIFOF;
    FIFOF#(Bit#(256)) dataOutQ <- mkFIFOF;
    rule flashRespData;
-      let {tag, needDeq, needEnq} <- toGet(flashRespMetaQ).get;
+      let {tag, needDeq, needEnq, maybeRowVec} <- toGet(flashRespMetaQ).get;
       let d <- pageBuffer.deqResponse;
       if ( needEnq)
          dataOutQ.enq(d);
+      
+      if ( needEnq &&& maybeRowVec matches tagged Valid .rowVec) begin
+         rowVecOutQ.enq(rowVec);
+      end
       
       if ( needDeq ) 
          pageBuffer.doneBuffer(tag);
@@ -227,8 +265,9 @@ module mkColProcReader(ColProcReader);
       state <= Ready;
    endrule
    
-   
+ 
    interface PipeIn rowVecReq = toPipeIn(rowVecReqQ);
+   interface PipeOut rowVecOut = toPipeOut(rowVecOutQ);
    interface PipeOut outPipe = toPipeOut(dataOutQ);
    interface Client flashRdClient = toClient(flashReqQ, flashRespQ);
 

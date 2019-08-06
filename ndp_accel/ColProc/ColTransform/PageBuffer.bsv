@@ -49,6 +49,7 @@ module mkUGPageBuffer(PageBuffer#(numPages)) provisos (
          deqPtrs[tag] <= deqPtrs[tag] + 1;
          buffer.rdReq(toBufferIdx(tag, deqPtrs[tag]));
          deqReqQ.deq;
+         $display("(@%t) execute deq for tag = %d, enqPtr = %d, deqPtr = %d", $time, tag, enqPtrs[tag], deqPtrs[tag]);
       end
    endrule
    

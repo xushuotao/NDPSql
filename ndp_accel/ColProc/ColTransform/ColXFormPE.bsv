@@ -1,6 +1,7 @@
 import NDPCommon::*;
 import FIFO::*;
 import FIFOF::*;
+import SpecialFIFOs::*;
 import Pipe::*;
 import SimdAlu256::*;
 import Vector::*;
@@ -10,12 +11,18 @@ import SimdMul64::*;
 import SimdTypeCast::*;
 import GetPut::*;
 import Assert::*;
+import ScheduleMonitor::*;
+import BuildVector::*;
 
 interface ColXFormPE;
+   interface PipeIn#(Bit#(64)) rowVecIn;
    interface PipeIn#(RowData) inPipe;
+   interface PipeOut#(Bit#(64)) rowVecOut;
    interface PipeOut#(RowData) outPipe;
    interface PipeIn#(Tuple3#(Bit#(3), Bool, Bit#(32))) programPort;
 endinterface
+
+Bool debug = False;
 
 typedef enum {
    Pass = 0,
@@ -35,7 +42,6 @@ typedef struct {
    Bit#(20) imm;    // 20-bit
    } DecodeInst deriving (Bits, Eq, FShow);  // 32-bit instr
 
-
 typedef struct {
    InstType iType; // 3-bit
    AluOp aluOp;    // 2-bit
@@ -43,40 +49,50 @@ typedef struct {
    Bit#(256) opVector;
    ColType colType; // 3-bit
    Bool isSigned;
+   
+   Bool first;
+   Bit#(64) rowVecId;
    } D2E deriving (Bits, Eq, FShow);
 
 typedef struct {
    InstType iType; // 3-bit
    Bit#(256) opVector;
+   
+   Bool first;
+   Bit#(64) rowVecId;
    } E2W deriving (Bits, Eq, FShow);
 
 (* synthesize *)
 module mkColXFormPE(ColXFormPE);
-   FIFOF#(RowData) inQ <- mkFIFOF;
-   FIFOF#(RowData) outQ <- mkFIFOF;
+   FIFOF#(Bit#(64)) rowVecInQ <- mkPipelineFIFOF;
+   FIFOF#(Bit#(64)) rowVecOutQ <- mkPipelineFIFOF;
+   // FIFOF#(Bit#(64)) rowVecInQ <- mkFIFOF;
+   // FIFOF#(Bit#(64)) rowVecOutQ <- mkFIFOF;
+
+   FIFOF#(RowData) inQ <- mkPipelineFIFOF;
+   FIFOF#(RowData) outQ <- mkPipelineFIFOF;
    
    RegFile#(Bit#(3), DecodeInst) iMem <- mkRegFileFull;
    Reg#(Bit#(3)) pc <- mkReg(0);
-   FIFO#(DecodeInst) f2e <- mkFIFO;
+   // FIFO#(D2E) d2e <- mkPipelineFIFO;
    FIFO#(D2E) d2e <- mkFIFO;
    SimdAlu256 alu <- mkSimdAlu256;
    FIFO#(E2W) e2w <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),17)));
-   FIFO#(RowData) operandQ <- mkSizedFIFO(valueOf(TAdd#(TMax#(AddSubLatency, IntMulLatency),17)));
+   FIFO#(RowData) operandQ <- mkSizedFIFO(17);
    
    Reg#(Bit#(3)) pcMax <- mkRegU;
    
-   // Reg#(Bit#(1)) beatCnt <- mkReg(0);
    Reg#(Bit#(128)) castTemp <- mkRegU;
    Reg#(CastOp) castOp <- mkRegU;
    Reg#(Bool) isCopy <- mkRegU;
    
    Reg#(Bit#(5)) beatCnt <- mkReg(0);
    
-   // Reg#(Bit#(4)) beatCnt 
+   let monitor <- mkScheduleMonitor(stdout, vec("fetch_decode", "execute", "writeback"));
    
-   rule doFetchDecode;// if ( beatCnt == 0);
+   rule doFetchDecode;
       let inst = iMem.sub(pc);
-      $display("%m, doFetch, pc = %d, inst =", pc, fshow(inst));
+      if (debug) $display("%m, doFetch, pc = %d, inst =", pc, fshow(inst));
 
       let opVector <- toGet(inQ).get;
       
@@ -110,14 +126,6 @@ module mkColXFormPE(ColXFormPE);
          end
       endcase
       
-      d2e.enq(D2E{iType:    inst.iType,
-                  aluOp:    inst.aluOp,
-                  immVec:   imm,
-                  opVector: opVector,
-                  colType:  inst.colType,
-                  isSigned: inst.isSigned});
-
-      
       if ( inst.iType == Copy || inst.iType == Store ) begin
          if ( inst.strType == inst.colType) begin
             operandQ.enq(opVector);
@@ -141,45 +149,53 @@ module mkColXFormPE(ColXFormPE);
       end
       
       Bit#(6) numBeats = toBeatsPerRowVec(inst.colType);
+      Bool last = False;
       if ( zeroExtend(beatCnt) + 1 == numBeats ) begin
          beatCnt <= 0;
-         if ( pc < pcMax )
+         if ( pc < pcMax ) begin
             pc <= pc + 1;
-         else
+         end
+         else begin
+            last = True;
             pc <= 0;
+         end
       end
       else begin
          beatCnt <= beatCnt + 1;
       end
 
-   endrule
-   
-   
-   // rule doFetchSecondBeat if (beatCnt == 1);
-   //    beatCnt <= 0;
+      Bool first = (beatCnt == 0 && pc == 0);
       
-   //    let opVector <- toGet(inQ).get;
-   //    let d = downCastFunc(opVector, castOp);
-   //    $display("doFetchSecondBeat downcasting");
-   //    dynamicAssert(isValid(d), "DownCastOp is not supported");
-   //    operandQ.enq({fromMaybe(?, d), castTemp});
+      Bit#(64) rowVecId = ?;
+      if ( first ) begin
+         rowVecId = rowVecInQ.first;
+         rowVecInQ.deq;
+         monitor.record("fetch_decode", "1");
+      end
+      else begin
+         monitor.record("fetch_decode","F");   
+      end
       
-            
-   //    d2e.enq(D2E{iType:    isCopy? Copy: Store,
-   //                aluOp:    ?,
-   //                immVec:   ?,
-   //                opVector: opVector,
-   //                colType:  ?,
-   //                isSigned: ?});
 
       
-   // endrule
+      d2e.enq(D2E{iType:    inst.iType,
+                  aluOp:    inst.aluOp,
+                  immVec:   imm,
+                  opVector: opVector,
+                  colType:  inst.colType,
+                  isSigned: inst.isSigned,
+                  first: first,
+                  rowVecId: rowVecId});
+   endrule
       
    rule doExecute;
       let eInst <- toGet(d2e).get;
       e2w.enq(E2W{iType: eInst.iType,
-                  opVector: eInst.opVector});
+                  opVector: eInst.opVector,
+                  first: eInst.first,
+                  rowVecId: eInst.rowVecId});
       
+      monitor.record("execute", "E");
       if ( eInst.iType == Alu ) begin
          let vec2 <- toGet(operandQ).get;
          alu.start(vec2, eInst.opVector, eInst.aluOp, unpack(pack(eInst.colType)), eInst.isSigned);
@@ -209,21 +225,27 @@ module mkColXFormPE(ColXFormPE);
          outQ.enq(outBeat);
       end
       
-      $display("doLowWrite");
+      if (d.first) rowVecOutQ.enq(d.rowVecId);
+      
+      monitor.record("writeback","W");
+      if (debug) $display("doLowWrite");
    endrule
    
    
    rule doUpWrite if (!doLower);
       doLower <= True;
       outQ.enq(upBeat);
-      $display("doUpWrite");
+      if (debug) $display("doUpWrite");
+      monitor.record("writeback","U");
    endrule
       
+   interface rowVecIn = toPipeIn(rowVecInQ);
+   interface rowVecOut = toPipeOut(rowVecOutQ);
    interface inPipe = toPipeIn(inQ);
    interface outPipe = toPipeOut(outQ);
    interface PipeIn programPort;// = toPipeIn(progQ);
       method Action enq(Tuple3#(Bit#(3), Bool, Bit#(32)) v);
-         $display("%m programPort, setting iMem = ", fshow(v));
+         if (debug) $display("%m programPort, setting iMem = ", fshow(v));
          let {pc, setPcMax, inst} = v;
          if ( !setPcMax )
             iMem.upd(pc, unpack(inst));
