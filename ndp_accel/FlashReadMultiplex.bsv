@@ -51,7 +51,7 @@ module mkFlashReadMultiplex(FlashReadMultiplex#(nSlaves));
       else 
          beatCnt <= 0;
       pageRespQs[channel].enq(d);
-      if (verbose) $display("flashReadMux deqResp beatCnt = %d, card = %d, bus = %d, channel = %d", beatCnt, card, bus, channel);
+      if (verbose) $display("(@%t) flashReadMux deqResp beatCnt = %d, card = %d, bus = %d, channel = %d", $time, beatCnt, card, bus, channel);
    endrule
       
       
