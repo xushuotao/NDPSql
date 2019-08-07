@@ -176,6 +176,7 @@ module mkTb_ColXForm();
    
    ColXForm#(NumColEngs) testEng <- mkColXForm;
    
+   mkConnection(colProcReader.rowVecOut, testEng.rowVecIn);
    mkConnection(colProcReader.outPipe, testEng.inPipe);
    
                     
@@ -296,6 +297,17 @@ module mkTb_ColXForm();
       
    endrule
    
+   rule doRowVecDeq;
+      let rowVec = testEng.rowVecOut.first;
+      testEng.rowVecOut.deq;
+      $display("(@%t) RowVecId = %d", $time, rowVec);
+   endrule
+   
+   Reg#(Bit#(64)) cycleCnt <- mkReg(0);
+   rule incrCnt if (state == Run);
+      cycleCnt <= cycleCnt + 1;
+   endrule
+      
 
    rule doOutput if (state == Run);
       let tester = testEng.outPipe.first;
@@ -324,7 +336,7 @@ module mkTb_ColXForm();
          state <= CheckResult;
       end
       
-      $display("Output cnt = %d, tester = %h", outputCnt, tester);
+      $display("(@%t) Output cnt = %d, tester = %h", $time, outputCnt, tester);
       
       outputCnt <= outputCnt + 1;
    endrule
@@ -348,7 +360,7 @@ module mkTb_ColXForm();
          $display("Expected_Cnts:: \t%32d, \t%32d, \t%32d, \t%32d", expectedCnt[0], expectedCnt[1], expectedCnt[2], expectedCnt[3]);
 
          if ( readVReg(sumV) == expectedSum && readVReg(cntV) == expectedCnt)
-            $display("Pass:: ColXForm");
+            $display("Pass:: ColXForm, , total Data Beats = %d, cycle = %d", toNumRowVecs(totalRows) * fold(add2, beatMax), cycleCnt);
          else
             $display("Fail:: ColXForm, aggregate result doesn't match");
       end

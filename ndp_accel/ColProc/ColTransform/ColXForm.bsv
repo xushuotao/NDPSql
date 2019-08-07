@@ -8,6 +8,8 @@ import Connectable::*;
 typedef PipeIn#(Tuple2#(Bit#(TLog#(engs)), Tuple3#(Bit#(3), Bool, Bit#(32)))) ProgramColXForm#(numeric type engs);
 
 interface ColXForm#(numeric type engs);
+   interface PipeIn#(Bit#(64)) rowVecIn;
+   interface PipeOut#(Bit#(64)) rowVecOut;
    interface PipeIn#(RowData) inPipe;
    interface PipeOut#(RowData) outPipe;
    interface ProgramColXForm#(engs) programIfc;
@@ -21,6 +23,7 @@ module mkColXForm(ColXForm#(engs)) provisos(
    Vector#(engs, ColXFormPE) vPE <- replicateM(mkColXFormPE);
    
    module connectPE#(ColXFormPE pe0, ColXFormPE pe1)(Empty);
+      mkConnection(pe0.rowVecOut, pe1.rowVecIn);
       mkConnection(pe0.outPipe, pe1.inPipe);
    endmodule
    
@@ -33,7 +36,9 @@ module mkColXForm(ColXForm#(engs)) provisos(
    function PipeIn#(Tuple3#(Bit#(3), Bool, Bit#(32))) getProgramPort(ColXFormPE pe) = pe.programPort;
    
    zipWithM_(mkConnection, programRouter.outPorts, map(getProgramPort, vPE));
-   
+
+   interface rowVecIn = vPE[0].rowVecIn;
+   interface rowVecOut = last(vPE).rowVecOut;
    interface inPipe = vPE[0].inPipe;
    interface outPipe = last(vPE).outPipe;
    interface programIfc = programRouter.inPort;
