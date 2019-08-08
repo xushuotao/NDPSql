@@ -213,7 +213,13 @@ module mkTb_ColXForm();
       colProcReader.programIfc.setRowNums(totalRows, fromInteger(numCols));
       rowSet <= True;
    endrule
+      
+   Aggregate#(4) aggr_quantity <- mkAggregate(True);
+   Aggregate#(8) aggr_extended_price <- mkAggregate(True);
+   Aggregate#(8) aggr_discount_price <- mkAggregate(True);
+   Aggregate#(8) aggr_charge_price <- mkAggregate(True);
    
+
    Reg#(Bit#(4)) colCnt <- mkReg(0);
    rule doProgramReader_1 if (state == Prog_Reader && rowSet);
       dynamicAssert(tpl_2(colInfos[colCnt])%8192 == 0, "baseAddr should be page aligned!");
@@ -222,6 +228,10 @@ module mkTb_ColXForm();
          state <= Run;
          rowSet <= False;
          colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
+         aggr_quantity.reset;
+         aggr_extended_price.reset;
+         aggr_discount_price.reset;
+         aggr_charge_price.reset;
       end
       else begin
          colCnt <= colCnt + 1;
@@ -241,12 +251,6 @@ module mkTb_ColXForm();
    
    Vector#(4, Reg#(Bit#(128))) sumV <- replicateM(mkReg(0));
    Vector#(4, Reg#(Bit#(64))) cntV <- replicateM(mkReg(0));
-   
-   Aggregate#(4) aggr_quantity <- mkAggregate(True);
-   Aggregate#(8) aggr_extended_price <- mkAggregate(True);
-   Aggregate#(8) aggr_discount_price <- mkAggregate(True);
-   Aggregate#(8) aggr_charge_price <- mkAggregate(True);
-   
    Vector#(4, NDPStreamIn) inStreams = vec(aggr_quantity.streamIn,
                                            aggr_extended_price.streamIn,
                                            aggr_discount_price.streamIn,
@@ -308,6 +312,7 @@ module mkTb_ColXForm();
       cycleCnt <= cycleCnt + 1;
    endrule
       
+   Reg#(Bit#(64)) rowVecIdCnt <- mkReg(0);
 
    rule doOutput if (state == Run);
       let tester = testEng.outPipe.first;
@@ -324,11 +329,13 @@ module mkTb_ColXForm();
       if ( colCnt > 1 ) begin
          inStreams[colCnt-2].rowData.enq(tester);
          if ( beatCnt + 1 == truncate(beatMax[colCnt]) ) begin
-            inStreams[colCnt-2].rowMask.enq(RowMask{rowVecId:?,
+            inStreams[colCnt-2].rowMask.enq(RowMask{rowVecId:rowVecIdCnt,
                                                     hasData:True,
-                                                    isLast: False,
-                                                    mask: maxBound});   
+                                                    isLast: rowVecIdCnt + 1 == toNumRowVecs(totalRows),
+                                                    mask: maxBound});
+            if ( colCnt == 5) rowVecIdCnt <= rowVecIdCnt + 1;
          end
+
       end
       
       if ( outputCnt + 1 == (toNumRowVecs(totalRows) * fold(add2, beatMax) )) begin

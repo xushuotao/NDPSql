@@ -20,6 +20,7 @@ typedef struct {
 interface Aggregate#(numeric type colBytes);
    interface NDPStreamIn streamIn;
    interface PipeOut#(AggrResult#(colBytes)) aggrResp;
+   method Action reset;
 endinterface
 
 function Tuple2#(Bool, Bit#(w)) minSigned2(Tuple2#(Bool, Bit#(w)) a, Tuple2#(Bool, Bit#(w)) b);
@@ -91,7 +92,19 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
    FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) beatMaskQ <- mkFIFO;
    
    FIFOF#(AggrResult#(colBytes)) aggrResultQ <- mkFIFOF;
+   FIFO#(Tuple2#(AggrResult#(colBytes), Bool)) reduceResultQ <- mkFIFO;
    
+   Reg#(AggrResult#(colBytes)) aggrReg <- mkRegU;
+   
+   UInt#(colWidth) minU = minBound;
+   UInt#(colWidth) maxU = maxBound;
+
+   AggrResult#(colBytes) initValue = AggrResult{min: isSigned? maxBound : pack(maxU),
+                                                max: isSigned? minBound : pack(minU),
+                                                sum: 0,
+                                                cnt: 0};
+   
+
    rule rowMask2beatMask;
       let maskData = rowMaskQ.first;
       let rowVecId = maskData.rowVecId;
@@ -102,7 +115,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
 
          $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
          if ( maskSel == maxBound ) rowMaskQ.deq;
-         beatMaskQ.enq(tuple4(rowVecId, isLast, True, maskV[maskSel]));
+         beatMaskQ.enq(tuple4(rowVecId, isLast&&(maskSel==maxBound), True, maskV[maskSel]));
       end
       else begin
          beatMaskQ.enq(tuple4(rowVecId, isLast, False, ?));
@@ -110,18 +123,18 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
       end
    endrule
 
-   rule doAggr;
+   rule doReduce;
       let {rowVecId, last, hasData, mask} <- toGet(beatMaskQ).get();
       
       if  ( hasData ) begin
          let v <- toGet(rowDataQ).get();
          Vector#(rowsPerBeat, Bit#(colWidth)) data = unpack(v);
          
-         let {dummy0, min} = fold(isSigned?minSigned2:minUnSigned2, 
+         let {dummy0, min} = fold(isSigned? minSigned2: minUnSigned2,
                                  zip(unpack(mask), data));
          
-         let {dummy1, max} = fold(isSigned?maxSigned2:maxUnSigned2, 
-                             zip(unpack(mask),data));
+         let {dummy1, max} = fold(isSigned? maxSigned2: maxUnSigned2,
+                                  zip(unpack(mask),data));
 
 
          Tuple2#(Bool, Bit#(TAdd#(colWidth, TLog#(rowsPerBeat)))) tpl_sum 
@@ -130,14 +143,44 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
          let {dummy2, sum} = tpl_sum;
          
          let cnt = countOnes(mask);
-         aggrResultQ.enq(AggrResult{sum: zeroExtend(sum),
-                                    min: min,
-                                    max: max,
-                                    cnt: zeroExtend(pack(cnt))});
+         reduceResultQ.enq(tuple2(AggrResult{sum: zeroExtend(sum),
+                                             min: min,
+                                             max: max,
+                                             cnt: zeroExtend(pack(cnt))},
+                                  last));
       end
+      else if ( last) begin
+         reduceResultQ.enq(tuple2(initValue,True));
+      end
+      
+   endrule
+   
+   function Bit#(colWidth) minFunc(Bit#(colWidth) a, Bit#(colWidth) b);
+      let aa = tuple2(True, a);
+      let bb = tuple2(True, b);
+      return tpl_2(isSigned?minSigned2(aa, bb):minUnSigned2(aa,bb));
+   endfunction
+
+   function Bit#(colWidth) maxFunc(Bit#(colWidth) a, Bit#(colWidth) b);
+      let aa = tuple2(True, a);
+      let bb = tuple2(True, b);
+      return tpl_2(isSigned?maxSigned2(aa,bb):maxUnSigned2(aa,bb));
+   endfunction
+   
+   rule doAggr;
+      let {v, last} <- toGet(reduceResultQ).get;
+      let newAggr = AggrResult{min: minFunc(aggrReg.min, v.min),
+                               max: maxFunc(aggrReg.max, v.max),
+                               sum: aggrReg.sum + v.sum,
+                               cnt: aggrReg.cnt + v.cnt
+                               };
+      aggrReg <= newAggr;
+      if ( last ) aggrResultQ.enq(newAggr);
    endrule
    
    interface NDPStreamIn streamIn = toNDPStreamIn(rowDataQ, rowMaskQ);
    interface PipeOut aggrResp = toPipeOut(aggrResultQ);
+   method Action reset;
+      aggrReg <= initValue;
+   endmethod
 endmodule
-
