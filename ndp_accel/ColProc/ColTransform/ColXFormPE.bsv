@@ -15,9 +15,9 @@ import ScheduleMonitor::*;
 import BuildVector::*;
 
 interface ColXFormPE;
-   interface PipeIn#(Bit#(64)) rowVecIn;
+   interface PipeIn#(Tuple2#(Bit#(64),Bool)) rowVecIn;
    interface PipeIn#(RowData) inPipe;
-   interface PipeOut#(Bit#(64)) rowVecOut;
+   interface PipeOut#(Tuple2#(Bit#(64),Bool)) rowVecOut;
    interface PipeOut#(RowData) outPipe;
    interface PipeIn#(Tuple3#(Bit#(3), Bool, Bit#(32))) programPort;
 endinterface
@@ -51,7 +51,7 @@ typedef struct {
    Bool isSigned;
    
    Bool first;
-   Bit#(64) rowVecId;
+   Tuple2#(Bit#(64),Bool) rowVecId;
    } D2E deriving (Bits, Eq, FShow);
 
 typedef struct {
@@ -59,13 +59,13 @@ typedef struct {
    Bit#(256) opVector;
    
    Bool first;
-   Bit#(64) rowVecId;
+   Tuple2#(Bit#(64),Bool) rowVecId;
    } E2W deriving (Bits, Eq, FShow);
 
 (* synthesize *)
 module mkColXFormPE(ColXFormPE);
-   FIFOF#(Bit#(64)) rowVecInQ <- mkPipelineFIFOF;
-   FIFOF#(Bit#(64)) rowVecOutQ <- mkPipelineFIFOF;
+   FIFOF#(Tuple2#(Bit#(64),Bool)) rowVecInQ <- mkPipelineFIFOF;
+   FIFOF#(Tuple2#(Bit#(64),Bool)) rowVecOutQ <- mkPipelineFIFOF;
    // FIFOF#(Bit#(64)) rowVecInQ <- mkFIFOF;
    // FIFOF#(Bit#(64)) rowVecOutQ <- mkFIFOF;
 
@@ -166,7 +166,7 @@ module mkColXFormPE(ColXFormPE);
 
       Bool first = (beatCnt == 0 && pc == 0);
       
-      Bit#(64) rowVecId = ?;
+      Tuple2#(Bit#(64),Bool) rowVecId = ?;
       if ( first ) begin
          rowVecId = rowVecInQ.first;
          rowVecInQ.deq;

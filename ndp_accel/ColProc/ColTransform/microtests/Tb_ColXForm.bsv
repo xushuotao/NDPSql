@@ -302,9 +302,18 @@ module mkTb_ColXForm();
    endrule
    
    rule doRowVecDeq;
-      let rowVec = testEng.rowVecOut.first;
+      let {rowVec, last} = testEng.rowVecOut.first;
       testEng.rowVecOut.deq;
-      $display("(@%t) RowVecId = %d", $time, rowVec);
+      function Action enqMask(NDPStreamIn inStream);
+         return (action
+                  inStream.rowMask.enq(RowMask{rowVecId:rowVec,
+                                               hasData:True,
+                                               isLast: last,
+                                               mask: maxBound});
+                 endaction);
+      endfunction
+      mapM_(enqMask, inStreams);
+      $display("(@%t) RowVecId = %d, last = %d", $time, rowVec, last);
    endrule
    
    Reg#(Bit#(64)) cycleCnt <- mkReg(0);
@@ -328,13 +337,13 @@ module mkTb_ColXForm();
       
       if ( colCnt > 1 ) begin
          inStreams[colCnt-2].rowData.enq(tester);
-         if ( beatCnt + 1 == truncate(beatMax[colCnt]) ) begin
-            inStreams[colCnt-2].rowMask.enq(RowMask{rowVecId:rowVecIdCnt,
-                                                    hasData:True,
-                                                    isLast: rowVecIdCnt + 1 == toNumRowVecs(totalRows),
-                                                    mask: maxBound});
-            if ( colCnt == 5) rowVecIdCnt <= rowVecIdCnt + 1;
-         end
+         // if ( beatCnt + 1 == truncate(beatMax[colCnt]) ) begin
+         //    inStreams[colCnt-2].rowMask.enq(RowMask{rowVecId:rowVecIdCnt,
+         //                                            hasData:True,
+         //                                            isLast: rowVecIdCnt + 1 == toNumRowVecs(totalRows),
+         //                                            mask: maxBound});
+         //    if ( colCnt == 5) rowVecIdCnt <= rowVecIdCnt + 1;
+         // end
 
       end
       

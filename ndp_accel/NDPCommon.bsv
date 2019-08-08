@@ -79,6 +79,17 @@ function Bit#(9) toRowVecsPerPage(Bit#(5) colBytes);
           endcase;
 endfunction
 
+function Bit#(9) toRowVecsPerPage2(ColType colType);
+   return case (colType )
+             Byte  : 256;
+             Short : 128;
+             Int   : 64;
+             Long  : 32;
+             BigInt: 16;
+          endcase;
+endfunction
+
+
 function Bit#(3) toLgRowVecsPerPage(ColType colType);
    return case (colType )
              Byte  : 8;

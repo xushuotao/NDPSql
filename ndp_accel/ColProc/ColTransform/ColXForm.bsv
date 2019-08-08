@@ -8,8 +8,8 @@ import Connectable::*;
 typedef PipeIn#(Tuple2#(Bit#(TLog#(engs)), Tuple3#(Bit#(3), Bool, Bit#(32)))) ProgramColXForm#(numeric type engs);
 
 interface ColXForm#(numeric type engs);
-   interface PipeIn#(Bit#(64)) rowVecIn;
-   interface PipeOut#(Bit#(64)) rowVecOut;
+   interface PipeIn#(Tuple2#(Bit#(64), Bool)) rowVecIn;
+   interface PipeOut#(Tuple2#(Bit#(64), Bool)) rowVecOut;
    interface PipeIn#(RowData) inPipe;
    interface PipeOut#(RowData) outPipe;
    interface ProgramColXForm#(engs) programIfc;

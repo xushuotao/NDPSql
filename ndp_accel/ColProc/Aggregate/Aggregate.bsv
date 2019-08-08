@@ -19,9 +19,17 @@ typedef struct {
 
 interface Aggregate#(numeric type colBytes);
    interface NDPStreamIn streamIn;
-   interface PipeOut#(AggrResult#(colBytes)) aggrResp;
+   interface PipeOut#(AggrResult#(16)) aggrResp;
    method Action reset;
 endinterface
+
+function AggrResult#(16) aggrExtend(AggrResult#(colBytes) in) provisos(
+   Add#(a__, TMul#(colBytes, 8), 128));
+   return AggrResult{sum: in.sum,
+                     cnt: in.cnt,
+                     min: zeroExtend(in.min),
+                     max: zeroExtend(in.max)};
+endfunction
 
 function Tuple2#(Bool, Bit#(w)) minSigned2(Tuple2#(Bool, Bit#(w)) a, Tuple2#(Bool, Bit#(w)) b);
    let {valid_a, a_val} = a;
@@ -81,6 +89,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
    Add#(1, c__, TLog#(TAdd#(1, TDiv#(32, colBytes)))),
    Add#(1, d__, TDiv#(32, colBytes)),
    Add#(e__, TAdd#(TMul#(8, colBytes), TLog#(TDiv#(32, colBytes))), 129),
+   Add#(f__, TMul#(TExp#(TLog#(colBytes)), 8), 128),
    Add#(colWidth, a__, 128) );
    
    Integer rowsPerBeat_int = valueOf(rowsPerBeat);
@@ -91,7 +100,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
    // rowVecId, isLast, hasData, mask
    FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) beatMaskQ <- mkFIFO;
    
-   FIFOF#(AggrResult#(colBytes)) aggrResultQ <- mkFIFOF;
+   FIFOF#(AggrResult#(16)) aggrResultQ <- mkFIFOF;
    FIFO#(Tuple2#(AggrResult#(colBytes), Bool)) reduceResultQ <- mkFIFO;
    
    Reg#(AggrResult#(colBytes)) aggrReg <- mkRegU;
@@ -175,7 +184,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
                                cnt: aggrReg.cnt + v.cnt
                                };
       aggrReg <= newAggr;
-      if ( last ) aggrResultQ.enq(newAggr);
+      if ( last ) aggrResultQ.enq(aggrExtend(newAggr));
    endrule
    
    interface NDPStreamIn streamIn = toNDPStreamIn(rowDataQ, rowMaskQ);

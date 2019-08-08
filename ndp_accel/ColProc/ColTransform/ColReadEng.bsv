@@ -5,7 +5,7 @@ import FlashCtrlIfc::*;
 
 interface ColReadEng#(type tagT);
    method ActionValue#(Tuple2#(DualFlashAddr, Bool)) getNextPageAddr(tagT tag, Bool needRead);
-   method Tuple3#(tagT, Bit#(9), Bit#(64)) firstInflightTag;
+   method Tuple4#(tagT, Bit#(9), Bit#(64), Bool) firstInflightTag;
    method Action doneFirstInflight;
    
    method Action setParam(Bit#(64) numRows, ColType colType, Bit#(64) basePage);
@@ -17,7 +17,7 @@ endinterface
 module mkColReadEng(ColReadEng#(tagT)) provisos (Bits#(tagT, tagTsz));
    FIFO#(Tuple4#(DualFlashAddr, Bit#(9), Bool, Bit#(64))) addrQ <- mkFIFO;
    
-   FIFO#(Tuple3#(tagT, Bit#(9), Bit#(64))) inflightTagQ <- mkSizedFIFO(valueOf(TExp#(tagTsz)));
+   FIFO#(Tuple4#(tagT, Bit#(9), Bit#(64), Bool)) inflightTagQ <- mkSizedFIFO(valueOf(TExp#(tagTsz)));
    
    FIFO#(DualFlashAddr) respQ <- mkPipelineFIFO;
    
@@ -52,12 +52,12 @@ module mkColReadEng(ColReadEng#(tagT)) provisos (Bits#(tagT, tagTsz));
       addrQ.deq;
       // $display("(%m) queuedepth = %d", valueOf(TExp#(tagTsz)));
       if ( needRead )
-         inflightTagQ.enq(tuple3(tag, beats, baseRowVec));
+         inflightTagQ.enq(tuple4(tag, beats, baseRowVec, last));
       // respQ.enq(addr);
       return tuple2(addr, last);
    endmethod
    
-   method Tuple3#(tagT, Bit#(9), Bit#(64)) firstInflightTag = inflightTagQ.first;
+   method Tuple4#(tagT, Bit#(9), Bit#(64), Bool) firstInflightTag = inflightTagQ.first;
    method Action doneFirstInflight = inflightTagQ.deq;
    
    method Action setParam(Bit#(64) numRows, ColType colType, Bit#(64) basePage);

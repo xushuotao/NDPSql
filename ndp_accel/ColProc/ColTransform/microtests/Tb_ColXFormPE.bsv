@@ -347,7 +347,7 @@ module mkTb_ColXFormPE();
       testEng.inPipe.enq(pack(rands));
       $display("(@%t) Input cnt = %d, streamIn = %h", $time, inputCnt, pack(rands));
       if ( inputCnt % beatsPerRowVec[testCnt] == 0 ) begin
-         testEng.rowVecIn.enq(inputCnt/beatsPerRowVec[testCnt]);
+         testEng.rowVecIn.enq(tuple2(inputCnt/beatsPerRowVec[testCnt], False));
          $display("Input RowVecId = %d, beatsPerRowVec = %d", inputCnt/beatsPerRowVec[testCnt], beatsPerRowVec[testCnt]);
       end
 
@@ -385,7 +385,7 @@ module mkTb_ColXFormPE();
    rule doRowVecOut;
       let rowVec = testEng.rowVecOut.first;
       testEng.rowVecOut.deq;
-      $display("(@%t) Output RowVecId = %d", $time, rowVec);
+      $display("(@%t) Output RowVecId = ", $time, fshow(rowVec));
    endrule
    
 endmodule

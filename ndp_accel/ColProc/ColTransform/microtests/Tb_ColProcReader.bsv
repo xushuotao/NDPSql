@@ -162,7 +162,7 @@ module mkTb_ColProcReader();
    rule doRowVec;
       let rowVec = colProcReader.rowVecOut.first;
       colProcReader.rowVecOut.deq;
-      $display("(@%t) RowVecId = %d", $time, rowVec);
+      $display("(@%t) RowVecId = ", $time, fshow(rowVec));
    endrule
    
    rule doIncrCont if (state == CheckResult && cnt < gap);
