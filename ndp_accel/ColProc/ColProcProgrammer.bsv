@@ -1,10 +1,13 @@
-import ColProcReader::*;
-import ColProc::*;
 import NDPCommon::*;
 import Pipe::*;
 import FIFOF::*;
 import Vector::*;
 import BuildVector::*;
+
+import ColProcReader::*;
+import ColXForm::*;
+import ColProc::*;
+
 
 typedef struct{
    ColType colType;
@@ -25,8 +28,8 @@ interface InColProgrammer;
    // interface ProgramInColClient programClient;
 endinterface
 
-interface ColXFormProgrammer;
-   method Action maxProgramCnt(Bit#(TLog#(ColXFormEngs)) colId, Bit#(4) progLength);
+interface ColXFormProgrammer#(numeric type engs);
+   method Action setProgramLength(Bit#(TLog#(engs)) colId, Bit#(4) progLength);
    interface PipeIn#( Bit#(32)) programPort;
 endinterface
 
@@ -80,24 +83,24 @@ module mkInColAutoProgram#(Bit#(64) numRows, Vector#(numCols, InColParamT) colIn
    endrule
 endmodule
       
-/*
-module mkColXFormProgrammer#(ProgramColXForm#(ColXFormEngs) programIfc)(ColXFormProgrammer);
-   Integer numEngs = valueOf(ColXFormEngs);
-   Reg#(Bit#(TLog#(ColXFormEngs))) maxProgramCnt <- mkReg(0);
-   Vector#(ColXFormEngs, Reg#(Bit#(4))) progLengths <- replicateM(mkRegU);
-   Vector#(ColXFormEngs, Reg#(Bit#(4))) progCnt <- replicateM(mkReg(0));
+
+module mkColXFormProgrammer#(ProgramColXForm#(engs) programIfc)(ColXFormProgrammer#(engs));
+   Integer numEngs = valueOf(engs);
+   Reg#(Bit#(TLog#(TAdd#(engs,1)))) engCnt_Length <- mkReg(0);
+   Vector#(engs, Reg#(Bit#(4))) progLengths <- replicateM(mkRegU);
    
-   FIFOF#(Tuple2#(Bit#(TLog#(ColXFormEngs)), Tuple2#(Bit#(3), Bit#(32)))) programQ <- mkFIFOF;
+   FIFOF#(Bit#(32)) programQ <- mkFIFOF;
    Reg#(Bit#(3)) pc <- mkReg(0);
-   Reg#(Bit#(TLog#(ColXFormEngs))) engCnt <- mkReg(0);
-   rule programEngs if ( maxProgramCnt == fromInteger(numEngs));
+   Reg#(Bit#(TLog#(engs))) engCnt <- mkReg(0);
+   rule programEngs if ( engCnt_Length == fromInteger(numEngs));
       let inst = programQ.first;
+      programQ.deq;
       programIfc.enq(tuple2(engCnt, tuple3(pc, False, inst)));
       
-      if ( zeroExtend(pc) + 1 == progCnt[engId] ) begin
+      if ( zeroExtend(pc) + 1 == progLengths[engCnt] ) begin
          pc <= 0;
-         if ( engCnt == fromInteger(numEngs - 1) begin
-            maxProgramCnt <= 0;
+         if (engCnt == fromInteger(numEngs - 1) ) begin
+            engCnt_Length <= 0;
             engCnt <= 0;
          end
          else begin
@@ -109,15 +112,50 @@ module mkColXFormProgrammer#(ProgramColXForm#(ColXFormEngs) programIfc)(ColXForm
       end
    endrule
    
-   method Action maxProgramCnt(Bit#(TLog#(ColXFormEngs)) engId, Bit#(4) progLength) if ( maxProgramCnt < fromInteger(numEngs) );
-      maxProgramCnt <=  maxProgramCnt + 1;
+   method Action setProgramLength(Bit#(TLog#(engs)) engId, Bit#(4) progLength) if ( engCnt_Length < fromInteger(numEngs) );
+      engCnt_Length <=  engCnt_Length + 1;
       progLengths[engId] <= progLength;
-      programIfc.enq(tuple2(engId, tuple3(?, True, zeroExtend(programLength))));
+      programIfc.enq(tuple2(engId, tuple3(?, True, zeroExtend(progLength))));
    endmethod
    
    interface PipeIn programPort = toPipeIn(programQ);
 endmodule
 
+module mkColXFormAutoProgram#(Vector#(engs, Bit#(4)) progLength,
+                              Vector#(engs, Vector#(8, Bit#(32))) insts,
+                              ProgramColXForm#(engs) programIfc)(Empty);
+   
+   let programmer <- mkColXFormProgrammer(programIfc);
+   Reg#(Bit#(TLog#(engs))) engCnt <- mkReg(0);
+   Reg#(Bool) programLength <- mkReg(True);
+   rule doProgramLength if ( programLength);
+      if ( engCnt == fromInteger(valueOf(engs) -1 )) begin
+         engCnt <= 0;
+         programLength <= False;
+      end
+      else begin
+         engCnt <= engCnt + 1;
+      end
+      programmer.setProgramLength(engCnt, progLength[engCnt]);
+   endrule
+   
+   Reg#(Bit#(TLog#(TAdd#(engs,1)))) engCnt2 <- mkReg(0);
+   Reg#(Bit#(3)) pc <- mkReg(0);
+   
+   rule doPrograms if ( engCnt2 < fromInteger(valueOf(engs)));
+      if ( zeroExtend(pc) + 1 == progLength[engCnt2] ) begin
+         pc <= 0;
+         engCnt2 <= engCnt2 + 1;
+      end
+      else begin
+         pc <= pc + 1;
+      end
+      programmer.programPort.enq(insts[engCnt2][pc]);
+   endrule
+endmodule
+
+
+/*
 module mkOutColProgrammer#(ProgramColOutputCol programIfc)(OutColProgrammer);
    FIFOF#(Tuple2#(ColIdT, OutColParamT)) programQ <- mkFIFOF;
    

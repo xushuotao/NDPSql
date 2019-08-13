@@ -34,6 +34,8 @@ import Pipe::*;
 import AlgFuncs::*;
 import Aggregate::*;
 
+import ColProcProgrammer::*;
+import ColXProgram::*;
 
 // flash releted
 import ControllerTypes::*;
@@ -57,106 +59,32 @@ import Assert::*;
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// ColEng Instruction Section
-////////////////////////////////////////////////////////////////////////////////
-typedef 4 NumColEngs;
-////////////////////////////////////////////////////////////////////////////////
-/// End of ColEng Instruction Section
-////////////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////////////////////////
 /// ColProcReader Parameter Section
 ////////////////////////////////////////////////////////////////////////////////
 typedef 6 NumCols; 
 Integer numCols = valueOf(NumCols);
-
-Tuple2#(ColType, Bit#(64)) colInfo_returnflag  = tuple2(Byte, getBaseAddr("l_returnflag"));
-Tuple2#(ColType, Bit#(64)) colInfo_linestatus  = tuple2(Byte, getBaseAddr("l_linestatus"));
-Tuple2#(ColType, Bit#(64)) colInfo_quantity    = tuple2(Int, getBaseAddr("l_quantity"));
-Tuple2#(ColType, Bit#(64)) colInfo_extendprice = tuple2(Long, getBaseAddr("l_extendedprice"));
-Tuple2#(ColType, Bit#(64)) colInfo_discount    = tuple2(Long, getBaseAddr("l_discount"));
-Tuple2#(ColType, Bit#(64)) colInfo_tax         = tuple2(Long, getBaseAddr("l_tax"));
-Vector#(NumCols, Tuple2#(ColType, Bit#(64))) colInfos = vec(colInfo_returnflag  ,
-                                                            colInfo_linestatus  ,
-                                                            colInfo_quantity    ,
-                                                            colInfo_extendprice ,
-                                                            colInfo_discount    ,
-                                                            colInfo_tax         );
+InColParamT colInfo_returnflag  = InColParamT{colType:Byte, baseAddr:getBaseAddr("l_returnflag")>>13};
+InColParamT colInfo_linestatus  = InColParamT{colType:Byte, baseAddr:getBaseAddr("l_linestatus")>>13};
+InColParamT colInfo_quantity    = InColParamT{colType:Int,  baseAddr:getBaseAddr("l_quantity")>>13};
+InColParamT colInfo_extendprice = InColParamT{colType:Long, baseAddr:getBaseAddr("l_extendedprice")>>13};
+InColParamT colInfo_discount    = InColParamT{colType:Long, baseAddr:getBaseAddr("l_discount")>>13};
+InColParamT colInfo_tax         = InColParamT{colType:Long, baseAddr:getBaseAddr("l_tax")>>13};
+Vector#(NumCols, InColParamT) colInfos = vec(colInfo_returnflag  ,
+                                             colInfo_linestatus  ,
+                                             colInfo_quantity    ,
+                                             colInfo_extendprice ,
+                                             colInfo_discount    ,
+                                             colInfo_tax         );
 ////////////////////////////////////////////////////////////////////////////////
 /// End of ColProcReader Parameter Section
 ////////////////////////////////////////////////////////////////////////////////
 
 
-typedef enum{Prog_Reader, Prog_ColX, Run, CheckResult} State deriving (Bits, Eq, FShow);
+typedef enum{Init, Run, CheckResult} State deriving (Bits, Eq, FShow);
 (* synthesize *)
 module mkTb_ColXForm();
    
    Bit#(64) totalRows = (getNumRows("l_shipdate")/100000)/32*32;
-   
-////////////////////////////////////////////////////////////////////////////////
-/// ColEng Instruction Section
-////////////////////////////////////////////////////////////////////////////////
-
-   Integer numColEngs = valueOf(NumColEngs);
-   Bit#(64) most_negative = 1<<63;
-   Vector#(NumColEngs, Vector#(8, DecodeInst)) pePrograms = ?;//replicate(peProg);
-   Vector#(NumColEngs, Integer) progLength = ?;//replicate(1);
-   Integer i = 0;
-   
-   Vector#(8, DecodeInst) peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
-                                              DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
-                                              DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
-                                              DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // extended_price
-                                              DecodeInst{iType: AluImm, aluOp: Sub, isSigned: True, colType: Long, strType: ?, imm: 100}, // 1 - discount
-                                              DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, colType: Long, strType: ?, imm: 100}), // 1 + tax
-                                          ?);
-                                              
-   pePrograms[i] = peProg;
-   progLength[i] = 6;
-   i = i + 1;
-
-      
-   peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
-                       DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?}, // copy extended_price
-                       DecodeInst{iType: Alu,  aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: 100}, // 1 - discount * extended_price
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}), // pass 1 + tax
-                   ?);
-      
-   pePrograms[i] = peProg;
-   progLength[i] = 6;
-   i = i + 1;
-   
-   
-   peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // pass extended_price
-                       DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?}, // copy 1 - discount * extended_price
-                       DecodeInst{iType: Alu,  aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: ?}), // (1 + tax) * (1 - discount * extended_price)
-                   ?);
-      
-   pePrograms[i] = peProg;
-   progLength[i] = 6;
-   i = i + 1;
-
-   peProg = append(vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //rf
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Byte, strType: ?, imm: ?}, //ls
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?}, //quantity
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // pass extended_price
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}, // pass 1 - discount * extended_price
-                       DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Long, strType: ?, imm: ?}), // pass (1 + tax) * (1 - discount * extended_price)
-                   ?);
-      
-   pePrograms[i] = peProg;
-   progLength[i] = 6;
-   i = i + 1;
-
-////////////////////////////////////////////////////////////////////////////////
-/// End of ColEng Instruction Section
-////////////////////////////////////////////////////////////////////////////////
-
    
    Vector#(2,FlashCtrlVirtexIfc) flashCtrls <- mapM(mkEmulatedFlashCtrl, genWith(fromInteger));
    
@@ -183,60 +111,23 @@ module mkTb_ColXForm();
 ////////////////////////////////////////////////////////////////////////////////
 /// Test Section
 ////////////////////////////////////////////////////////////////////////////////
-   Reg#(State) state <- mkReg(Prog_ColX);
-
-   Reg#(Bit#(TLog#(TAdd#(NumColEngs, 1)))) colXEngCnt <- mkReg(0);
-   Reg#(Bit#(4)) prog_cnt <- mkReg(0);   
-
-   rule doProgramColX if (state == Prog_ColX);
-      if ( prog_cnt  < fromInteger(progLength[colXEngCnt]) ) begin
-         testEng.programIfc.enq(tuple2(truncate(colXEngCnt),
-                                         tuple3(truncate(prog_cnt), False, pack(pePrograms[colXEngCnt][prog_cnt]))));
-         prog_cnt <= prog_cnt + 1;
-      end
-      else if ( prog_cnt  == fromInteger(progLength[colXEngCnt])) begin
-         prog_cnt <= 0;
-         testEng.programIfc.enq(tuple2(truncate(colXEngCnt),
-                                         tuple3(?, True, extend(prog_cnt))));
-         if ( colXEngCnt + 1 == fromInteger(numColEngs)) begin
-            state <= Prog_Reader;
-            colXEngCnt <= 0;
-         end
-         else begin
-            colXEngCnt <= colXEngCnt + 1;
-         end
-      end
-   endrule
-   
-   Reg#(Bool) rowSet <- mkReg(False);
-   rule doProgramReader_0 if (state == Prog_Reader && !rowSet);
-      colProcReader.programIfc.setRowNums(totalRows, fromInteger(numCols));
-      rowSet <= True;
-   endrule
+   Reg#(State) state <- mkReg(Init);
+   let {progLength_bit, peInsts} = genTest();
+   let dummpy <- mkColXFormAutoProgram(progLength_bit, peInsts, testEng.programIfc);
       
+   let programmer <- mkInColAutoProgram(totalRows, colInfos, colProcReader.programIfc);
+
    Aggregate#(4) aggr_quantity <- mkAggregate(True);
    Aggregate#(8) aggr_extended_price <- mkAggregate(True);
    Aggregate#(8) aggr_discount_price <- mkAggregate(True);
    Aggregate#(8) aggr_charge_price <- mkAggregate(True);
-   
 
-   Reg#(Bit#(4)) colCnt <- mkReg(0);
-   rule doProgramReader_1 if (state == Prog_Reader && rowSet);
-      dynamicAssert(tpl_2(colInfos[colCnt])%8192 == 0, "baseAddr should be page aligned!");
-      if ( colCnt + 1 == fromInteger(numCols)) begin
-         colCnt <= 0;
-         state <= Run;
-         rowSet <= False;
-         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
-         aggr_quantity.reset;
-         aggr_extended_price.reset;
-         aggr_discount_price.reset;
-         aggr_charge_price.reset;
-      end
-      else begin
-         colCnt <= colCnt + 1;
-         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
-      end
+   rule doReset if (state == Init);
+      aggr_quantity.reset;
+      aggr_extended_price.reset;
+      aggr_discount_price.reset;
+      aggr_charge_price.reset;
+      state <= Run;
    endrule
 
    Reg#(Bit#(64)) outputCnt <- mkReg(0);
@@ -322,6 +213,8 @@ module mkTb_ColXForm();
    endrule
       
    Reg#(Bit#(64)) rowVecIdCnt <- mkReg(0);
+   
+   Reg#(Bit#(4)) colCnt <- mkReg(0);
 
    rule doOutput if (state == Run);
       let tester = testEng.outPipe.first;
@@ -337,14 +230,6 @@ module mkTb_ColXForm();
       
       if ( colCnt > 1 ) begin
          inStreams[colCnt-2].rowData.enq(tester);
-         // if ( beatCnt + 1 == truncate(beatMax[colCnt]) ) begin
-         //    inStreams[colCnt-2].rowMask.enq(RowMask{rowVecId:rowVecIdCnt,
-         //                                            hasData:True,
-         //                                            isLast: rowVecIdCnt + 1 == toNumRowVecs(totalRows),
-         //                                            mask: maxBound});
-         //    if ( colCnt == 5) rowVecIdCnt <= rowVecIdCnt + 1;
-         // end
-
       end
       
       if ( outputCnt + 1 == (toNumRowVecs(totalRows) * fold(add2, beatMax) )) begin
@@ -394,5 +279,4 @@ module mkTb_ColXForm();
  
    endrule
    
-endmodule
-                 
+endmodule       

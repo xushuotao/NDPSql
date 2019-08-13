@@ -23,7 +23,7 @@ typedef Bit#(TLog#(NumPageBufs)) BufIdT;
 
 interface ProgramColProcReader;
    // step 1
-   method Action setRowNums(Bit#(64) numRows, ColNumT numCols);
+   method Action setDims(Bit#(64) numRows, ColNumT numCols);
    // step 2
    //TODO:: For now we assume that the col file sits on continuous pages;
    interface PipeIn#(Tuple4#(ColIdT, ColType, Bit#(64), Bool)) colInfoPort;
@@ -38,7 +38,7 @@ interface ColProcReader;
    interface ProgramColProcReader programIfc;
 endinterface
 
-typedef enum{SetRow, SetCol, Normalize, Ready} State deriving (FShow, Bits, Eq);
+typedef enum{SetDims, SetCol, Normalize, Ready} State deriving (FShow, Bits, Eq);
 
 (* synthesize *)
 module mkColReadEng_synth(ColReadEng#(BufIdT));
@@ -56,7 +56,7 @@ endmodule
 (* synthesize *)
 module mkColProcReader(ColProcReader);
    
-   Reg#(State) state <- mkReg(SetRow);
+   Reg#(State) state <- mkReg(SetDims);
    
    Reg#(Bit#(64)) rowCnt <- mkReg(0);
    Reg#(Bit#(64)) rowsPerIter <- mkRegU;
@@ -69,7 +69,7 @@ module mkColProcReader(ColProcReader);
    Reg#(ColNumT) colNum <- mkRegU;
    
    Reg#(Bit#(4)) minLgColBeatsPerIter <- mkReg(maxBound);
-   Vector#(MaxNumCol, Reg#(Bit#(6))) colBeatsPerIter_V <- replicateM(mkRegU);
+   Vector#(MaxNumCol, Reg#(Bit#(5))) colBeatsPerIter_V <- replicateM(mkRegU);
 
    Vector#(MaxNumCol, ColReadEng#(BufIdT)) colReadEng_V <- replicateM(mkColReadEng_synth);
    
@@ -114,7 +114,7 @@ module mkColProcReader(ColProcReader);
    
    FIFO#(BufIdT) outstandingReadQ <- mkSizedFIFO(valueOf(NumPageBufs));
    
-   Reg#(Bit#(6)) max_colBeatsPerIter <- mkRegU;
+   Reg#(Bit#(5)) max_colBeatsPerIter <- mkRegU;
    
    Vector#(MaxNumCol, Reg#(Bool)) colDones <- replicateM(mkRegU);
    
@@ -150,7 +150,7 @@ module mkColProcReader(ColProcReader);
             pageBatchQ.deq;
             
             if ( rowCnt + rowsPerIter >= rowNum ) begin
-               state <= SetRow;
+               state <= SetDims;
                rowCnt <= 0;
                max_colBeatsPerIter <= 0;
                minLgColBeatsPerIter <= maxBound;
@@ -192,9 +192,9 @@ module mkColProcReader(ColProcReader);
    endrule
    
    Reg#(ColIdT) colId <- mkReg(0);
-   Vector#(MaxNumCol, Reg#(Bit#(6))) beatsPerRowVec_V <- replicateM(mkReg(0));
+   Vector#(MaxNumCol, Reg#(Bit#(5))) beatsPerRowVec_V <- replicateM(mkReg(0));
    
-   Reg#(Bit#(6)) beatCnt <- mkReg(0);
+   Reg#(Bit#(5)) beatCnt <- mkReg(0);
    
    // maxbeat = 256
    Vector#(MaxNumCol, Reg#(Bit#(8))) colBeatCnts <- replicateM(mkReg(0));
@@ -268,7 +268,7 @@ module mkColProcReader(ColProcReader);
    endrule
    
    rule doNormalize ( state == Normalize );
-      function Bit#(6) normalize(Bit#(6) colBeatsPerIter);
+      function Bit#(5) normalize(Bit#(5) colBeatsPerIter);
          return colBeatsPerIter >> minLgColBeatsPerIter;
       endfunction
 
@@ -289,8 +289,8 @@ module mkColProcReader(ColProcReader);
    interface Client flashRdClient = toClient(flashReqQ, flashRespQ);
 
    interface ProgramColProcReader programIfc;
-      method Action setRowNums(Bit#(64) numRows, ColNumT numCols) if (state == SetRow);
-         $display("%m setRowNums:: numRows = %d, numCols = %d", numRows, numCols);
+      method Action setDims(Bit#(64) numRows, ColNumT numCols) if (state == SetDims);
+         $display("%m setDims:: numRows = %d, numCols = %d", numRows, numCols);
          rowNum <= numRows;
          colNum <= numCols;
          state <= SetCol;

@@ -148,7 +148,7 @@ module mkColXFormPE(ColXFormPE);
          end
       end
       
-      Bit#(6) numBeats = toBeatsPerRowVec(inst.colType);
+      Bit#(5) numBeats = toBeatsPerRowVec(inst.colType);
       Bool last = False;
       if ( zeroExtend(beatCnt) + 1 == numBeats ) begin
          beatCnt <= 0;
