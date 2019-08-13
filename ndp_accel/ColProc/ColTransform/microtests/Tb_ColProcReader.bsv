@@ -32,6 +32,7 @@ import ColXForm::*;
 import GetPut::*;
 import Pipe::*;
 
+import ColProcProgrammer::*;
 
 // flash releted
 import ControllerTypes::*;
@@ -58,22 +59,22 @@ import Assert::*;
 ////////////////////////////////////////////////////////////////////////////////
 typedef 6 NumCols; 
 Integer numCols = valueOf(NumCols);
-Tuple2#(ColType, Bit#(64)) colInfo_returnflag  = tuple2(Byte, getBaseAddr("l_returnflag"));
-Tuple2#(ColType, Bit#(64)) colInfo_linestatus  = tuple2(Byte, getBaseAddr("l_linestatus"));
-Tuple2#(ColType, Bit#(64)) colInfo_quantity    = tuple2(Int, getBaseAddr("l_quantity"));
-Tuple2#(ColType, Bit#(64)) colInfo_extendprice = tuple2(Long, getBaseAddr("l_extendedprice"));
-Tuple2#(ColType, Bit#(64)) colInfo_discount    = tuple2(Long, getBaseAddr("l_discount"));
-Tuple2#(ColType, Bit#(64)) colInfo_tax         = tuple2(Long, getBaseAddr("l_tax"));
-Vector#(NumCols, Tuple2#(ColType, Bit#(64))) colInfos = vec(colInfo_returnflag  ,
-                                                            colInfo_linestatus  ,
-                                                            colInfo_quantity    ,
-                                                            colInfo_extendprice ,
-                                                            colInfo_discount    ,
-                                                            colInfo_tax         );
+InColParamT colInfo_returnflag  = InColParamT{colType:Byte, baseAddr:getBaseAddr("l_returnflag")>>13};
+InColParamT colInfo_linestatus  = InColParamT{colType:Byte, baseAddr:getBaseAddr("l_linestatus")>>13};
+InColParamT colInfo_quantity    = InColParamT{colType:Int,  baseAddr:getBaseAddr("l_quantity")>>13};
+InColParamT colInfo_extendprice = InColParamT{colType:Long, baseAddr:getBaseAddr("l_extendedprice")>>13};
+InColParamT colInfo_discount    = InColParamT{colType:Long, baseAddr:getBaseAddr("l_discount")>>13};
+InColParamT colInfo_tax         = InColParamT{colType:Long, baseAddr:getBaseAddr("l_tax")>>13};
+Vector#(NumCols, InColParamT) colInfos = vec(colInfo_returnflag  ,
+                                             colInfo_linestatus  ,
+                                             colInfo_quantity    ,
+                                             colInfo_extendprice ,
+                                             colInfo_discount    ,
+                                             colInfo_tax         );
+
 ////////////////////////////////////////////////////////////////////////////////
 /// End of ColProcReader Parameter Section
 ////////////////////////////////////////////////////////////////////////////////
-
 
 typedef enum{Prog_Reader, Run, CheckResult} State deriving (Bits, Eq, FShow);
 (* synthesize *)
@@ -101,28 +102,9 @@ module mkTb_ColProcReader();
 ////////////////////////////////////////////////////////////////////////////////
 /// Test Section
 ////////////////////////////////////////////////////////////////////////////////
-   Reg#(State) state <- mkReg(Prog_Reader);
+   Reg#(State) state <- mkReg(Run);
    
-   Reg#(Bool) rowSet <- mkReg(False);
-   rule doProgramReader_0 if (state == Prog_Reader && !rowSet);
-      colProcReader.programIfc.setRowNums(totalRows, fromInteger(numCols));
-      rowSet <= True;
-   endrule
-   
-   Reg#(Bit#(4)) colCnt <- mkReg(0);
-   rule doProgramReader_1 if (state == Prog_Reader && rowSet);
-      dynamicAssert(tpl_2(colInfos[colCnt])%8192 == 0, "baseAddr should be page aligned!");
-      if ( colCnt + 1 == fromInteger(numCols)) begin
-         colCnt <= 0;
-         state <= Run;
-         rowSet <= False;
-         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, True));
-      end
-      else begin
-         colCnt <= colCnt + 1;
-         colProcReader.programIfc.colInfoPort.enq(tuple4(truncate(colCnt), tpl_1(colInfos[colCnt]), tpl_2(colInfos[colCnt])>>13, False));
-      end
-   endrule
+   let programmer <- mkInColAutoProgram(totalRows, colInfos, colProcReader.programIfc);
    
    Reg#(Bit#(64)) cycleCnt <- mkReg(0);
    rule incrCnt if (state == Run);
