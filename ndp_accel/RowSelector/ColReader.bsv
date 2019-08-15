@@ -279,7 +279,7 @@ module mkColReader(ColReader);
          if ( pageBeatCnt < fromInteger(8192/32) ) begin // useful 8k data
             // this part is needed for page misAlignment e.g. 3 pages of 4-byte col only generate 1 page of 1-byte col
             Bool validData = !isLastPage || (pageBeatCnt <= zeroExtend(lastBeat));
-            $display("(%m) pageCnt_resp = %d, endPageId = %d, pageBeatCnt = %d, lastBeat = %h", pageCnt_resp, endPageId, pageBeatCnt, lastBeat);
+            $display("(%m) pageCnt_resp = %d, endPageId = %d, pageBeatCnt = %d, lastBeat = %d", pageCnt_resp, endPageId, pageBeatCnt, lastBeat);
             // on the last beat per rowVec, rowVec mask read request is issued or mask is generated
             if ( ((pageBeatCnt+1) & zeroExtend(beatsPerRowVec-1)) == 0 ) begin
 
@@ -356,13 +356,13 @@ module mkColReader(ColReader);
          state <= SetParam;
       endmethod
       method Action setParameters(ParamT param) if (state == SetParam);
-         $display("(%m) setParameters ", fshow(param));
          Bit#(64) numRows = truncate(param[0]);
          Bit#(64) baseAddr = truncate(param[1]);
          Bit#(1) maskRdPort = param[2][0];
          Bool allRows = unpack(param[2][1]);
          Bool forward = unpack(param[2][2]);
    
+         $display("(%m) numRows = %d, baseAddr = %d, maskRdPort = %d, allRows = %d, forward = %d", numRows, baseAddr, maskRdPort, allRows, forward);   
          allRowVecsFinished <= False;   
    
          rowVecCnt <= 0;

@@ -52,7 +52,7 @@ import FlashSwitch::*;
 import AlgFuncs::*;
 
 import RowSelector::*;
-import ProgramRowSelector::*;
+import RowSelectorProgrammer::*;
 
 import "BDPI" function Bit#(32) log2_c(Bit#(32) x);
 import "BDPI" function Action rand_seed();
@@ -171,10 +171,10 @@ module mkTb_RowSelector(Empty);
                                                                             isSigned:?, 
                                                                             andNotOr:? });
    
-   ProgramRowSelectorClient#(ColCount) programmer <- mkRowSelectAutoProgram(programInfo);
+   let programmer <- mkRowSelectAutoProgram(programInfo, ndp.programIfc);
 
-   mkConnection(programmer.setColBytesPort, ndp.programIfc.setColBytesPort);
-   mkConnection(programmer.setParamPort, ndp.programIfc.setParamPort);
+   // mkConnection(programmer.setColBytesPort, ndp.programIfc.setColBytesPort);
+   // mkConnection(programmer.setParamPort, ndp.programIfc.setParamPort);
                  
    
    Reg#(Bit#(64)) rowAggr <- mkReg(0);

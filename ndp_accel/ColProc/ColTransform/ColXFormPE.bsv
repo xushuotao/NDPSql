@@ -88,7 +88,9 @@ module mkColXFormPE(ColXFormPE);
    
    Reg#(Bit#(5)) beatCnt <- mkReg(0);
    
-   let monitor <- mkScheduleMonitor(stdout, vec("fetch_decode", "execute", "writeback"));
+   ScheduleMonitor monitor = ?;
+   if ( debug) 
+      monitor <- mkScheduleMonitor(stdout, vec("fetch_decode", "execute", "writeback"));
    
    rule doFetchDecode;
       let inst = iMem.sub(pc);
@@ -170,10 +172,10 @@ module mkColXFormPE(ColXFormPE);
       if ( first ) begin
          rowVecId = rowVecInQ.first;
          rowVecInQ.deq;
-         monitor.record("fetch_decode", "1");
+         if (debug) monitor.record("fetch_decode", "1");
       end
       else begin
-         monitor.record("fetch_decode","F");   
+         if (debug) monitor.record("fetch_decode","F");   
       end
       
 
@@ -195,7 +197,7 @@ module mkColXFormPE(ColXFormPE);
                   first: eInst.first,
                   rowVecId: eInst.rowVecId});
       
-      monitor.record("execute", "E");
+      if (debug) monitor.record("execute", "E");
       if ( eInst.iType == Alu ) begin
          let vec2 <- toGet(operandQ).get;
          alu.start(vec2, eInst.opVector, eInst.aluOp, unpack(pack(eInst.colType)), eInst.isSigned);
@@ -227,7 +229,7 @@ module mkColXFormPE(ColXFormPE);
       
       if (d.first) rowVecOutQ.enq(d.rowVecId);
       
-      monitor.record("writeback","W");
+      if (debug) monitor.record("writeback","W");
       if (debug) $display("doLowWrite");
    endrule
    
@@ -236,7 +238,7 @@ module mkColXFormPE(ColXFormPE);
       doLower <= True;
       outQ.enq(upBeat);
       if (debug) $display("doUpWrite");
-      monitor.record("writeback","U");
+      if (debug) monitor.record("writeback","U");
    endrule
       
    interface rowVecIn = toPipeIn(rowVecInQ);

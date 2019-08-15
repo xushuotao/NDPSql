@@ -78,7 +78,7 @@ module mkSelect(Select#(colBytes)) provisos(
          Vector#(colBytes, rowMaskT) maskV = unpack(maskData.mask);
          maskSel <= maskSel + 1;
 
-         $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
+         $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b, isLast = ", valueOf(colBytes), maskSel, maskData.mask, fshow(isLast));
          if ( maskSel == maxBound ) rowMaskQ.deq;
          beatMaskQ.enq(tuple4(rowVecId, isLast, True, maskV[maskSel]));
       end

@@ -59,6 +59,16 @@ function ColType toColType(Bit#(5) colBytes);
           endcase;
 endfunction
 
+function Bit#(5) toColBytes(ColType colType);
+   return case (colType)
+             Byte:  1; 
+             Short: 2; 
+             Int:   4; 
+             Long:  8; 
+             BigInt:16; 
+          endcase;
+endfunction
+
 function Bit#(3) toLgColBytes(Bit#(5) colBytes);
    return case (colBytes)
              1:  0;
@@ -140,7 +150,7 @@ function Bit#(8) lastPageBeats(Bit#(64) numRows, ColType colType);
 endfunction
 
 
-function Bit#(6) toBeatsPerRowVec(ColType colType);
+function Bit#(5) toBeatsPerRowVec(ColType colType);
    return case (colType)
              Byte  : 1;
              Short : 2;
@@ -167,10 +177,25 @@ interface NDPStreamIn;
    interface PipeIn#(RowMask) rowMask;
 endinterface
 
+function NDPStreamIn zipNDPStreamIn(PipeIn#(RowMask) ifc0, PipeIn#(RowData) ifc1);
+   return (interface NDPStreamIn;
+              interface rowMask = ifc0;
+              interface rowData = ifc1;
+           endinterface);
+endfunction
+
+
 interface NDPStreamOut;
    interface PipeOut#(RowData) rowData;
    interface PipeOut#(RowMask) rowMask;
 endinterface
+
+function NDPStreamOut zipNDPStreamOut(PipeOut#(RowMask) ifc0, PipeOut#(RowData) ifc1);
+   return (interface NDPStreamOut;
+              interface rowMask = ifc0;
+              interface rowData = ifc1;
+           endinterface);
+endfunction
 
 
 // typedef Vector#(4, Bit#(128)) ParamT;
@@ -219,6 +244,8 @@ interface NDPAccel;
    interface NDPStreamOut streamOut;
    interface NDPConfigure configure;
 endinterface
+
+function NDPStreamIn takeStreamIn(NDPAccel ifc) = ifc.streamIn;
 
 
 function NDPStreamIn toNDPStreamIn(FIFOF#(RowData) dataQ, FIFOF#(RowMask) maskQ);

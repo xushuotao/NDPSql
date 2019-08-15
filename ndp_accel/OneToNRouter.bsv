@@ -8,6 +8,7 @@ interface OneToNRouter#(numeric type n, type d);
    interface Vector#(n, PipeOut#(d)) outPorts;
 endinterface
 
+function Vector#(n, PipeOut#(d)) takeOutPorts(OneToNRouter#(n,d) ifc) = ifc.outPorts;
 
 module mkOneToNRouterPipelined(OneToNRouter#(n,d)) provisos(
    Bits#(d, a__),

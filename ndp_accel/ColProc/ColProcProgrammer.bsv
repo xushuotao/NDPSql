@@ -7,6 +7,7 @@ import BuildVector::*;
 import ColProcReader::*;
 import ColXForm::*;
 import ColProc::*;
+import Connectable::*;
 
 
 typedef struct{
@@ -33,8 +34,8 @@ interface ColXFormProgrammer#(numeric type engs);
    interface PipeIn#( Bit#(32)) programPort;
 endinterface
 
-interface ProgramOutCol;
-   method Action setColNums(ColNumT numCols);
+interface OutColProgrammer;
+   method Action setColNum(ColNumT numCols);
    interface PipeIn#(Tuple2#(ColIdT, OutColParamT)) programPort;
    // interface ProgramOutColClient programClient;
 endinterface
@@ -155,8 +156,8 @@ module mkColXFormAutoProgram#(Vector#(engs, Bit#(4)) progLength,
 endmodule
 
 
-/*
-module mkOutColProgrammer#(ProgramColOutputCol programIfc)(OutColProgrammer);
+
+module mkOutColProgrammer#(ProgramOutputCol programIfc)(OutColProgrammer);
    FIFOF#(Tuple2#(ColIdT, OutColParamT)) programQ <- mkFIFOF;
    
    Reg#(Bool) doSetDims <- mkReg(True);
@@ -164,7 +165,11 @@ module mkOutColProgrammer#(ProgramColOutputCol programIfc)(OutColProgrammer);
    Reg#(ColNumT) colCnt <- mkReg(0);
    Reg#(ColNumT) colNum <- mkRegU;
    
-   rule programCols if (!doSetDims);
+   FIFOF#(Tuple3#(ColIdT, ParamT, Bool)) ndpParamQ <- mkSizedFIFOF(valueOf(MaxNumCol));
+   
+   mkConnection(toPipeOut(ndpParamQ), programIfc.colNDPParamPort);
+   
+   rule programSetColInfo if (!doSetDims);
       let { colId, param } = programQ.first;
       programQ.deq;
       if ( colCnt + 1 == colNum) begin
@@ -174,15 +179,32 @@ module mkOutColProgrammer#(ProgramColOutputCol programIfc)(OutColProgrammer);
       else begin
          colCnt <= colCnt + 1;
       end
-      programIfc.colInfoPort.enq(tuple4(colId, param.colType, param.ndpDest, colCnt + 1 == colNum)));
-      programIfc.colNDPParamPort.enq(tuple3(colId, vec({?,pack(param.isSigned)},?,?,?), colCnt + 1 == colNum));
+      $display("(%m) outColProgrammer programCols = ", fshow(programQ.first));
+      programIfc.colInfoPort.enq(tuple4(colId, param.colType, param.dest, colCnt + 1 == colNum));
+      ndpParamQ.enq(tuple3(colId, vec({?,pack(param.isSigned)},?,?,?), colCnt + 1 == colNum));
    endrule
   
-   method Action setColNums(ColNumT numCols) if ( doSetDims);
+   method Action setColNum(ColNumT numCols) if ( doSetDims);
       colNum <= numCols;
       doSetDims <= False;
+      programIfc.setColNum(numCols);
    endmethod
+   
    
    interface PipeIn programPort = toPipeIn(programQ);   
 endmodule
-*/
+
+module mkOutColAutoProgram#(Vector#(numCols, OutColParamT) colInfo, ProgramOutputCol programIfc)(Empty);
+   let programmer <- mkOutColProgrammer(programIfc);
+   Reg#(Bool) doDim <- mkReg(True);
+   rule doColNums if (doDim);
+      programmer.setColNum(fromInteger(valueOf(numCols)));
+      doDim <= False;
+   endrule
+   Reg#(ColNumT) colCnt <- mkReg(0);
+   rule doProgram if ( colCnt < fromInteger(valueOf(numCols)) );
+      programmer.programPort.enq(tuple2(truncate(colCnt), colInfo[colCnt]));
+      colCnt <= colCnt + 1;
+   endrule
+endmodule
+

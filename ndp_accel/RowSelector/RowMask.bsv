@@ -122,7 +122,7 @@ module mkRowMaskBuff(RowMaskBuff#(nSlaves));
       // endmethod
       method Action put(Bit#(9) req);
          freeRows.incr(zeroExtend(unpack(req)));
-         $display("freeRows = %d", freeRows + zeroExtend(unpack(req)));
+         $display("freeRows = %d, maxRowVecs = %d", freeRows + zeroExtend(unpack(req)), fromInteger(valueOf(MaxNumRowVectors)));
          if ( freeRows + zeroExtend(unpack(req)) > fromInteger(valueOf(MaxNumRowVectors)) )
             $display("Warning:: You are releasing lock which has not been acquired");
       endmethod

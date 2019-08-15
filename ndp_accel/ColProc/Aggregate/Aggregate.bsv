@@ -8,6 +8,7 @@ import GetPut::*;
 import NDPCommon::*;
 import Pipe::*;
 import Vector::*;
+import Assert::*;
 
 
 typedef struct {
@@ -105,11 +106,11 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
    
    Reg#(AggrResult#(colBytes)) aggrReg <- mkRegU;
    
-   UInt#(colWidth) minU = minBound;
-   UInt#(colWidth) maxU = maxBound;
+   Int#(colWidth) minInt = minBound;
+   Int#(colWidth) maxInt = maxBound;
 
-   AggrResult#(colBytes) initValue = AggrResult{min: isSigned? maxBound : pack(maxU),
-                                                max: isSigned? minBound : pack(minU),
+   AggrResult#(colBytes) initValue = AggrResult{min: isSigned? pack(maxInt) : maxBound,
+                                                max: isSigned? pack(minInt) : minBound,
                                                 sum: 0,
                                                 cnt: 0};
    
@@ -122,7 +123,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
          Vector#(colBytes, rowMaskT) maskV = unpack(maskData.mask);
          maskSel <= maskSel + 1;
 
-         $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
+         $display("(%m) Aggregate (%d) rowMask2beatMask maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
          if ( maskSel == maxBound ) rowMaskQ.deq;
          beatMaskQ.enq(tuple4(rowVecId, isLast&&(maskSel==maxBound), True, maskV[maskSel]));
       end
@@ -134,9 +135,12 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
 
    rule doReduce;
       let {rowVecId, last, hasData, mask} <- toGet(beatMaskQ).get();
-      
+      $display("(%m) Aggregate (%d) doReduce, rewVecId = %d, beatMaskQ.first = ", valueOf(colBytes), rowVecId, fshow(beatMaskQ.first));
+      if ( last ) $display("(%m) warning:: Aggregate received last");
+      // dynamicAssert(last, "Aggregate received last");
       if  ( hasData ) begin
          let v <- toGet(rowDataQ).get();
+         $display("(%m) Aggregate (%d) doReduce, rowData = ", valueOf(colBytes), fshow(rowDataQ.first));
          Vector#(rowsPerBeat, Bit#(colWidth)) data = unpack(v);
          
          let {dummy0, min} = fold(isSigned? minSigned2: minUnSigned2,

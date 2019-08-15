@@ -46,7 +46,7 @@ module mkPredicateResult(PredicateResult);
       else begin
          lastRowVecId <= d.rowVecId;
       end
-      
+      $display("(%m) doRowMask = ", fshow(d));
       maskWriteQ.enq(RowMaskWrite{isMerge:False,
                                   src:0,
                                   id:truncate(d.rowVecId),
