@@ -10,7 +10,7 @@ import Pipe::*;
 import Vector::*;
 import Assert::*;
 
-
+Bool debug = False;
 typedef struct {
    Bit#(129) sum;
    Bit#(64) cnt;
@@ -123,7 +123,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
          Vector#(colBytes, rowMaskT) maskV = unpack(maskData.mask);
          maskSel <= maskSel + 1;
 
-         $display("(%m) Aggregate (%d) rowMask2beatMask maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
+         if (debug) $display("(%m) Aggregate (%d) rowMask2beatMask maskSel = %d, maskV = %b", valueOf(colBytes), maskSel, maskData.mask);
          if ( maskSel == maxBound ) rowMaskQ.deq;
          beatMaskQ.enq(tuple4(rowVecId, isLast&&(maskSel==maxBound), True, maskV[maskSel]));
       end
@@ -135,12 +135,12 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
 
    rule doReduce;
       let {rowVecId, last, hasData, mask} <- toGet(beatMaskQ).get();
-      $display("(%m) Aggregate (%d) doReduce, rewVecId = %d, beatMaskQ.first = ", valueOf(colBytes), rowVecId, fshow(beatMaskQ.first));
+      if (debug) $display("(%m) Aggregate (%d) doReduce, rewVecId = %d, beatMaskQ.first = ", valueOf(colBytes), rowVecId, fshow(beatMaskQ.first));
       if ( last ) $display("(%m) warning:: Aggregate received last");
       // dynamicAssert(last, "Aggregate received last");
       if  ( hasData ) begin
          let v <- toGet(rowDataQ).get();
-         $display("(%m) Aggregate (%d) doReduce, rowData = ", valueOf(colBytes), fshow(rowDataQ.first));
+         if (debug) $display("(%m) Aggregate (%d) doReduce, rowData = ", valueOf(colBytes), fshow(rowDataQ.first));
          Vector#(rowsPerBeat, Bit#(colWidth)) data = unpack(v);
          
          let {dummy0, min} = fold(isSigned? minSigned2: minUnSigned2,

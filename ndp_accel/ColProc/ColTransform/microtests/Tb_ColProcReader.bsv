@@ -48,6 +48,8 @@ import FlashSwitch::*;
 import FlashReadMultiplex::*;
 import EmulatedFlash::*;
 
+import DualFlashPageBuffer::*;
+
 
 import Connectable::*;
 import BDPIHelper::*;
@@ -89,14 +91,19 @@ module mkTb_ColProcReader();
    mkConnection(flashSwitches[0].flashCtrlClient, flashCtrls[0].user);
    mkConnection(flashSwitches[1].flashCtrlClient, flashCtrls[1].user);
    
-   FlashReadMultiplex#(1) flashMux <- mkFlashReadMultiplex;
+   FlashReadMultiplexOO#(1) flashMux <- mkFlashReadMultiplexOO;
    
    zipWithM_(mkConnection, flashMux.flashClient, vec(flashSwitches[0].users[0], flashSwitches[1].users[0]));
    
 
+   DualFlashPageBuffer#(1, PageBufSz) pageBuf <- mkDualFlashPageBuffer;
+
+   mkConnection(pageBuf.flashRdClient, flashMux.flashReadServers[0]);
+   
    ColProcReader colProcReader <- mkColProcReader;
    
-   mkConnection(colProcReader.flashRdClient, flashMux.flashReadServers[0]);
+   mkConnection(colProcReader.flashBufClient, pageBuf.pageBufferServers[0]);
+   
    
                     
 ////////////////////////////////////////////////////////////////////////////////
