@@ -8,13 +8,14 @@ import GetPut::*;
 import FIFO::*;
 import SpecialFIFOs::*;
 import Assert::*;
+import NDPCommon::*;
 
 Bool debug = True;
 
 typedef 8192 MaxRowsPerPage;
 
 typedef 32 RowVectorSz;
-typedef TMul#(128, MaxRowsPerPage) MaxNumRows;
+typedef TMul#(PageBufSz, MaxRowsPerPage) MaxNumRows;
 typedef TDiv#(MaxNumRows, RowVectorSz) MaxNumRowVectors;
 
 
