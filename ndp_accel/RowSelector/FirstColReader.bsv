@@ -10,6 +10,9 @@ import FIFO::*;
 import ControllerTypes::*;
 import Vector::*;
 import ColReader::*;
+import DualFlashPageBuffer::*;
+
+Bool debug = True;
 
 typedef struct{
    Bit#(64) firstRow;
@@ -19,8 +22,9 @@ typedef struct{
 
 interface FirstColReader;
    // interactions with flash and rowMasks
-   interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
-   
+   // interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   interface PageBufferClient#(PageBufSz) pageBufClient;
+      
    interface Client#(Bit#(9), void) reserveRowVecs;
    
    interface PipeOut#(RowVecReq) rowVecReqOut;
@@ -62,7 +66,7 @@ module mkFirstColReader(FirstColReader);
       
       let rowVecsToReserve = min(zeroExtend(rowVecsPerPage), totalRowVecs - rowVecCnt);
       
-      $display("(%m) rowVecsPerPage = %d, totalRowVecs = %d, rowVecCnt = %d, last = %d", rowVecsPerPage, totalRowVecs, rowVecCnt, last);
+      if (debug) $display("(%m) rowVecsPerPage = %d, totalRowVecs = %d, rowVecCnt = %d, last = %d", rowVecsPerPage, totalRowVecs, rowVecCnt, last);
       
       rowVecReqQ.enq(RowVecReq{numRowVecs: rowVecsToReserve,
                                maskZero: False,
@@ -77,7 +81,8 @@ module mkFirstColReader(FirstColReader);
       colReader.rowVecReqIn.enq(v);
    endrule
    
-   interface Client flashRdClient = colReader.flashRdClient;
+   // interface Client flashRdClient = colReader.flashRdClient;
+   interface pageBufClient = colReader.pageBufClient;
    interface Client reserveRowVecs = toClient(reserveRowVecQ, reserveRespQ);
    interface PipeOut rowVecReqOut = colReader.rowVecReqOut;
    interface NDPStreamOut streamOut = colReader.streamOut;

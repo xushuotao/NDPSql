@@ -5,7 +5,7 @@ import FIFOF::*;
 
 typedef enum {Byte, Short, Int, Long, BigInt} ColType deriving (Bits, FShow, Eq);
 
-typedef 29 PageBufSz;
+typedef 3 PageBufSz;
 
 typedef Bit#(256) RowData;
 // typedef struct{

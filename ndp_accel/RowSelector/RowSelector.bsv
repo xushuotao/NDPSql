@@ -11,6 +11,7 @@ import RowMask::*;
 import GetPut::*;
 import PredicateEval::*;
 import OneToNRouter::*;
+import DualFlashPageBuffer::*;
 
 
 interface ProgramRowSelector#(numeric type num);
@@ -20,7 +21,8 @@ endinterface
 
 
 interface RowSelector#(numeric type num);
-   interface Vector#(num, Client#(DualFlashAddr, Bit#(256))) flashRdClients;
+   // interface Vector#(num, Client#(DualFlashAddr, Bit#(256))) flashRdClients;
+   interface Vector#(num, PageBufferClient#(PageBufSz)) pageBufferClients;
    interface Client#(Bit#(9), void) reserveRowVecs;
    interface Vector#(num, Client#(RowMaskRead, RowVectorMask)) rowMaskReads;
    interface Vector#(num, Get#(RowMaskWrite)) rowMaskWrites;
@@ -42,7 +44,8 @@ module mkRowSelector(RowSelector#(n)) provisos (
    Vector#(TSub#(n,1), PredicateEval) colFilters <- replicateM(mkPredicateEval);
    
    // function to assemble flashRdClients;
-   function Client#(DualFlashAddr, Bit#(256)) getFlashRdClient(PredicateEval ifc) = ifc.flashRdClient;
+   // function Client#(DualFlashAddr, Bit#(256)) getFlashRdClient(PredicateEval ifc) = ifc.flashRdClient;
+   function PageBufferClient#(PageBufSz) getPageBufferClient(PredicateEval ifc) = ifc.pageBufClient;
 
    // function to assemble rowMaskReadClients;
    Client#(RowMaskRead, RowVectorMask) emptyRowMaskRead <- mkEmptyClient;
@@ -72,7 +75,8 @@ module mkRowSelector(RowSelector#(n)) provisos (
    
    zipWithM_(mkConnection,take(outPipes), inPipes);
    
-   interface flashRdClients = cons(firstColFilter.flashRdClient, map(getFlashRdClient, colFilters));
+   // interface flashRdClients = cons(firstColFilter.flashRdClient, map(getFlashRdClient, colFilters));
+   interface pageBufferClients = cons(firstColFilter.pageBufClient, map(getPageBufferClient, colFilters));
    interface reserveRowVecs = firstColFilter.reserveRowVecs;
    interface rowMaskReads = cons(emptyRowMaskRead, map(getRowMaskRead, colFilters));
    interface rowMaskWrites = cons(firstColFilter.rowMaskWrite, map(getRowMaskWrite, colFilters));

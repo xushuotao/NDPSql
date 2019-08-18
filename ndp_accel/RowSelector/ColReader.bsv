@@ -11,11 +11,16 @@ import ControllerTypes::*;
 import Vector::*;
 import Assert::*;
 
+import FlashPageReader::*;
+import DualFlashPageBuffer::*;
+
 // typedef struct{
 //    Bit#(64) pageId;
 //    // Bit#(64) baseRowVecId;
 //    // Bool isLast;
 //    } FlashRespMetaT deriving (Bits, Eq, FShow);
+
+Bool debug = True;
 
 typedef struct{
    Bool isNop;
@@ -29,7 +34,9 @@ typedef enum {Idle, SetParam, Forward, AllRows, PartialRows} ColReaderState deri
 
 interface ColReader;
    // interactions with flash and rowMasks
-   interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   // interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   interface PageBufferClient#(PageBufSz) pageBufClient;
+   
    interface Client#(RowMaskRead, RowVectorMask) maskRdClient;   
       
    interface PipeIn#(RowVecReq) rowVecReqIn;
@@ -64,7 +71,7 @@ module mkColReader(ColReader);
    Reg#(Bit#(64)) pageReqCnt <- mkReg(0);
    
    // FIFO#(FlashRespMetaT) flashRespMetaQ <- mkSizedFIFO(128); // this size could be over-provisioned
-   FIFO#(Bool) flashRespMetaQ <- mkSizedFIFO(128); // this size could be over-provisioned
+   FIFO#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFO(valueOf(PageBufSz)); // this size could be over-provisioned
    
    // 1 2 4 8 16
    // 0 1 2 3 4
@@ -99,6 +106,7 @@ module mkColReader(ColReader);
 ////////////////////////////////////////////////////////////////////////////////
    rule doBypass if ( state == Forward );
       let req <- toGet(rowVecReqQ).get();
+      if (debug) $display("%m, doBypass forwarding, reqCnt = %d, numRowVecs = %d, totalRowVecs = %d, req = ", rowVecCnt, req.numRowVecs, totalRowVecs, fshow(req));
       if (req.last ) begin
          dynamicAssert(rowVecCnt + req.numRowVecs == totalRowVecs, "(%m) (Forward) totalRows should be the same");
          state <= Idle;
@@ -107,7 +115,7 @@ module mkColReader(ColReader);
       else begin
          rowVecCnt <= rowVecCnt + req.numRowVecs;
       end
-      $display("%m, doBypass forwarding, req = ", fshow(req));
+
       bypassRowVecReqQ.enq(req);
    endrule
 
@@ -132,8 +140,10 @@ module mkColReader(ColReader);
    
    Reg#(Bool) needRead <- mkReg(False);
       
-   FIFO#(DualFlashAddr) addrQ <- mkFIFO;
-   FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
+   // FIFO#(DualFlashAddr) addrQ <- mkFIFO;
+   // FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
+   
+   let flashReader <- mkFlashPageReaderIO;
 
    
    rule doAllRows_flashReq if ( state == AllRows || state == PartialRows);
@@ -173,9 +183,9 @@ module mkColReader(ColReader);
 
       
       
-      Bool needRead_next = needRead || (state == AllRows || req.maskZero);
-      $display("(%m):gen flash req rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
-      $display("(%m): currPageId = %d, nextPageId = %d, needRead = %d, needRead_next = %d, isLast = %d", currPageId, nextPageId, needRead, needRead_next, isLast);
+      Bool needRead_next = needRead || (state == AllRows || !req.maskZero);
+      if (debug) $display("(%m):gen flash req rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
+      if (debug) $display("(%m): currPageId = %d, nextPageId = %d, needRead = %d, needRead_next = %d, isLast = %d", currPageId, nextPageId, needRead, needRead_next, isLast);
       
 
       // on last RowVec of a page;
@@ -185,7 +195,7 @@ module mkColReader(ColReader);
             pageReqQ.enq(currPageId);
             // addrQ.enq(toDualFlashAddr(currPageId+basePageReg));
          end
-         flashRespMetaQ.enq(needRead_next);
+         flashRespMetaQ.enq(tuple2(rowVec_reqCnt, needRead_next));
          
          needRead <= False;
       end
@@ -217,15 +227,17 @@ module mkColReader(ColReader);
    Reg#(Bit#(64)) totalPageIssued <- mkReg(0);
    rule issuePageReq;// if ( pageReqQ.first() < rowVecToPageId(lastRowVecId) || allRowVecsFinished);
       let pageId <- toGet(pageReqQ).get;
-      $display("(%m): issuing page Read Request for basePageAddr = %d, pageId = %d, lastRowVecId = %d, totalPageIssued = %d", basePage, pageId, lastRowVecId, totalPageIssued);
-      addrQ.enq(toDualFlashAddr(pageId+basePage));
+      if (debug) $display("(%m): issuing page Read Request for basePageAddr = %d, pageId = %d, lastRowVecId = %d, totalPageIssued = %d", basePage, pageId, lastRowVecId, totalPageIssued);
+      // addrQ.enq(toDualFlashAddr(pageId+basePage));
+      flashReader.readServer.request.put(toDualFlashAddr(pageId+basePage));
       totalPageIssued <= totalPageIssued + 1;
    endrule
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Handles flash read responses for all cases
 ////////////////////////////////////////////////////////////////////////////////
-   Reg#(Bit#(TLog#(TDiv#(PageWords, 2)))) pageBeatCnt <- mkReg(0);
+   // Reg#(Bit#(TLog#(TDiv#(PageWords, 2)))) pageBeatCnt <- mkReg(0);
+   Reg#(Bit#(8)) pageBeatCnt <- mkReg(0);
    Reg#(Bit#(8)) lastBeat <- mkRegU;
    Reg#(Bit#(9)) rowVecCnt_resp <- mkReg(0);
    Reg#(Bit#(32)) lastMask <- mkRegU;
@@ -243,7 +255,7 @@ module mkColReader(ColReader);
    
    
    rule doFlashResp if ( state != Idle );
-      let doRead = flashRespMetaQ.first;
+      let {firstRowVecId, doRead} = flashRespMetaQ.first;
       // skip the flashRead
       let pageId = pageCnt_resp;
       Bool isLastPage = (pageId == endPageId);
@@ -253,63 +265,71 @@ module mkColReader(ColReader);
          pageCnt_resp <= pageCnt_resp + 1;
          rowMaskMetaQ.enq(MaskRdMeta{isNop: True,
                                      maskRdPort: ?,
-                                     rowVecId: ?,
+                                     rowVecId: firstRowVecId,
                                      maskGen: ?,
                                      isLast: isLastPage});
 
          if ( isLastPage ) state <= Idle;
       end
       else begin
-         let flashWord <- toGet(flashRespQ).get;
+         // let flashWord <- toGet(flashRespQ).get;
+         let flashWord <- flashReader.readServer.response.get;
       
          let beatsPerRowVec = colBytes;
       
          let baseRowVecId = pageIdToRowVec(pageId);
          
-         if ( pageBeatCnt == fromInteger(pageWords/2-1) ) begin
-            pageBeatCnt <= 0;
-            flashRespMetaQ.deq();
+         // if ( pageBeatCnt == fromInteger(pageWords/2-1) ) begin
+         //    pageBeatCnt <= 0;
+         //    flashRespMetaQ.deq();
+         //    pageCnt_resp <= pageCnt_resp + 1;
+         //    if ( isLastPage ) state <= Idle;
+         // end
+         // else begin
+         //    pageBeatCnt <= pageBeatCnt + 1;
+         // end
+         pageBeatCnt <= pageBeatCnt + 1;
+         
+         if ( pageBeatCnt == maxBound ) begin
             pageCnt_resp <= pageCnt_resp + 1;
+            flashRespMetaQ.deq();
             if ( isLastPage ) state <= Idle;
          end
-         else begin
-            pageBeatCnt <= pageBeatCnt + 1;
-         end
       
-         if ( pageBeatCnt < fromInteger(8192/32) ) begin // useful 8k data
+         // if ( pageBeatCnt < fromInteger(8192/32) ) begin // useful 8k data
             // this part is needed for page misAlignment e.g. 3 pages of 4-byte col only generate 1 page of 1-byte col
-            Bool validData = !isLastPage || (pageBeatCnt <= zeroExtend(lastBeat));
-            $display("(%m) pageCnt_resp = %d, endPageId = %d, pageBeatCnt = %d, lastBeat = %d", pageCnt_resp, endPageId, pageBeatCnt, lastBeat);
+         Bool validData = !isLastPage || (pageBeatCnt <= lastBeat);
+         if (debug) $display("(%m) pageCnt_resp = %d, endPageId = %d, pageBeatCnt = %d, lastBeat = %d", pageCnt_resp, endPageId, pageBeatCnt, lastBeat);
             // on the last beat per rowVec, rowVec mask read request is issued or mask is generated
-            if ( ((pageBeatCnt+1) & zeroExtend(beatsPerRowVec-1)) == 0 ) begin
+         if ( (({1'b0,pageBeatCnt}+1) & zeroExtend(beatsPerRowVec-1)) == 0 ) begin
 
-               // increment rowVecCnt per Page
-               // no need to reset to zero since it is of power of 2
-               rowVecCnt_resp <= rowVecCnt_resp + 1;
-               let rowVecId_page = rowVecCnt_resp & (rowVecsPerPage-1);
+            // increment rowVecCnt per Page
+            // no need to reset to zero since it is of power of 2
+            rowVecCnt_resp <= rowVecCnt_resp + 1;
+            let rowVecId_page = rowVecCnt_resp & (rowVecsPerPage-1);
 
-               Bool isLastBeat = isLastPage && pageBeatCnt == zeroExtend(lastBeat);
+            Bool isLastBeat = isLastPage && pageBeatCnt == lastBeat;
                
-               $display("(%m) producing mask request or generating a mask, pageBeatCnt = %h, isLastBeat = %d, validData = %d", pageBeatCnt, isLastBeat, validData);
-               let mask = isLastBeat ? lastMask : maxBound;
+            if (debug) $display("(%m) producing mask request or generating a mask, pageBeatCnt = %h, isLastBeat = %d, validData = %d", pageBeatCnt, isLastBeat, validData);
+            let mask = isLastBeat ? lastMask : maxBound;
 
-               Bit#(64) rowVecId = baseRowVecId + zeroExtend(rowVecId_page);
-               if ( validData ) begin
-                  rowMaskMetaQ.enq(MaskRdMeta{isNop: False,
-                                              maskRdPort: state == PartialRows ? tagged Valid maskRdPortId : tagged Invalid,
-                                              rowVecId: rowVecId,
-                                              maskGen: mask,
-                                              isLast: isLastBeat});
+            Bit#(64) rowVecId = baseRowVecId + zeroExtend(rowVecId_page);
+            if ( validData ) begin
+               rowMaskMetaQ.enq(MaskRdMeta{isNop: False,
+                                           maskRdPort: state == PartialRows ? tagged Valid maskRdPortId : tagged Invalid,
+                                           rowVecId: rowVecId,
+                                           maskGen: mask,
+                                           isLast: isLastBeat});
                
-                  if ( state == PartialRows ) begin
-                     maskRdReqQ.enq(RowMaskRead{id:truncate(rowVecId),
+               if ( state == PartialRows ) begin
+                  maskRdReqQ.enq(RowMaskRead{id:truncate(rowVecId),
                                                 src: maskRdPortId});
-                  end
                end
             end
-         
-            if (validData) rowDataQ.enq(flashWord);
          end
+         
+         if (validData) rowDataQ.enq(flashWord);
+         // end
       end
    endrule
    
@@ -321,7 +341,7 @@ module mkColReader(ColReader);
       let mask = meta.maskGen;
       let rowVecId = meta.rowVecId;
       let isLast = meta.isLast;
-      $display("(%m) produceMask ", fshow(meta));
+      if (debug) $display("(%m) produceMask ", fshow(meta));
       if ( !meta.isNop ) begin
          if ( meta.maskRdPort matches tagged Valid .portId ) begin
             mask <- toGet(rowMaskRespQ).get();
@@ -339,8 +359,8 @@ module mkColReader(ColReader);
       end
    endrule
    
-   interface Client flashRdClient = toClient(addrQ, flashRespQ);
-   
+   // interface Client flashRdClient = toClient(addrQ, flashRespQ);
+   interface pageBufClient = flashReader.pageBufferClient;
    interface Client maskRdClient = toClient(maskRdReqQ, rowMaskRespQ);
    // interface Client maskRdClient = ?;//toClient(maskRdReqQ, rowMaskRespQ);
    
@@ -362,12 +382,12 @@ module mkColReader(ColReader);
          Bool allRows = unpack(param[2][1]);
          Bool forward = unpack(param[2][2]);
    
-         $display("(%m) numRows = %d, baseAddr = %d, maskRdPort = %d, allRows = %d, forward = %d", numRows, baseAddr, maskRdPort, allRows, forward);   
+         $display("(%m) setParameters numRows = %d, baseAddr = %d, maskRdPort = %d, allRows = %d, forward = %d", numRows, baseAddr, maskRdPort, allRows, forward);   
          allRowVecsFinished <= False;   
    
          rowVecCnt <= 0;
       
-         Bit#(64) totalRowVecs_var = (numRows + 31) >> 5;
+         Bit#(64) totalRowVecs_var = toNumRowVecs(numRows);//(numRows + 31) >> 5;
    
          totalRowVecs <= totalRowVecs_var;
    

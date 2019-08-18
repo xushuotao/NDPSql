@@ -43,7 +43,7 @@ import FlashCtrlIfc::*;
 
 import FlashReadMultiplex::*;
 import EmulatedFlash::*;
-
+import DualFlashPageBuffer::*;
 
 import Connectable::*;
 import RowMask::*;
@@ -104,13 +104,19 @@ module mkTb_RowSelector(Empty);
    mkConnection(flashSwitches[0].flashCtrlClient, flashCtrls[0].user);
    mkConnection(flashSwitches[1].flashCtrlClient, flashCtrls[1].user);
    
-   FlashReadMultiplex#(ColCount) flashMux <- mkFlashReadMultiplex;
+   // FlashReadMultiplex#(ColCount) flashMux <- mkFlashReadMultiplex;
+   FlashReadMultiplexOO#(1) flashMux <- mkFlashReadMultiplexOO;
    
    zipWithM_(mkConnection, flashMux.flashClient, vec(flashSwitches[0].users[0], flashSwitches[1].users[0]));
    
+   DualFlashPageBuffer#(ColCount, PageBufSz) pageBuf <- mkDualFlashPageBuffer;
+   
+   mkConnection(pageBuf.flashRdClient, flashMux.flashReadServers[0]);
+   
    RowSelector#(ColCount) ndp <- mkRowSelector;
    
-   zipWithM_(mkConnection, ndp.flashRdClients, flashMux.flashReadServers);
+   // zipWithM_(mkConnection, ndp.flashRdClients, flashMux.flashReadServers);
+   zipWithM_(mkConnection, reverse(ndp.pageBufferClients), pageBuf.pageBufferServers);
    
    // RowSelector#(ColCount)
    RowMaskBuff#(ColCount) rowMaskBuff <- mkRowMaskBuff;
@@ -122,8 +128,8 @@ module mkTb_RowSelector(Empty);
 
    Reg#(StatusT) state <- mkReg(Run);
 
-   Bit#(64) totalRows = getNumRows("l_shipdate")/100000;
-   Bit#(64) totalRowsExpected = 333; //732; //2801;
+   Bit#(64) totalRows = getNumRows("l_shipdate")/10000;
+   Bit#(64) totalRowsExpected = 3546;//333; //732; //2801;
    Int#(32) int_min = minBound;
    
                  

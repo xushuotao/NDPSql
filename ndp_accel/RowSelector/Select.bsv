@@ -20,7 +20,7 @@ function Bool signedTest(Bit#(sz) in,  Bit#(sz) lv, Bit#(sz) hv);
    return signedLE(lv,in) && signedLE(in,hv);
 endfunction
 
-
+Bool debug = False;
 
 
 module mkSelect(Select#(colBytes)) provisos(
@@ -78,7 +78,7 @@ module mkSelect(Select#(colBytes)) provisos(
          Vector#(colBytes, rowMaskT) maskV = unpack(maskData.mask);
          maskSel <= maskSel + 1;
 
-         $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b, isLast = ", valueOf(colBytes), maskSel, maskData.mask, fshow(isLast));
+         if ( debug) $display("(%m) rowMask2beatMask(%d) maskSel = %d, maskV = %b, isLast = ", valueOf(colBytes), maskSel, maskData.mask, fshow(isLast));
          if ( maskSel == maxBound ) rowMaskQ.deq;
          beatMaskQ.enq(tuple4(rowVecId, isLast, True, maskV[maskSel]));
       end
@@ -101,7 +101,7 @@ module mkSelect(Select#(colBytes)) provisos(
          let evalRes = evalPred(data, loBound, hiBound);
          let dataMask = map(tpl_1, evalRes);
          Vector#(rowsPerBeat, Int#(colWidth)) data_int = unpack(v);
-         $display("(%m) doSelect(%d) (lo, hi)=(%d, %d), dataV = ", valueOf(colBytes), loBound, hiBound, fshow(data_int));
+         if (debug) $display("(%m) doSelect(%d) (lo, hi)=(%d, %d), dataV = ", valueOf(colBytes), loBound, hiBound, fshow(data_int));
          // $display("(%m) doSelect(%d) dataMask = %b, notallzero = %d", valueOf(colBytes), dataMask, pack(dataMask) != 0);
          // newMask = andNotOr? pack(dataMask) & mask : pack(dataMask) | mask;
          newMask = pack(dataMask) & mask;
@@ -122,7 +122,7 @@ module mkSelect(Select#(colBytes)) provisos(
    rule rowMaskTomask;
       let {rowVecId, last, hasData, beatMask} <- toGet(outBeatMaskQ).get();
       Bit#(32) rowMask = truncateLSB({beatMask, outMaskBuf});
-      $display("(%m) rowMaskTomask(%d) maskCnt = %d, mask = %b, rowMask = %b, last = %d", valueOf(colBytes), maskCnt, rowMask, beatMask, last);      
+      if (debug) $display("(%m) rowMaskTomask(%d) maskCnt = %d, mask = %b, rowMask = %b, last = %d", valueOf(colBytes), maskCnt, rowMask, beatMask, last);      
       if ( hasData ) begin
          outMaskBuf <= rowMask;
          maskCnt <= maskCnt + 1;

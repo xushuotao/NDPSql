@@ -9,6 +9,8 @@ import FIFO::*;
 import SpecialFIFOs::*;
 import Assert::*;
 
+Bool debug = True;
+
 typedef 8192 MaxRowsPerPage;
 
 typedef 32 RowVectorSz;
@@ -39,10 +41,7 @@ typedef struct{
    
 interface RowMaskBuff#(numeric type nSlaves);
    
-   // method Action setColWidth(Bit#(5) colW);
-
    interface Server#(Bit#(9), void) reserveRowVecs;
-   // interface Put#(void) releaseRowVecs;
    interface Put#(Bit#(9)) releaseRowVecs;
    
    interface Vector#(nSlaves, Put#(RowMaskWrite)) writePorts;
@@ -94,35 +93,16 @@ module mkRowMaskBuff(RowMaskBuff#(nSlaves));
    rule doReservation if ( freeRows - zeroExtend(unpack(reserveReqQ.first)) >= 0 );
       let req <- toGet(reserveReqQ).get;
       freeRows.decr(zeroExtend(unpack(req)));
+      if (debug) $display("doReservation, freeRows = %d", freeRows);
       lockAcqRespQ.enq(?);
    endrule
    
    interface Server reserveRowVecs = toServer(reserveReqQ, lockAcqRespQ);
-   //    interface Put request;
-   //    //    method Action put(Bit#(9) req);// if ( freeRows - zeroExtend(unpack(req)) >= 0 );
-   //    //       when(freeRows - zeroExtend(unpack(req)) < 0, noAction);
-   //    //       // dynamicAssert(freeRows - zeroExtend(unpack(req)) < 0, "freeRows cannot be less than 0");
-   //    //       freeRows.decr(zeroExtend(unpack(req)));
-   //    //       lockAcqRespQ.enq(?);
-   //    //    endmethod
-   //    // endinterface
-   //    interface Get response;
-   //       method ActionValue#(void) get;
-   //          lockAcqRespQ.deq;
-   //          return ?;
-   //       endmethod
-   //    endinterface
-   // endinterface
    
    interface Put releaseRowVecs;
-      // method Action put(void req);
-      //    freeRows.incr(1);
-      //    if ( freeRows + 1 > fromInteger(valueOf(MaxNumRowVectors)) )
-      //       $display("Warning:: You are releasing lock which has not been acquired");
-      // endmethod
       method Action put(Bit#(9) req);
          freeRows.incr(zeroExtend(unpack(req)));
-         $display("freeRows = %d, maxRowVecs = %d", freeRows + zeroExtend(unpack(req)), fromInteger(valueOf(MaxNumRowVectors)));
+         if (debug) $display("freeRows = %d, maxRowVecs = %d", freeRows + zeroExtend(unpack(req)), fromInteger(valueOf(MaxNumRowVectors)));
          if ( freeRows + zeroExtend(unpack(req)) > fromInteger(valueOf(MaxNumRowVectors)) )
             $display("Warning:: You are releasing lock which has not been acquired");
       endmethod

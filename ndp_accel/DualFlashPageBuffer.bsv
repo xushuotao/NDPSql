@@ -80,8 +80,10 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
    FIFO#(slaveIdT) readDst <- mkFIFO;
    
    Vector#(numSlaves, FIFO#(Bit#(256))) deqRespQs <- replicateM(mkFIFO);
+   Vector#(numSlaves, FIFO#(tagT)) doneBufQs <- replicateM(mkFIFO);
    
    for (Integer i = 0; i < valueOf(numSlaves); i = i + 1) begin
+      (* descending_urgency = "processDoneBuf, processEnqReq, processDeqReq" *)
       rule processDeqReq;
          let tag = deqReqQs[i].first;
          // this is safe only since we know that we will not write exceed the capacity
@@ -103,8 +105,17 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
          if ( enqPtrs[i][tag] < 256 ) begin
             buffer.wrReq(toBufferIdx(tag, enqPtrs[i][tag]), data);
             // enq is unguarded since we know that we will not write exceed the capacity
-            enqPtrs[i][tag] <= enqPtrs[i][tag] + 1;
          end
+         enqPtrs[i][tag] <= enqPtrs[i][tag] + 1;
+      endrule
+      
+      rule processDoneBuf if ( enqPtrs[i][doneBufQs[i].first] == 257);
+         let tag = doneBufQs[i].first;
+         if (debug) $display("(@%t) execute doneBuf tag = %d, client = %d", $time, tag, i);
+            freeBufIdQ.enq(tag);
+            doneBufQs[i].deq;
+            deqPtrs[i][tag] <= 0;
+            enqPtrs[i][tag] <= 0;
       endrule
    end
    
@@ -112,6 +123,7 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
       let slaveId <- toGet(readDst).get();
       let data = buffer.rdResp;
       buffer.deqRdResp;
+      if (debug) $display("(@%t) got deq response to client = %d", $time, slaveId);
       deqRespQs[slaveId].enq(data);
    endrule
 
@@ -125,7 +137,7 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
                           tagTable.upd(tag, fromInteger(i));
                           flashReqQ.enq(tuple2(zeroExtend(tag), addr));
                           tagRespQs[i].enq(tag);
-
+                          $display("(%m) Reserved tag = %d for client = %d", tag, i);
                        endmethod
                     endinterface
                     interface Get response = toGet(tagRespQs[i]);
@@ -137,10 +149,9 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
                  endinterface
 
                  interface Put doneBuf;
-                    method Action put(Bit#(TLog#(numPages)) tag);
-                       freeBufIdQ.enq(tag);
-                       deqPtrs[i][tag] <= 0;
-                       enqPtrs[i][tag] <= 0;
+                    method Action put(tagT tag);
+                       let clientId = tagTable.sub(tag);
+                       doneBufQs[clientId].enq(tag);
                     endmethod
                  endinterface
               endinterface);

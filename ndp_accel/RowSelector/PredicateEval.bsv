@@ -17,8 +17,10 @@ import Vector::*;
 
 import Connectable::*;
 
+import DualFlashPageBuffer::*;
+
 interface FirstPredicateEval;
-   interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   interface PageBufferClient#(PageBufSz) pageBufClient;
    interface Client#(Bit#(9), void) reserveRowVecs;
    interface Get#(RowMaskWrite) rowMaskWrite;
    interface PipeOut#(RowVecReq) rowVecReq;
@@ -26,7 +28,7 @@ interface FirstPredicateEval;
 endinterface
 
 interface PredicateEval;
-   interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   interface PageBufferClient#(PageBufSz) pageBufClient;
    
    interface Client#(RowMaskRead, RowVectorMask) rowMaskRead;
    interface Get#(RowMaskWrite) rowMaskWrite;
@@ -63,7 +65,8 @@ module mkFirstPredicateEval(FirstPredicateEval);
                           endmethod
                        endinterface);
 
-   interface Client flashRdClient = colReader.flashRdClient;
+   // interface Client flashRdClient = colReader.flashRdClient;
+   interface pageBufClient = colReader.pageBufClient;
    interface Client reserveRowVecs = colReader.reserveRowVecs;
    interface Get rowMaskWrite = predResult.rowMaskWrite;
    interface PipeOut rowVecReq = rowVecReqOuts[rowVecReqOutSel];
@@ -97,8 +100,7 @@ module mkPredicateEval(PredicateEval);
                           endmethod
                        endinterface);
 
-   interface Client flashRdClient = colReader.flashRdClient;
-
+   interface pageBufClient = colReader.pageBufClient;
    interface Client rowMaskRead = colReader.maskRdClient;
    interface Get rowMaskWrite = predResult.rowMaskWrite;
    

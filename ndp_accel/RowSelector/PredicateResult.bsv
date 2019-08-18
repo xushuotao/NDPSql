@@ -5,6 +5,8 @@ import Pipe::*;
 import FIFO::*;
 import GetPut::*;
 
+Bool debug = True;
+
 interface PredicateResult;
    interface NDPStreamIn streamIn;
    interface Get#(RowMaskWrite) rowMaskWrite;
@@ -46,28 +48,12 @@ module mkPredicateResult(PredicateResult);
       else begin
          lastRowVecId <= d.rowVecId;
       end
-      $display("(%m) doRowMask = ", fshow(d));
+      if ( debug) $display("(%m) doRowMask = ", fshow(d));
       maskWriteQ.enq(RowMaskWrite{isMerge:False,
                                   src:0,
                                   id:truncate(d.rowVecId),
                                   mask: d.mask});
 
-      
-      // case (d) matches
-      //    tagged Mask .maskD:
-      //       begin
-      //          $display("(%m) doRowMask mask = %b, notVoid = %d,", maskD.mask, maskD.mask != 0);
-      //          maskWriteQ.enq(RowMaskWrite{id:truncate(maskD.rowVecId),
-      //                                      mask: maskD.mask});
-      //          // if ( maskD.mask != 0 ) begin
-      //          rowVecReqQ.enq(tagged RowVecId maskD.rowVecId );
-      //          // end
-      //       end
-      //    tagged Last:
-      //       rowVecReqQ.enq(tagged Last);
-      // endcase
-            
-      // if ( d.last ) doLast <= True;
    endrule
    
    rule deqRowData;
