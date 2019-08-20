@@ -133,14 +133,14 @@ module mkTb_RowSelector(Empty);
 
    Reg#(StatusT) state <- mkReg(Run);
 
-   Bit#(64) totalRows = getNumRows("l_shipdate")/10000;
+   Bit#(64) totalRows = getNumRows("l_shipdate")/1000;
    Bit#(64) totalRowsExpected = 3546;//333; //732; //2801;
    Int#(32) int_min = minBound;
    
                  
    Vector#(ColCount, RowSelectorParamT) programInfo = vec(RowSelectorParamT{colType: Int,
                                                                             numRows: totalRows,
-                                                                            baseAddr: getBaseAddr("l_shipdate"),
+                                                                            baseAddr: getBaseAddr("l_shipdate")>>13,
                                                                             forward: False,
                                                                             allRows: True,
                                                                             rdPort: 0,
@@ -151,7 +151,7 @@ module mkTb_RowSelector(Empty);
                                                           
                                                           RowSelectorParamT{colType: Long,
                                                                             numRows: totalRows,
-                                                                            baseAddr: getBaseAddr("l_discount"),
+                                                                            baseAddr: getBaseAddr("l_discount")>>13,
                                                                             forward: False,
                                                                             allRows: False,
                                                                             rdPort: 0,
@@ -163,7 +163,7 @@ module mkTb_RowSelector(Empty);
                  
                                                           RowSelectorParamT{colType: Int,
                                                                             numRows: totalRows,
-                                                                            baseAddr: getBaseAddr("l_quantity"),
+                                                                            baseAddr: getBaseAddr("l_quantity")>>13,
                                                                             forward: False,
                                                                             allRows: False,
                                                                             rdPort: 0,
@@ -202,7 +202,7 @@ module mkTb_RowSelector(Empty);
       ndp.rowVecReq.deq();
       let d = ndp.rowVecReq.first;
       
-      $display(fshow(d));
+      // $display(fshow(d));
       rowAggr <= rowAggr + d.rowAggr;
       
       if (d.numRowVecs != 1 ) begin

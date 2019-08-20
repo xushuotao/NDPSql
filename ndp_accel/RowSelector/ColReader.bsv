@@ -11,6 +11,7 @@ import ControllerTypes::*;
 import Vector::*;
 import Assert::*;
 
+import ColPageEng::*;
 import FlashPageReader::*;
 import DualFlashPageBuffer::*;
 
@@ -70,9 +71,9 @@ module mkColReader(ColReader);
    Reg#(Bit#(64)) basePage <- mkRegU;
    Reg#(Bit#(64)) pageReqCnt <- mkReg(0);
    
-   // FIFO#(FlashRespMetaT) flashRespMetaQ <- mkSizedFIFO(128); // this size could be over-provisioned
-   // FIFOF#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFOF(valueOf(TMax#(8,PageBufSz))); // this size could be over-provisioned
-   FIFOF#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFOF(valueOf(TMax#(8,PageBufSz))); // this size could be over-provisioned
+   ColPageEng colPageEng <- mkColPageEng;
+   
+   FIFOF#(Bool) flashRespMetaQ <- mkSizedFIFOF(valueOf(TAdd#(8,PageBufSz)));
    
    // 1 2 4 8 16
    // 0 1 2 3 4
@@ -141,19 +142,8 @@ module mkColReader(ColReader);
    
    Reg#(Bool) needRead <- mkReg(False);
       
-   // FIFO#(DualFlashAddr) addrQ <- mkFIFO;
-   // FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
-   
    let flashReader <- mkFlashPageReaderIO;
    
-   // rule displayWarning0 if ( !flashRespMetaQ.notFull);
-   //    $display("(%m) warning flashRespMetaQ is full...");
-   // endrule
-
-   // rule displayWarning1 if ( !pageReqQ.notFull);
-   //    $display("(%m) warning pageReqQ is full...");
-   // endrule
-
    
    rule doAllRows_flashReq if ( state == AllRows || state == PartialRows);
       let req = rowVecReqQ.first();
@@ -189,8 +179,6 @@ module mkColReader(ColReader);
       
       let currPageId = rowVecToPageId(rowVecCnt + rowVec_reqCnt);
       
-
-      
       
       Bool needRead_next = needRead || (state == AllRows || !req.maskZero);
       if (debug) $display("(%m):gen flash req rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
@@ -200,48 +188,18 @@ module mkColReader(ColReader);
       // on last RowVec of a page;
       if ( currPageId != nextPageId || isLast) begin
          dynamicAssert( nextPageId - currPageId == 1 || isLast, "pageReq only increase by one, or it is last");
-         
-         if (debug) $display("(%m) dispatch readReq, currPageId = %d, needRead = %d", currPageId, needRead_next);
+         let {addr, last} <- colPageEng.getNextPageAddr();
+         if (debug) $display("(%m) issue readReq, needRead = %d, addr = ", needRead_next, fshow(addr));
          if ( needRead_next ) begin
-            pageReqQ.enq(currPageId);
-            // addrQ.enq(toDualFlashAddr(currPageId+basePageReg));
+            flashReader.readServer.request.put(addr);
          end
-         flashRespMetaQ.enq(tuple2(rowVec_reqCnt, needRead_next));
          
+         flashRespMetaQ.enq(needRead_next);
          needRead <= False;
       end
       else begin
          needRead <= needRead_next;
       end
-      
-
-      // lastPageId <= tagged Valid currPageId;
-
-      // // issue flashRead request only when there is page change
-      // if ( lastPageId !=  tagged Valid currPageId ) begin      
-      //    Bool cond = isValid(lastPageId) && (fromMaybe(?, lastPageId) + 1 == currPageId);
-      //    dynamicAssert( cond || currPageId == 0, "pageReq only increase by one");
-      //    Bool doRead = False;
-      //    if ( state == AllRows ) begin
-      //       pageReqQ.enq(currPageId);
-      //       doRead = True;
-      //    end
-      //    else if ( !req.maskZero ) begin
-      //       pageReqQ.enq(currPageId);
-      //       doRead = True;
-      //    end
-      //    flashRespMetaQ.enq(doRead);
-      // end
-   endrule
-   
-   // issue page request only if when all the rowvec in the page has been seen;
-   Reg#(Bit#(64)) totalPageIssued <- mkReg(0);
-   rule issuePageReq;// if ( pageReqQ.first() < rowVecToPageId(lastRowVecId) || allRowVecsFinished);
-      let pageId <- toGet(pageReqQ).get;
-      if (debug) $display("(%m): issuing page Read Request for basePageAddr = %d, pageId = %d, lastRowVecId = %d, totalPageIssued = %d", basePage, pageId, lastRowVecId, totalPageIssued);
-      // addrQ.enq(toDualFlashAddr(pageId+basePage));
-      flashReader.readServer.request.put(toDualFlashAddr(pageId+basePage));
-      totalPageIssued <= totalPageIssued + 1;
    endrule
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -266,39 +224,28 @@ module mkColReader(ColReader);
    
    
    rule doFlashResp if ( state != Idle );
-      let {firstRowVecId, doRead} = flashRespMetaQ.first;
+      let doRead = flashRespMetaQ.first;
       // skip the flashRead
       let pageId = pageCnt_resp;
       Bool isLastPage = (pageId == endPageId);
-
+      let baseRowVecId = pageIdToRowVec(pageId);
+      
       if ( !doRead ) begin
          flashRespMetaQ.deq();
          pageCnt_resp <= pageCnt_resp + 1;
          rowMaskMetaQ.enq(MaskRdMeta{isNop: True,
                                      maskRdPort: ?,
-                                     rowVecId: firstRowVecId,
+                                     rowVecId: isLastPage ? totalRowVecs-1 : baseRowVecId,
                                      maskGen: ?,
                                      isLast: isLastPage});
 
          if ( isLastPage ) state <= Idle;
       end
       else begin
-         // let flashWord <- toGet(flashRespQ).get;
          let flashWord <- flashReader.readServer.response.get;
       
          let beatsPerRowVec = colBytes;
-      
-         let baseRowVecId = pageIdToRowVec(pageId);
          
-         // if ( pageBeatCnt == fromInteger(pageWords/2-1) ) begin
-         //    pageBeatCnt <= 0;
-         //    flashRespMetaQ.deq();
-         //    pageCnt_resp <= pageCnt_resp + 1;
-         //    if ( isLastPage ) state <= Idle;
-         // end
-         // else begin
-         //    pageBeatCnt <= pageBeatCnt + 1;
-         // end
          pageBeatCnt <= pageBeatCnt + 1;
          
          if ( pageBeatCnt == maxBound ) begin
@@ -398,7 +345,7 @@ module mkColReader(ColReader);
    
          rowVecCnt <= 0;
       
-         Bit#(64) totalRowVecs_var = toNumRowVecs(numRows);//(numRows + 31) >> 5;
+         Bit#(64) totalRowVecs_var = toNumRowVecs(numRows);
    
          totalRowVecs <= totalRowVecs_var;
    
@@ -408,8 +355,8 @@ module mkColReader(ColReader);
          rowVecsPerPage <= toRowVecsPerPage(colBytes);
    
          // basePage <= baseAddr;
-         dynamicAssert(baseAddr%8192 == 0, "baseAddr should be page alighed!");
-         basePage <= baseAddr>>13;
+         // dynamicAssert(baseAddr%8192 == 0, "baseAddr should be page alighed!");
+         basePage <= baseAddr;
    
          pageReqCnt <= 0;
       
@@ -417,7 +364,6 @@ module mkColReader(ColReader);
       
          Bit#(5) rowVRmd_last = truncate(numRows - 1);
    
-      // Bit#(32)
          lastMask <= truncate((33'b10<<rowVRmd_last) - 1);
       
          if ( forward ) begin
@@ -430,43 +376,13 @@ module mkColReader(ColReader);
             state <= PartialRows;
          end
    
+         if (!forward ) begin
+            colPageEng.setParam(numRows, toColType(colBytes), baseAddr);
+         end
+   
          maskRdPortId <= maskRdPort;
    
       endmethod
    endinterface
 
-   // method Action configure(Bit#(5) colBytes, Bit#(64) numRows, Bit#(64) baseAddr, Bit#(1) maskRdPort, Bool allRows, Bool forward) if (state == Idle);
-   //    allRowVecsFinished <= False;   
-   //    // rowVecCnt <= 0;
-      
-   //    Bit#(64) totalRowVecs_var = (numRows + 31) >> 5;
-   
-   //    totalRowVecs <= totalRowVecs_var;
-   
-   //    // 256 beats per Page
-   //    lastBeat <= truncate((totalRowVecs_var-1)<< toLgColBytes(colBytes));
-   
-   //    rowVecsPerPage <= toRowsVecPerPage(colBytes);
-   
-   //    basePage <= baseAddr;
-   
-   //    pageReqCnt <= 0;
-      
-   //    endPageId <= toEndPageId(numRows-1, colBytes);
-      
-   //    Bit#(5) rowVRmd_last = truncate(numRows - 1);
-   
-   //    // Bit#(32)
-   //    lastMask <= truncate((33'b10<<rowVRmd_last) - 1);
-      
-   //    if ( forward ) begin
-   //       state <= Bypass;
-   //    end
-   //    else if ( allRows ) begin
-   //       state <= AllRows;
-   //    end
-   //    else begin
-   //       state <= ParitalRows;
-   //    end
-   // endmethod
 endmodule

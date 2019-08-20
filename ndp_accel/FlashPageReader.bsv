@@ -20,8 +20,8 @@ endinterface
 
 (* synthesize *)
 module mkFlashPageReaderIO(FlashPageReaderIO);
-   FIFO#(DualFlashAddr) addrQ <- mkSizedFIFO(valueOf(TAdd#(8,PageBufSz)));
-   FIFO#(BufTagT) tagRespQ <- mkSizedFIFO(valueOf(PageBufSz));
+   FIFO#(DualFlashAddr) addrQ <- mkSizedFIFO(valueOf(PageBufSz));
+   FIFO#(BufTagT) tagRespQ <- mkFIFO;//SizedFIFO(valueOf(PageBufSz));
    FIFOF#(Bit#(256)) dataRespQ <- mkFIFOF;
    FIFO#(BufTagT) tagReleaseQ <- mkFIFO;
    FIFO#(BufTagT) tagDoneQ <- mkFIFO;

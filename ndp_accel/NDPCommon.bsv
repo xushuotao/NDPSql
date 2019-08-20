@@ -122,6 +122,28 @@ function Bit#(64) toEndPageId(Bit#(64) numRows, Bit#(5) colBytes);
           endcase;
 endfunction
 
+function Bit#(64) pageIdToRowVecId(Bit#(64) pageId, ColType colType);
+   return case (colType)
+             Byte:   (pageId << 8); // 1 byte:  pageId*256
+             Short:  (pageId << 7); // 2 byte:  pageId*128
+             Int:    (pageId << 6); // 4 byte:  pageId*64
+             Long:   (pageId << 5); // 8 byte:  pageId*32
+             BigInt: (pageId << 4); // 16 byte: pageId*16
+          endcase;
+endfunction
+
+function Bit#(64) rowVecIdToPageId(Bit#(64) rowVecId, ColType colType);
+   return case (colType)
+             Byte:   (rowVecId >> 8); // 1 byte:  rowVedId/256
+             Short:  (rowVecId >> 7); // 2 byte:  rowVedId/128
+             Int:    (rowVecId >> 6); // 4 byte:  rowVedId/64
+             Long:   (rowVecId >> 5); // 8 byte:  rowVedId/32
+             BigInt: (rowVecId >> 4); // 16 byte: rowVedId/16
+          endcase;
+endfunction
+
+
+
 function Bit#(64) toNumPages(Bit#(64) numRows, ColType colType);
    Bit#(64) endRowId = numRows - 1;
    Bit#(64) endPageId = case (colType)
