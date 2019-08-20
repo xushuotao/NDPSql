@@ -71,7 +71,7 @@ module mkColReader(ColReader);
    Reg#(Bit#(64)) pageReqCnt <- mkReg(0);
    
    // FIFO#(FlashRespMetaT) flashRespMetaQ <- mkSizedFIFO(128); // this size could be over-provisioned
-   FIFO#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFO(valueOf(PageBufSz)); // this size could be over-provisioned
+   FIFOF#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFOF(valueOf(TMax#(8,PageBufSz))); // this size could be over-provisioned
    
    // 1 2 4 8 16
    // 0 1 2 3 4
@@ -134,7 +134,7 @@ module mkColReader(ColReader);
    
    Reg#(Bit#(64)) lastRowVecId <- mkReg(0);
    
-   FIFO#(Bit#(64)) pageReqQ <- mkFIFO();
+   FIFOF#(Bit#(64)) pageReqQ <- mkFIFOF();
    
    Reg#(Bool) allRowVecsFinished <- mkRegU();
    
@@ -144,6 +144,14 @@ module mkColReader(ColReader);
    // FIFO#(Bit#(256)) flashRespQ <- mkFIFO;
    
    let flashReader <- mkFlashPageReaderIO;
+   
+   // rule displayWarning0 if ( !flashRespMetaQ.notFull);
+   //    $display("(%m) warning flashRespMetaQ is full...");
+   // endrule
+
+   // rule displayWarning1 if ( !pageReqQ.notFull);
+   //    $display("(%m) warning pageReqQ is full...");
+   // endrule
 
    
    rule doAllRows_flashReq if ( state == AllRows || state == PartialRows);
@@ -191,6 +199,8 @@ module mkColReader(ColReader);
       // on last RowVec of a page;
       if ( currPageId != nextPageId || isLast) begin
          dynamicAssert( nextPageId - currPageId == 1 || isLast, "pageReq only increase by one, or it is last");
+         
+         $display("(%m) dispatch readReq, currPageId = %d, needRead = %d", currPageId, needRead_next);
          if ( needRead_next ) begin
             pageReqQ.enq(currPageId);
             // addrQ.enq(toDualFlashAddr(currPageId+basePageReg));
@@ -299,7 +309,7 @@ module mkColReader(ColReader);
          // if ( pageBeatCnt < fromInteger(8192/32) ) begin // useful 8k data
             // this part is needed for page misAlignment e.g. 3 pages of 4-byte col only generate 1 page of 1-byte col
          Bool validData = !isLastPage || (pageBeatCnt <= lastBeat);
-         if (debug) $display("(%m) pageCnt_resp = %d, endPageId = %d, pageBeatCnt = %d, lastBeat = %d", pageCnt_resp, endPageId, pageBeatCnt, lastBeat);
+         if (debug) $display("(%m) pageCnt_resp = %d, endPageId = %d, pageBeatCnt = %d, lastBeat = %d, validData = %d", pageCnt_resp, endPageId, pageBeatCnt, lastBeat, validData);
             // on the last beat per rowVec, rowVec mask read request is issued or mask is generated
          if ( (({1'b0,pageBeatCnt}+1) & zeroExtend(beatsPerRowVec-1)) == 0 ) begin
 
@@ -310,7 +320,7 @@ module mkColReader(ColReader);
 
             Bool isLastBeat = isLastPage && pageBeatCnt == lastBeat;
                
-            if (debug) $display("(%m) producing mask request or generating a mask, pageBeatCnt = %h, isLastBeat = %d, validData = %d", pageBeatCnt, isLastBeat, validData);
+            if (debug) $display("(%m) producing mask request or generating a mask, pageBeatCnt = %d, isLastBeat = %d, validData = %d", pageBeatCnt, isLastBeat, validData);
             let mask = isLastBeat ? lastMask : maxBound;
 
             Bit#(64) rowVecId = baseRowVecId + zeroExtend(rowVecId_page);

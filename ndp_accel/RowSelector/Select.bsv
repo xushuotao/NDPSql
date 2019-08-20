@@ -68,9 +68,9 @@ module mkSelect(Select#(colBytes)) provisos(
        return zipWith(tuple2, zipWith3(unsignedTest, inV,  lvVec, hvVec), inV);
    endfunction
 
-
+   Reg#(Bool) ready <- mkReg(False);
    
-   rule rowMask2beatMask;
+   rule rowMask2beatMask if (ready);
       let maskData = rowMaskQ.first;
       let rowVecId = maskData.rowVecId;
       let isLast = maskData.isLast;
@@ -126,17 +126,20 @@ module mkSelect(Select#(colBytes)) provisos(
       if ( hasData ) begin
          outMaskBuf <= rowMask;
          maskCnt <= maskCnt + 1;
-         if ( maskCnt == maxBound ) 
+         if ( maskCnt == maxBound ) begin
             outRowMaskQ.enq(RowMask{rowVecId: rowVecId,
                                     mask: rowMask,
                                     hasData: True,
                                     isLast: last});
+            if (last) ready <= False;
+         end
       end
       else begin
          outRowMaskQ.enq(RowMask{rowVecId: rowVecId,
                                  mask: ?,
                                  hasData: False,
                                  isLast: last});
+         if ( last ) ready <= False;
       end
    endrule
 
@@ -149,13 +152,14 @@ module mkSelect(Select#(colBytes)) provisos(
       method Action setColBytes(Bit#(5) colBytes);
          noAction;
       endmethod
-      method Action setParameters(Vector#(4, Bit#(128)) paras);
+      method Action setParameters(Vector#(4, Bit#(128)) paras) if (!ready);
          $display("(%m) setParameters of colBytes %d, (loB, hiB, isSigned, andNotOr) = (%d,%d,%d,%d)", valueOf(colBytes), paras[0], paras[1], paras[2][0], paras[3][0]);
          loBound <= truncate(paras[0]);
          hiBound <= truncate(paras[1]);
          isSigned <= unpack(paras[2][0]);
          andNotOr <= unpack(paras[3][0]);
          rowOffset <= 0;
+         ready <= True;
       endmethod
    endinterface
    

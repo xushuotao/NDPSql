@@ -3,6 +3,8 @@ import ClientServerHelper::*;
 import GetPut::*;
 import FIFOF::*;
 import FIFO::*;
+import SpecialFIFOs::*;
+import Cntrs::*;
 
 import RWBramCore::*;
 import RegFile::*;
@@ -11,6 +13,7 @@ import Vector::*;
 
 import FlashCtrlIfc::*;
 import ControllerTypes::*;
+
 
 import Connectable::*;
 
@@ -71,29 +74,52 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
    FIFO#(Tuple2#(TagT, DualFlashAddr)) flashReqQ <- mkFIFO;
 
    Vector#(numSlaves, FIFO#(tagT)) tagRespQs <- replicateM(mkSizedFIFO(valueOf(numPages)+1));
-   Vector#(numSlaves, FIFO#(tagT)) deqReqQs <- replicateM(mkFIFO);
+   Vector#(numSlaves, FIFOF#(tagT)) deqReqQs <- replicateM(mkFIFOF);
    
    RegFile#(tagT, slaveIdT) tagTable <- mkRegFileFull;
    
    Vector#(numSlaves, FIFO#(Tuple2#(TagT, Bit#(256)))) flashRespQs <- replicateM(mkFIFO);
    
-   FIFO#(slaveIdT) readDst <- mkFIFO;
+   FIFO#(slaveIdT) readDst <- mkPipelineFIFO;
    
    Vector#(numSlaves, FIFO#(Bit#(256))) deqRespQs <- replicateM(mkFIFO);
    Vector#(numSlaves, FIFO#(tagT)) doneBufQs <- replicateM(mkFIFO);
    
+   Reg#(Bit#(TLog#(TAdd#(numPages,1)))) outstandingBufCnt[2] <- mkCReg(2,0);
+   
+   Vector#(numSlaves, Array#(Reg#(UInt#(3)))) inPipeElemCnts <- replicateM(mkCReg(2,0));
+   
    for (Integer i = 0; i < valueOf(numSlaves); i = i + 1) begin
       (* descending_urgency = "processDoneBuf, processEnqReq, processDeqReq" *)
-      rule processDeqReq;
+      
+      // rule displayFull if ( !deqReqQs[i].notFull );
+      //    $display("(%m) warning deqReqQs[%d] is full...", i);
+      // endrule
+      
+      rule processDoneBuf if ( enqPtrs[i][doneBufQs[i].first] == 257);
+         let tag = doneBufQs[i].first;
+         outstandingBufCnt[1] <= outstandingBufCnt[1] - 1;
+         if (debug) $display("(@%t) execute doneBuf tag = %d, client = %d, outstandingBuf = %d", $time, tag, i, outstandingBufCnt[1]);
+         freeBufIdQ.enq(tag);
+         doneBufQs[i].deq;
+         deqPtrs[i][tag] <= 0;
+         enqPtrs[i][tag] <= 0;
+      endrule
+
+      
+      rule processDeqReq if ( zeroExtend(deqPtrs[i][deqReqQs[i].first]) < enqPtrs[i][deqReqQs[i].first] && inPipeElemCnts[i][1] < 2 );
          let tag = deqReqQs[i].first;
          // this is safe only since we know that we will not write exceed the capacity
-         if ( zeroExtend(deqPtrs[i][tag]) < enqPtrs[i][tag] ) begin
+         // when ( zeroExtend(deqPtrs[i][tag]) >= enqPtrs[i][tag], noAction); 
+         // if ( zeroExtend(deqPtrs[i][tag]) < enqPtrs[i][tag] ) begin
+         // if ( inPipeElemCnts[i][1] < 2 ) begin
             deqPtrs[i][tag] <= deqPtrs[i][tag] + 1;
             buffer.rdReq(toBufferIdx(tag, deqPtrs[i][tag]));
             readDst.enq(fromInteger(i));
             deqReqQs[i].deq;
-            if (debug) $display("(@%t) execute deq for tag = %d, client = %d, enqPtr = %d, deqPtr = %d", $time, tag, i, enqPtrs[i][tag], deqPtrs[i][tag]);
-         end
+            if (debug) $display("(@%t) execute deq for tag = %d, client = %d, enqPtr = %d, deqPtr = %d, inPipeElems = %d", $time, tag, i, enqPtrs[i][tag], deqPtrs[i][tag], inPipeElemCnts[i][1]);
+            inPipeElemCnts[i][1] <= inPipeElemCnts[i][1] + 1; 
+         // end 
       endrule
       
       
@@ -109,14 +135,6 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
          enqPtrs[i][tag] <= enqPtrs[i][tag] + 1;
       endrule
       
-      rule processDoneBuf if ( enqPtrs[i][doneBufQs[i].first] == 257);
-         let tag = doneBufQs[i].first;
-         if (debug) $display("(@%t) execute doneBuf tag = %d, client = %d", $time, tag, i);
-            freeBufIdQ.enq(tag);
-            doneBufQs[i].deq;
-            deqPtrs[i][tag] <= 0;
-            enqPtrs[i][tag] <= 0;
-      endrule
    end
    
    rule distrbuteRead;
@@ -128,6 +146,8 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
    endrule
 
    
+   
+   
    function PageBufferServer#(numPages) genPageBufferServer(Integer i);
       return (interface PageBufferServer;
                  interface Server bufReserve;
@@ -137,7 +157,8 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
                           tagTable.upd(tag, fromInteger(i));
                           flashReqQ.enq(tuple2(zeroExtend(tag), addr));
                           tagRespQs[i].enq(tag);
-                          $display("(%m) Reserved tag = %d for client = %d", tag, i);
+                          outstandingBufCnt[0] <= outstandingBufCnt[0] + 1;
+                          if (debug) $display("(%m) Reserved tag = %d for client = %d, outstandingBuf = %d", tag, i, outstandingBufCnt[0]);
                        endmethod
                     endinterface
                     interface Get response = toGet(tagRespQs[i]);
@@ -145,7 +166,15 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
          
                  interface Server circularRead;
                     interface Put request = toPut(deqReqQs[i]);
-                    interface Get response = toGet(deqRespQs[i]);
+                    interface Get response;// = toGet(deqRespQs[i]);
+                       method ActionValue#(Bit#(256)) get();
+                          let v <- toGet(deqRespQs[i]).get;
+                          inPipeElemCnts[i][0] <= inPipeElemCnts[i][0] - 1; 
+                          if (debug) $display("(%m) circularRead deq client = %d, elems = %d", i, inPipeElemCnts[i][0]);
+                          // inPipeElemCnts[i].decr(1);
+                          return v;
+                       endmethod
+                    endinterface
                  endinterface
 
                  interface Put doneBuf;

@@ -4,6 +4,7 @@ import DualFlashPageBuffer::*;
 import ClientServer::*;
 import ClientServerHelper::*;
 import FIFO::*;
+import FIFOF::*;
 import DualFlashPageBuffer::*;
 import GetPut::*;
 import NDPCommon::*;
@@ -17,13 +18,24 @@ endinterface
 
 (* synthesize *)
 module mkFlashPageReaderIO(FlashPageReaderIO);
-   FIFO#(DualFlashAddr) addrQ <- mkFIFO;
+   FIFO#(DualFlashAddr) addrQ <- mkSizedFIFO(valueOf(TAdd#(8,PageBufSz)));
    FIFO#(BufTagT) tagRespQ <- mkSizedFIFO(valueOf(PageBufSz));
-   FIFO#(Bit#(256)) dataRespQ <- mkFIFO;
+   FIFOF#(Bit#(256)) dataRespQ <- mkFIFOF;
+   FIFO#(BufTagT) tagReleaseQ <- mkFIFO;
    FIFO#(BufTagT) tagDoneQ <- mkFIFO;
    // 256 beats per Page
    Reg#(Bit#(8)) beatCnt <- mkReg(0);
-   interface Server readServer = toServer(addrQ, dataRespQ);
+   Reg#(Bit#(8)) beatCnt_resp <- mkReg(0);
+   
+   // rule displayBackPressure if (! dataRespQ.notFull);
+   //    $display("(%m) warning :: dataResqQ is full...");
+   // endrule
+                               
+   
+   interface Server readServer;// = toServer(addrQ, dataRespQ);
+      interface request = toPut(addrQ);
+      interface response = toGet(dataRespQ);
+   endinterface
    interface PageBufferClient pageBufferClient;
       interface bufReserve = toClient(addrQ, tagRespQ);
    
@@ -31,16 +43,27 @@ module mkFlashPageReaderIO(FlashPageReaderIO);
          interface Get request;
             method ActionValue#(BufTagT) get();
                let tag = tagRespQ.first;
-               $display("(%m) circularRead get, tag = %d, beatCnt = %d", tag, beatCnt);
+               $display("(%m) @%t circularRead get, tag = %d, beatCnt = %d", $time, tag, beatCnt);
                if ( beatCnt == maxBound) begin
                   tagRespQ.deq;
-                  tagDoneQ.enq(tag);
+                  tagReleaseQ.enq(tag);
+                  // tagDoneQ.enq(tag);
                end
                beatCnt <= beatCnt + 1;
                return tag;
             endmethod
          endinterface
-         interface Put response = toPut(dataRespQ);
+         interface Put response;// = toPut(dataRespQ);
+            method Action put(Bit#(256) data);
+               dataRespQ.enq(data);
+               beatCnt_resp <= beatCnt_resp + 1;
+               $display("(%m) @%t circularRead response, beatCnt = %d", $time, beatCnt_resp);
+               if ( beatCnt_resp == maxBound ) begin
+                  let tag <- toGet(tagReleaseQ).get;
+                  tagDoneQ.enq(tag);
+               end
+            endmethod
+         endinterface
       endinterface
       interface Get doneBuf = toGet(tagDoneQ);
    endinterface

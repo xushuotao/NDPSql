@@ -90,12 +90,17 @@ Integer colBytes = valueOf(ColBytes);
 Int#(32) int_min = minBound;
                  
 typedef enum {Init0, Init1, Run} StatusT deriving (Bits, Eq, FShow);
+                 
+(* synthesize *)
+module mkDualFlashPageBuffer_synth(DualFlashPageBuffer#(ColCount, PageBufSz));
+   let m_ <- mkDualFlashPageBuffer;
+   return m_;
+endmodule
 
 
 
 (* synthesize *)
-module mkTb_RowSelector(Empty);
-   
+module mkTb_RowSelector(Empty);   
    
    Vector#(2,FlashCtrlVirtexIfc) flashCtrls <- mapM(mkEmulatedFlashCtrl, genWith(fromInteger));
    
@@ -109,7 +114,7 @@ module mkTb_RowSelector(Empty);
    
    zipWithM_(mkConnection, flashMux.flashClient, vec(flashSwitches[0].users[0], flashSwitches[1].users[0]));
    
-   DualFlashPageBuffer#(ColCount, PageBufSz) pageBuf <- mkDualFlashPageBuffer;
+   DualFlashPageBuffer#(ColCount, PageBufSz) pageBuf <- mkDualFlashPageBuffer_synth;
    
    mkConnection(pageBuf.flashRdClient, flashMux.flashReadServers[0]);
    
@@ -123,8 +128,8 @@ module mkTb_RowSelector(Empty);
    
    mkConnection(ndp.reserveRowVecs, rowMaskBuff.reserveRowVecs);
    
-   zipWithM_(mkConnection, ndp.rowMaskWrites, rowMaskBuff.writePorts);
-   zipWithM_(mkConnection, ndp.rowMaskReads, rowMaskBuff.readPorts);
+   zipWithM_(mkConnection, reverse(ndp.rowMaskWrites), rowMaskBuff.writePorts);
+   zipWithM_(mkConnection, reverse(ndp.rowMaskReads), rowMaskBuff.readPorts);
 
    Reg#(StatusT) state <- mkReg(Run);
 
@@ -143,7 +148,7 @@ module mkTb_RowSelector(Empty);
                                                                             hiTh:728658, 
                                                                             isSigned:True, 
                                                                             andNotOr:True },
-                 
+                                                          
                                                           RowSelectorParamT{colType: Long,
                                                                             numRows: totalRows,
                                                                             baseAddr: getBaseAddr("l_discount"),
@@ -154,6 +159,7 @@ module mkTb_RowSelector(Empty);
                                                                             hiTh:7, 
                                                                             isSigned:True, 
                                                                             andNotOr:True },
+                                                          
                  
                                                           RowSelectorParamT{colType: Int,
                                                                             numRows: totalRows,
@@ -177,10 +183,15 @@ module mkTb_RowSelector(Empty);
                                                                             isSigned:?, 
                                                                             andNotOr:? });
    
-   let programmer <- mkRowSelectAutoProgram(programInfo, ndp.programIfc);
+   mkRowSelectAutoProgram(programInfo, ndp.programIfc);
 
-   // mkConnection(programmer.setColBytesPort, ndp.programIfc.setColBytesPort);
-   // mkConnection(programmer.setParamPort, ndp.programIfc.setParamPort);
+
+   Reg#(Bit#(64)) cycleCnt <- mkReg(0);
+   
+   rule doIncrCycle;
+      cycleCnt <= cycleCnt + 1;
+   endrule
+   
                  
    
    Reg#(Bit#(64)) rowAggr <- mkReg(0);
@@ -204,7 +215,8 @@ module mkTb_RowSelector(Empty);
       numRowVecs <= numRowVecs + d.numRowVecs;
       
       if ( d.last ) begin
-         $display("Test Done, rowAggr = %d, expected = %d, numRowVecs = %d, expected = %d", rowAggr + d.rowAggr, totalRowsExpected, numRowVecs + d.numRowVecs, (totalRows+31)/32);
+         $display("Test Done, totalBeats = %d, cycleCnt = %d", toNumRowVecs(totalRows)*(4+8+4), cycleCnt);
+         $display("Test Done, rowAggr = %d, expected = %d, numRowVecs = %d, expected = %d", rowAggr + d.rowAggr, totalRowsExpected, numRowVecs + d.numRowVecs, toNumRowVecs(totalRows));
          $finish();
       end
       

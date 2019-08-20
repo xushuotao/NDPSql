@@ -12,6 +12,7 @@ import Connectable::*;
 
 import OneToNRouter::*;
 import FlashCtrlIfc::*;
+import DualFlashPageBuffer::*;
 
 import RowMask::*;
 
@@ -19,6 +20,8 @@ import NDPCommon::*;
 import NDPDrain::*;
 import Aggregate::*;
 import NDPAggregate::*;
+
+Bool debug = True;
 
 typedef 4 ColXFormEngs;
 
@@ -39,7 +42,7 @@ endinterface
 
 
 interface ColProc;
-   interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   interface PageBufferClient#(PageBufSz) pageBufferClient;
    
    interface PipeIn#(RowVecReq) rowVecReq;
 
@@ -89,7 +92,7 @@ module mkColProc(ColProc);
       maskReqQ.enq(RowMaskRead{id:truncate(rowVecId),
                                src:0});
       bypassRowVecQ.enq(tuple2(rowVecId,last));
-      $display("(%m) receive rowVecReq from ColxForm rowVecId = %d, last = %d ", rowVecId, last);
+      if ( debug) $display("(%m) receive rowVecReq from ColxForm rowVecId = %d, last = %d ", rowVecId, last);
    endrule
    
    Reg#(Bit#(TLog#(MaxNumCol))) colCntMask <- mkReg(0);
@@ -152,7 +155,7 @@ module mkColProc(ColProc);
          colCntMask <= colCntMask + 1;
       end
       
-      $display("(%m) collect and distribute rowmask rowVecId = %d, colCntMask = %d, mask = %b, last = %d", rowVecId, colCntMask, mask, last);
+      if (debug) $display("(%m) collect and distribute rowmask rowVecId = %d, colCntMask = %d, mask = %b, last = %d", rowVecId, colCntMask, mask, last);
       rowMaskToNDP[colCntMask].inPort.enq(tuple2(toNDPId(destSel[colCntMask]),RowMask{rowVecId: rowVecId,
                                                                                       mask: mask,
                                                                                       isLast: last,
@@ -182,12 +185,13 @@ module mkColProc(ColProc);
       beatNum <= beatNum + 1;
       let d = colXForm.outPipe.first;
       colXForm.outPipe.deq;
-      $display("(%m) collect Data beatCnt = %d, colCntData = %d, data = %h, beatNum = %d", beatCnt, colCntData, d, beatNum);
+      if (debug) $display("(%m) collect Data beatCnt = %d, colCntData = %d, data = %h, beatNum = %d", beatCnt, colCntData, d, beatNum);
       rowDataToNDP[colCntData].inPort.enq(tuple2(toNDPId(destSel[colCntData]),d));
    endrule
       
    
-   interface flashRdClient = colProcReader.flashRdClient;
+   // interface flashRdClient = colProcReader.flashRdClient;
+   interface pageBufferClient = colProcReader.flashBufClient;
    
    interface rowVecReq = colProcReader.rowVecReq;
    
@@ -239,3 +243,4 @@ module mkColProc(ColProc);
       interface aggrResultOut = map(takeAggrResp, aggrNDPs);
    endinterface
 endmodule
+

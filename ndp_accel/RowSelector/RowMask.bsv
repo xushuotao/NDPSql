@@ -15,7 +15,7 @@ Bool debug = True;
 typedef 8192 MaxRowsPerPage;
 
 typedef 32 RowVectorSz;
-typedef TMul#(PageBufSz, MaxRowsPerPage) MaxNumRows;
+typedef TMul#(128, MaxRowsPerPage) MaxNumRows;
 typedef TDiv#(MaxNumRows, RowVectorSz) MaxNumRowVectors;
 
 
@@ -103,9 +103,9 @@ module mkRowMaskBuff(RowMaskBuff#(nSlaves));
    interface Put releaseRowVecs;
       method Action put(Bit#(9) req);
          freeRows.incr(zeroExtend(unpack(req)));
-         if (debug) $display("freeRows = %d, maxRowVecs = %d", freeRows + zeroExtend(unpack(req)), fromInteger(valueOf(MaxNumRowVectors)));
-         if ( freeRows + zeroExtend(unpack(req)) > fromInteger(valueOf(MaxNumRowVectors)) )
-            $display("Warning:: You are releasing lock which has not been acquired");
+         // if (debug) $display("freeRows = %d, maxRowVecs = %d", freeRows + zeroExtend(unpack(req)), fromInteger(valueOf(MaxNumRowVectors)));
+         // if ( freeRows + zeroExtend(unpack(req)) > fromInteger(valueOf(MaxNumRowVectors)) )
+         //    $display("Warning:: You are releasing lock which has not been acquired");
       endmethod
    endinterface
    
