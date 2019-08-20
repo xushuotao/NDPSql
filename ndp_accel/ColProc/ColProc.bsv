@@ -21,7 +21,7 @@ import NDPDrain::*;
 import Aggregate::*;
 import NDPAggregate::*;
 
-Bool debug = True;
+Bool debug = False;
 
 typedef 4 ColXFormEngs;
 

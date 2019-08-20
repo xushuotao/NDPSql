@@ -4,7 +4,7 @@ import SpecialFIFOs::*;
 import FlashCtrlIfc::*;
 import GetPut::*;
 
-Bool debug = True;
+Bool debug = False;
 
 interface ColReadEng#(type tagT);
    method ActionValue#(Tuple2#(DualFlashAddr, Bool)) getNextPageAddr(Bool needRead);//(tagT tag, Bool needRead);

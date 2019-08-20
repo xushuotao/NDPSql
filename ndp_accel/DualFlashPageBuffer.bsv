@@ -17,7 +17,7 @@ import ControllerTypes::*;
 
 import Connectable::*;
 
-Bool debug = True;
+Bool debug = False;
 
 interface PageBufferClient#(numeric type numPages);
    interface Client#(DualFlashAddr, Bit#(TLog#(numPages))) bufReserve;

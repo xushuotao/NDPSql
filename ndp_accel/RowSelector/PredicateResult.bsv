@@ -5,7 +5,7 @@ import Pipe::*;
 import FIFO::*;
 import GetPut::*;
 
-Bool debug = True;
+Bool debug = False;
 
 interface PredicateResult;
    interface NDPStreamIn streamIn;

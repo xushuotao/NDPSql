@@ -15,7 +15,7 @@ import Assert::*;
 
 import DualFlashPageBuffer::*;
 
-Bool debug = True;
+Bool debug = False;
 
 typedef 8 MaxNumCol;
 
@@ -92,7 +92,7 @@ module mkColProcReader(ColProcReader);
    
    Reg#(Bool) hasData <- mkReg(False);
    
-   FIFO#(Tuple2#(Bool, Bool)) pageBatchQ <- mkFIFO;
+   FIFO#(Tuple2#(Bool, Bool)) pageBatchQ <- mkSizedFIFO(valueOf(TMax#(8,PageBufSz))); //mkSizedFIFO(valueOf(TMul#(32,PageBufSz)));
    
    function Bit#(64) toIterId(Bit#(64) rowVecCnt);
       return rowVecCnt >> lgRowVecsPerIter;

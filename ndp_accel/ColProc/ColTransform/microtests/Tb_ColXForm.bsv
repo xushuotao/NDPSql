@@ -268,9 +268,9 @@ module mkTb_ColXForm();
          $display("Expected_Cnts:: \t%32d, \t%32d, \t%32d, \t%32d", expectedCnt[0], expectedCnt[1], expectedCnt[2], expectedCnt[3]);
 
          if ( readVReg(sumV) == expectedSum && readVReg(cntV) == expectedCnt)
-            $display("Pass:: ColXForm, , total Data Beats = %d, cycle = %d", toNumRowVecs(totalRows) * fold(add2, beatMax), cycleCnt);
+            $display("Pass:: ColXForm, total Data Beats = %d, cycle = %d", toNumRowVecs(totalRows) * fold(add2, beatMax), cycleCnt);
          else
-            $display("Fail:: ColXForm, aggregate result doesn't match");
+            $display("Fail:: ColXForm, aggregate result doesn't match. total Data Beats = %d, cycle = %d", toNumRowVecs(totalRows) * fold(add2, beatMax), cycleCnt);
       end
          
       $finish;

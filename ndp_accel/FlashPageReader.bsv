@@ -11,6 +11,8 @@ import NDPCommon::*;
 
 typedef Bit#(TLog#(PageBufSz)) BufTagT;
 
+Bool debug = False;
+
 interface FlashPageReaderIO;
    interface Server#(DualFlashAddr, Bit#(256)) readServer;
    interface PageBufferClient#(PageBufSz) pageBufferClient;
@@ -43,7 +45,7 @@ module mkFlashPageReaderIO(FlashPageReaderIO);
          interface Get request;
             method ActionValue#(BufTagT) get();
                let tag = tagRespQ.first;
-               $display("(%m) @%t circularRead get, tag = %d, beatCnt = %d", $time, tag, beatCnt);
+               if (debug) $display("(%m) @%t circularRead get, tag = %d, beatCnt = %d", $time, tag, beatCnt);
                if ( beatCnt == maxBound) begin
                   tagRespQ.deq;
                   tagReleaseQ.enq(tag);
@@ -57,7 +59,7 @@ module mkFlashPageReaderIO(FlashPageReaderIO);
             method Action put(Bit#(256) data);
                dataRespQ.enq(data);
                beatCnt_resp <= beatCnt_resp + 1;
-               $display("(%m) @%t circularRead response, beatCnt = %d", $time, beatCnt_resp);
+               if (debug) $display("(%m) @%t circularRead response, beatCnt = %d", $time, beatCnt_resp);
                if ( beatCnt_resp == maxBound ) begin
                   let tag <- toGet(tagReleaseQ).get;
                   tagDoneQ.enq(tag);

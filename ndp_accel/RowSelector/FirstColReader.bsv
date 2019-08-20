@@ -12,7 +12,7 @@ import Vector::*;
 import ColReader::*;
 import DualFlashPageBuffer::*;
 
-Bool debug = True;
+Bool debug = False;
 
 typedef struct{
    Bit#(64) firstRow;

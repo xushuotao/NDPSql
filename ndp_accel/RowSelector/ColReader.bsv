@@ -20,7 +20,7 @@ import DualFlashPageBuffer::*;
 //    // Bool isLast;
 //    } FlashRespMetaT deriving (Bits, Eq, FShow);
 
-Bool debug = True;
+Bool debug = False;
 
 typedef struct{
    Bool isNop;
@@ -71,6 +71,7 @@ module mkColReader(ColReader);
    Reg#(Bit#(64)) pageReqCnt <- mkReg(0);
    
    // FIFO#(FlashRespMetaT) flashRespMetaQ <- mkSizedFIFO(128); // this size could be over-provisioned
+   // FIFOF#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFOF(valueOf(TMax#(8,PageBufSz))); // this size could be over-provisioned
    FIFOF#(Tuple2#(Bit#(64), Bool)) flashRespMetaQ <- mkSizedFIFOF(valueOf(TMax#(8,PageBufSz))); // this size could be over-provisioned
    
    // 1 2 4 8 16
@@ -200,7 +201,7 @@ module mkColReader(ColReader);
       if ( currPageId != nextPageId || isLast) begin
          dynamicAssert( nextPageId - currPageId == 1 || isLast, "pageReq only increase by one, or it is last");
          
-         $display("(%m) dispatch readReq, currPageId = %d, needRead = %d", currPageId, needRead_next);
+         if (debug) $display("(%m) dispatch readReq, currPageId = %d, needRead = %d", currPageId, needRead_next);
          if ( needRead_next ) begin
             pageReqQ.enq(currPageId);
             // addrQ.enq(toDualFlashAddr(currPageId+basePageReg));
