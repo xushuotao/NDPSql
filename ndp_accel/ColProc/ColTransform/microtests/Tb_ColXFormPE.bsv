@@ -61,7 +61,7 @@ module mkTb_ColXFormPE();
    Integer i = 0;
    
    // test 0
-   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, colType: Int, strType: ?, imm: ?},
+   Vector#(8, DecodeInst) inst = vec(DecodeInst{iType: Pass, aluOp: ?, isSigned: ?, inType: Int, outType: ?, imm: ?},
                                      ?,
                                      ?,      
                                      ?,
@@ -84,7 +84,7 @@ module mkTb_ColXFormPE();
    i = i + 1;
 
    // test 1                 
-   inst = vec(DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, colType: Int, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: AluImm, aluOp: Add, isSigned: True, inType: Int, outType: ?, imm: 1},
               ?,      
               ?,
               ?,
@@ -108,8 +108,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
    
    // test 2
-   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, inType: Int, outType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, inType: Int, outType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -132,8 +132,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
    
    // test 3
-   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, colType: Int, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, inType: Int, outType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Add, isSigned: True, inType: Int, outType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -157,8 +157,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
    
    // test 4
-   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, strType: Int, imm: 1},
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, inType: Int, outType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, inType: Int, outType: Int, imm: 1},
               ?,
               ?,
               ?,
@@ -182,8 +182,8 @@ module mkTb_ColXFormPE();
    
       
    // test 5
-   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Int, strType: Int, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Int, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, inType: Int, outType: Int, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, inType: Int, outType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -207,8 +207,8 @@ module mkTb_ColXFormPE();
    
 
    // test 6
-   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: BigInt, strType: Long, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Long, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, inType: BigInt, outType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, inType: Long, outType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -232,8 +232,8 @@ module mkTb_ColXFormPE();
    
             
    // test 7
-   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: BigInt, strType: Long, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, colType: Long, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, inType: BigInt, outType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mul, isSigned: True, inType: Long, outType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -257,8 +257,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
       
    // test 8
-   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Store, aluOp: ?, isSigned: ?, inType: Long, outType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mullo, isSigned: True, inType: Long, outType: ?, imm: 1},
               ?,
               ?,
               ?,
@@ -282,8 +282,8 @@ module mkTb_ColXFormPE();
    i = i + 1;
 
    // test 9
-   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, colType: Long, strType: Long, imm: ?},
-              DecodeInst{iType: Alu, aluOp: Mullo, isSigned: True, colType: Long, strType: ?, imm: 1},
+   inst = vec(DecodeInst{iType: Copy, aluOp: ?, isSigned: ?, inType: Long, outType: Long, imm: ?},
+              DecodeInst{iType: Alu, aluOp: Mullo, isSigned: True, inType: Long, outType: ?, imm: 1},
               ?,
               ?,
               ?,

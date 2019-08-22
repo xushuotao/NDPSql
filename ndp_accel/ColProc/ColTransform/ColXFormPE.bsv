@@ -37,8 +37,8 @@ typedef struct {
    InstType iType;  // 3-bit
    AluOp aluOp;     // 2-bit
    Bool isSigned;   // 1-bit 
-   ColType colType; // 3-bit
-   ColType strType; // 3-bit total 12-bit
+   ColType inType; // 3-bit
+   ColType outType; // 3-bit total 12-bit
    Bit#(20) imm;    // 20-bit
    } DecodeInst deriving (Bits, Eq, FShow);  // 32-bit instr
 
@@ -47,7 +47,7 @@ typedef struct {
    AluOp aluOp;    // 2-bit
    Bit#(256) immVec;
    Bit#(256) opVector;
-   ColType colType; // 3-bit
+   ColType inType; // 3-bit
    Bool isSigned;
    
    Bool first;
@@ -100,7 +100,7 @@ module mkColXFormPE(ColXFormPE);
       
       
       Bit#(256) imm = ?;
-      case (inst.colType)
+      case (inst.inType)
          Byte:
          begin
             Vector#(32, Bit#(8)) immV = replicate(truncate(inst.imm));
@@ -129,10 +129,10 @@ module mkColXFormPE(ColXFormPE);
       endcase
       
       if ( inst.iType == Copy || inst.iType == Store ) begin
-         if ( inst.strType == inst.colType) begin
+         if ( inst.outType == inst.inType) begin
             operandQ.enq(opVector);
          end
-         else if ( inst.strType == Long && inst.colType == BigInt ) begin
+         else if ( inst.outType == Long && inst.inType == BigInt ) begin
             let d = downCastFunc(opVector, BigInt_Long);
             castTemp <= fromMaybe(?, d);
             if ( beatCnt[0] == 1) begin
@@ -140,7 +140,7 @@ module mkColXFormPE(ColXFormPE);
                operandQ.enq({fromMaybe(?, d), castTemp});
             end
          end
-         else if ( inst.strType == Int && inst.colType == Long ) begin
+         else if ( inst.outType == Int && inst.inType == Long ) begin
             let d = downCastFunc(opVector, Long_Int);
             castTemp <= fromMaybe(?, d);
             if ( beatCnt[0] == 1) begin
@@ -150,7 +150,7 @@ module mkColXFormPE(ColXFormPE);
          end
       end
       
-      Bit#(5) numBeats = toBeatsPerRowVec(inst.colType);
+      Bit#(5) numBeats = toBeatsPerRowVec(inst.inType);
       Bool last = False;
       if ( zeroExtend(beatCnt) + 1 == numBeats ) begin
          beatCnt <= 0;
@@ -184,7 +184,7 @@ module mkColXFormPE(ColXFormPE);
                   aluOp:    inst.aluOp,
                   immVec:   imm,
                   opVector: opVector,
-                  colType:  inst.colType,
+                  inType:  inst.inType,
                   isSigned: inst.isSigned,
                   first: first,
                   rowVecId: rowVecId});
@@ -200,10 +200,10 @@ module mkColXFormPE(ColXFormPE);
       if (debug) monitor.record("execute", "E");
       if ( eInst.iType == Alu ) begin
          let vec2 <- toGet(operandQ).get;
-         alu.start(vec2, eInst.opVector, eInst.aluOp, unpack(pack(eInst.colType)), eInst.isSigned);
+         alu.start(vec2, eInst.opVector, eInst.aluOp, unpack(pack(eInst.inType)), eInst.isSigned);
       end
       else if ( eInst.iType == AluImm ) begin
-         alu.start(eInst.immVec, eInst.opVector, eInst.aluOp, unpack(pack(eInst.colType)), eInst.isSigned);
+         alu.start(eInst.immVec, eInst.opVector, eInst.aluOp, unpack(pack(eInst.inType)), eInst.isSigned);
       end
    endrule
    
