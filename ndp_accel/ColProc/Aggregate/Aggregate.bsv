@@ -20,13 +20,13 @@ typedef struct {
 
 interface Aggregate#(numeric type colBytes);
    interface NDPStreamIn streamIn;
-   interface PipeOut#(AggrResult#(16)) aggrResp;
+   interface PipeOut#(AggrResp) aggrResp;
    method Action reset;
 endinterface
 
-function AggrResult#(16) aggrExtend(AggrResult#(colBytes) in) provisos(
+function AggrResp aggrExtend(AggrResult#(colBytes) in) provisos(
    Add#(a__, TMul#(colBytes, 8), 128));
-   return AggrResult{sum: in.sum,
+   return AggrResp{sum: truncate(in.sum),
                      cnt: in.cnt,
                      min: zeroExtend(in.min),
                      max: zeroExtend(in.max)};
@@ -101,7 +101,7 @@ module mkAggregate#(Bool isSigned)(Aggregate#(colBytes)) provisos(
    // rowVecId, isLast, hasData, mask
    FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) beatMaskQ <- mkFIFO;
    
-   FIFOF#(AggrResult#(16)) aggrResultQ <- mkFIFOF;
+   FIFOF#(AggrResp) aggrResultQ <- mkFIFOF;
    FIFO#(Tuple2#(AggrResult#(colBytes), Bool)) reduceResultQ <- mkFIFO;
    
    Reg#(AggrResult#(colBytes)) aggrReg <- mkRegU;

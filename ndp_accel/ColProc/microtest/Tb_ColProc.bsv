@@ -123,7 +123,7 @@ module mkTb_ColProc(Empty);
       cycleCnt <= cycleCnt + 1;
    endrule
    
-   Vector#(MaxNumCol, Reg#(Maybe#(AggrResult#(16)))) aggrResult <- replicateM(mkReg(tagged Invalid));
+   Vector#(MaxNumCol, Reg#(Maybe#(AggrResp))) aggrResult <- replicateM(mkReg(tagged Invalid));
    for (Integer i = 0; i < valueOf(MaxNumCol); i = i + 1) begin
       rule doResp;
          let v = colProc.colProcOutput.aggrResultOut[i].first;

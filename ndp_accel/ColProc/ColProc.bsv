@@ -33,7 +33,7 @@ interface ProgramOutputCol;
 endinterface
 
 interface ColProcOutput;
-   interface Vector#(MaxNumCol, PipeOut#(AggrResult#(16))) aggrResultOut;
+   interface Vector#(MaxNumCol, PipeOut#(AggrResp)) aggrResultOut;
 endinterface
 
 
@@ -106,7 +106,7 @@ module mkColProc(ColProc);
    
    Vector#(MaxNumCol, NDPAccel) drainNDPs <- replicateM(mkNDPDrain);
    Vector#(MaxNumCol, NDPAggregate) aggrNDPs <- replicateM(mkNDPAggregate);
-   Vector#(MaxNumCol, Reg#(Maybe#(AggrResult#(16)))) aggrResults <- replicateM(mkReg(tagged Invalid));
+   Vector#(MaxNumCol, Reg#(Maybe#(AggrResp))) aggrResults <- replicateM(mkReg(tagged Invalid));
    
    
    for ( Integer i = 0; i < valueOf(MaxNumCol); i = i + 1) begin
