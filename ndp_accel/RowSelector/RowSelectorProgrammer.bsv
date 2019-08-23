@@ -19,14 +19,15 @@ typedef struct{
    } RowSelectorParamT deriving (Bits, Eq, FShow);
 
 // ColType, numRows, baseAddr, {forward,allRows,maskRdport}, lowTh, hiTh, isSigned, andNotOr,
-interface RowSelectorProgrammer#(numeric type numCols);
-   interface PipeIn#(Tuple2#(Bit#(TLog#(numCols)), RowSelectorParamT)) programPort; 
+interface RowSelectorProgrammer;
+   method Action setParam(Bit#(8) colId, RowSelectorParamT param);
 endinterface
 
 
-module mkRowSelectorProgrammer#(ProgramRowSelector#(TMul#(numCols,2)) programIfc)(RowSelectorProgrammer#(numCols)) provisos(
+module mkRowSelectorProgrammer#(ProgramRowSelector#(TMul#(numCols,2)) programIfc)(RowSelectorProgrammer) provisos(
    Add#(TLog#(numCols), a__, TLog#(TMul#(numCols, 2))),
-   Add#(a__, TLog#(numCols), TLog#(TAdd#(numCols, 1))));
+   Add#(a__, TLog#(numCols), TLog#(TAdd#(numCols, 1))),
+   Add#(b__, TLog#(numCols), 8));
    
    FIFOF#(Tuple2#(Bit#(TLog#(numCols)), RowSelectorParamT)) programFifo <- mkFIFOF;
    
@@ -70,20 +71,21 @@ module mkRowSelectorProgrammer#(ProgramRowSelector#(TMul#(numCols,2)) programIfc
       doSetBytes <= !doSetBytes;
    endrule
 
-
-   interface PipeIn programPort = toPipeIn(programFifo); 
-   
+   method Action setParam(Bit#(8) colId, RowSelectorParamT param);
+      programFifo.enq(tuple2(truncate(colId), param));
+   endmethod
 endmodule
    
 module mkRowSelectAutoProgram#(Vector#(numCols, RowSelectorParamT) programInfo, ProgramRowSelector#(TMul#(numCols,2)) programIfc)(Empty) provisos(
    Add#(TLog#(numCols), a__, TLog#(TMul#(numCols, 2))),
-   Add#(a__, TLog#(numCols), TLog#(TAdd#(numCols, 1))));
+   Add#(a__, TLog#(numCols), TLog#(TAdd#(numCols, 1))),
+   Add#(b__, TLog#(numCols), 8));
    
-   RowSelectorProgrammer#(numCols) programmer <- mkRowSelectorProgrammer(programIfc);
+   RowSelectorProgrammer programmer <- mkRowSelectorProgrammer(programIfc);
    
-   Reg#(Bit#(TLog#(TAdd#(numCols,1)))) colCnt <- mkReg(0);
+   Reg#(Bit#(8)) colCnt <- mkReg(0);
    rule doProgram if ( colCnt < fromInteger(valueOf(numCols)));
-      programmer.programPort.enq(tuple2(truncate(colCnt), programInfo[colCnt]));
+      programmer.setParam(colCnt, programInfo[colCnt]);
       colCnt <= colCnt + 1;
    endrule
 endmodule

@@ -145,6 +145,11 @@ module mkTb_ColProc(Empty);
             $display("col %d is Invalid", i);
          end
       end
+      
+      $display("RowSelectorParamT size = %d", valueOf(SizeOf#(RowSelectorParamT)));
+      $display("InColParamT size = %d", valueOf(SizeOf#(InColParamT)));
+      $display("ColXFormParamT size = %d", valueOf(SizeOf#(Bit#(32))));
+      $display("OutColParamT size = %d", valueOf(SizeOf#(OutColParamT)));
       $finish();
    endrule
 

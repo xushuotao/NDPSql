@@ -284,3 +284,57 @@ function NDPStreamOut toNDPStreamOut(FIFOF#(RowData) dataQ, FIFOF#(RowMask) mask
               interface rowMask = toPipeOut(maskQ);
            endinterface);
 endfunction
+
+typedef 5 NDPDestCnt;
+typedef enum {NDP_Drain, NDP_Group, NDP_Aggregate, NDP_Bloom, NDP_Host} NDPDest deriving (Bits, Eq, FShow);
+
+typedef enum {SetColNum, SetCol, SetParam, Run} ProcState deriving (Bits, Eq, FShow);
+
+
+typedef struct{
+   ColType colType;
+   Bit#(64) numRows;
+   Bit#(64) baseAddr;
+   Bool forward;
+   Bool allRows;
+   Bit#(1) rdPort;
+   Bit#(64) lowTh;
+   Bit#(64) hiTh;
+   Bool isSigned;
+   Bool andNotOr; 
+   } RowSelectorParamT deriving (Bits, Eq, FShow);
+
+
+typedef struct{
+   ColType colType;
+   Bit#(64) baseAddr;
+   } InColParamT deriving (Bits, Eq, FShow);
+
+
+typedef struct{
+   ColType colType;
+   NDPDest dest;
+   Bool isSigned;
+   } OutColParamT deriving (Bits, Eq, FShow);
+
+
+interface RowSelectorProgrammer;
+   method Action setParam(Bit#(8) colId, RowSelectorParamT param);
+endinterface
+
+
+interface InColProgrammer;
+   method Action setDim(Bit#(64) numRows, Bit#(8) numCols);
+   method Action setParam(Bit#(8) colId, InColParamT param);
+endinterface
+
+interface ColXFormProgrammer;
+   method Action setProgramLength(Bit#(8) colId, Bit#(8) progLength);
+   method Action setInstruction(Bit#(32) inst);
+endinterface
+
+interface OutColProgrammer;
+   method Action setColNum(Bit#(8) numCols);
+   method Action setParam(Bit#(8) colId, OutColParamT param);
+endinterface
+

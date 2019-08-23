@@ -25,10 +25,6 @@ Bool debug = False;
 
 typedef 4 ColXFormEngs;
 
-typedef 5 NDPDestCnt;
-typedef enum {Drain, Group, Aggregate, Bloom, Host} NDPDest deriving (Bits, Eq, FShow);
-
-typedef enum {SetColNum, SetCol, SetParam, Run} ProcState deriving (Bits, Eq, FShow);
 
 interface ProgramOutputCol;
    method Action setColNum(ColNumT colnum);
@@ -97,11 +93,10 @@ module mkColProc(ColProc);
    
    Reg#(Bit#(TLog#(MaxNumCol))) colCntMask <- mkReg(0);
    
-   Vector#(MaxNumCol, Reg#(NDPDest)) destNDP <- replicateM(mkReg(Drain));
    
    Reg#(Bit#(TLog#(TAdd#(MaxNumCol,1)))) outColNum <- mkReg(0);
    Vector#(MaxNumCol, Reg#(Bit#(5))) beatsPerRowVec_V <- replicateM(mkRegU);
-   Vector#(MaxNumCol, Reg#(NDPDest)) destSel <- replicateM(mkReg(Drain));
+   Vector#(MaxNumCol, Reg#(NDPDest)) destSel <- replicateM(mkReg(NDP_Drain));
    
    Vector#(MaxNumCol, OneToNRouter#(NDPDestCnt, RowMask)) rowMaskToNDP <- replicateM(mkOneToNRouterPipelined);
    Vector#(MaxNumCol, OneToNRouter#(NDPDestCnt, RowData)) rowDataToNDP <- replicateM(mkOneToNRouterPipelined);
@@ -133,7 +128,7 @@ module mkColProc(ColProc);
 
    function Bit#(TLog#(NDPDestCnt)) toNDPId(NDPDest dest);
       return case (dest)
-                Aggregate: 1;
+                NDP_Aggregate: 1;
                 default: 0;
              endcase;
    endfunction

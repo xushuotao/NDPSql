@@ -9,37 +9,6 @@ import ColXForm::*;
 import ColProc::*;
 import Connectable::*;
 
-
-typedef struct{
-   ColType colType;
-   Bit#(64) baseAddr;
-   } InColParamT deriving (Bits, Eq, FShow);
-
-
-typedef struct{
-   ColType colType;
-   NDPDest dest;
-   Bool isSigned;
-   } OutColParamT deriving (Bits, Eq, FShow);
-
-
-interface InColProgrammer;
-   method Action setDim(Bit#(64) numRows, ColNumT numCols);
-   interface PipeIn#(Tuple2#(ColIdT, InColParamT)) programPort;
-   // interface ProgramInColClient programClient;
-endinterface
-
-interface ColXFormProgrammer#(numeric type engs);
-   method Action setProgramLength(Bit#(TLog#(engs)) colId, Bit#(4) progLength);
-   interface PipeIn#( Bit#(32)) programPort;
-endinterface
-
-interface OutColProgrammer;
-   method Action setColNum(ColNumT numCols);
-   interface PipeIn#(Tuple2#(ColIdT, OutColParamT)) programPort;
-   // interface ProgramOutColClient programClient;
-endinterface
-
 module mkInColProgrammer#(ProgramColProcReader programIfc)(InColProgrammer);
    FIFOF#(Tuple2#(ColIdT, InColParamT)) programQ <- mkFIFOF;
    
@@ -61,13 +30,15 @@ module mkInColProgrammer#(ProgramColProcReader programIfc)(InColProgrammer);
       programIfc.colInfoPort.enq(tuple4(colId, param.colType, param.baseAddr, colCnt + 1 == colNum));
    endrule
   
-   method Action setDim(Bit#(64) numRows, ColNumT numCols) if ( doSetDims);
-      programIfc.setDims(numRows, numCols);
-      colNum <= numCols;
+   method Action setDim(Bit#(64) numRows, Bit#(8) numCols) if ( doSetDims);
+      programIfc.setDims(numRows, truncate(numCols));
+      colNum <= truncate(numCols);
       doSetDims <= False;
    endmethod
    
-   interface PipeIn programPort = toPipeIn(programQ);
+   method Action setParam(Bit#(8) colId, InColParamT param);
+      programQ.enq(tuple2(truncate(colId), param));
+   endmethod
 endmodule
 
 module mkInColAutoProgram#(Bit#(64) numRows, Vector#(numCols, InColParamT) colInfo, ProgramColProcReader programIfc)(Empty);
@@ -77,28 +48,29 @@ module mkInColAutoProgram#(Bit#(64) numRows, Vector#(numCols, InColParamT) colIn
       programmer.setDim(numRows, fromInteger(valueOf(numCols)));
       doDim <= False;
    endrule
-   Reg#(ColNumT) colCnt <- mkReg(0);
+   Reg#(Bit#(8)) colCnt <- mkReg(0);
    rule doProgram if ( colCnt < fromInteger(valueOf(numCols)) );
-      programmer.programPort.enq(tuple2(truncate(colCnt), colInfo[colCnt]));
+      programmer.setParam(colCnt, colInfo[colCnt]);
       colCnt <= colCnt + 1;
    endrule
 endmodule
       
 
-module mkColXFormProgrammer#(ProgramColXForm#(engs) programIfc)(ColXFormProgrammer#(engs));
+module mkColXFormProgrammer#(ProgramColXForm#(engs) programIfc)(ColXFormProgrammer) provisos(
+    Add#(a__, TLog#(engs), 8));
    Integer numEngs = valueOf(engs);
    Reg#(Bit#(TLog#(TAdd#(engs,1)))) engCnt_Length <- mkReg(0);
-   Vector#(engs, Reg#(Bit#(4))) progLengths <- replicateM(mkRegU);
+   Vector#(engs, Reg#(Bit#(8))) progLengths <- replicateM(mkRegU);
    
    FIFOF#(Bit#(32)) programQ <- mkFIFOF;
-   Reg#(Bit#(3)) pc <- mkReg(0);
+   Reg#(Bit#(8)) pc <- mkReg(0);
    Reg#(Bit#(TLog#(engs))) engCnt <- mkReg(0);
    rule programEngs if ( engCnt_Length == fromInteger(numEngs));
       let inst = programQ.first;
       programQ.deq;
-      programIfc.enq(tuple2(engCnt, tuple3(pc, False, inst)));
+      programIfc.enq(tuple2(engCnt, tuple3(truncate(pc), False, inst)));
       
-      if ( zeroExtend(pc) + 1 == progLengths[engCnt] ) begin
+      if ( pc + 1 == progLengths[engCnt] ) begin
          pc <= 0;
          if (engCnt == fromInteger(numEngs - 1) ) begin
             engCnt_Length <= 0;
@@ -113,21 +85,23 @@ module mkColXFormProgrammer#(ProgramColXForm#(engs) programIfc)(ColXFormProgramm
       end
    endrule
    
-   method Action setProgramLength(Bit#(TLog#(engs)) engId, Bit#(4) progLength) if ( engCnt_Length < fromInteger(numEngs) );
+   method Action setProgramLength(Bit#(8) engId, Bit#(8) progLength) if ( engCnt_Length < fromInteger(numEngs) );
       engCnt_Length <=  engCnt_Length + 1;
       progLengths[engId] <= progLength;
-      programIfc.enq(tuple2(engId, tuple3(?, True, zeroExtend(progLength))));
+      programIfc.enq(tuple2(truncate(engId), tuple3(?, True, zeroExtend(progLength))));
    endmethod
    
-   interface PipeIn programPort = toPipeIn(programQ);
+   method Action setInstruction(Bit#(32) inst);
+      programQ.enq(inst);
+   endmethod
 endmodule
 
-module mkColXFormAutoProgram#(Vector#(engs, Bit#(4)) progLength,
+module mkColXFormAutoProgram#(Vector#(engs, Bit#(w)) progLength,
                               Vector#(engs, Vector#(8, Bit#(32))) insts,
-                              ProgramColXForm#(engs) programIfc)(Empty);
+                              ProgramColXForm#(engs) programIfc)(Empty) provisos(Add#(a__, w, 8), Add#(b__, TLog#(engs), 8));
    
    let programmer <- mkColXFormProgrammer(programIfc);
-   Reg#(Bit#(TLog#(engs))) engCnt <- mkReg(0);
+   Reg#(Bit#(8)) engCnt <- mkReg(0);
    Reg#(Bool) programLength <- mkReg(True);
    rule doProgramLength if ( programLength);
       if ( engCnt == fromInteger(valueOf(engs) -1 )) begin
@@ -137,21 +111,21 @@ module mkColXFormAutoProgram#(Vector#(engs, Bit#(4)) progLength,
       else begin
          engCnt <= engCnt + 1;
       end
-      programmer.setProgramLength(engCnt, progLength[engCnt]);
+      programmer.setProgramLength(engCnt, zeroExtend(progLength[engCnt]));
    endrule
    
    Reg#(Bit#(TLog#(TAdd#(engs,1)))) engCnt2 <- mkReg(0);
-   Reg#(Bit#(3)) pc <- mkReg(0);
+   Reg#(Bit#(8)) pc <- mkReg(0);
    
    rule doPrograms if ( engCnt2 < fromInteger(valueOf(engs)));
-      if ( zeroExtend(pc) + 1 == progLength[engCnt2] ) begin
+      if ( pc + 1 == zeroExtend(progLength[engCnt2]) ) begin
          pc <= 0;
          engCnt2 <= engCnt2 + 1;
       end
       else begin
          pc <= pc + 1;
       end
-      programmer.programPort.enq(insts[engCnt2][pc]);
+      programmer.setInstruction(insts[engCnt2][pc]);
    endrule
 endmodule
 
@@ -184,14 +158,15 @@ module mkOutColProgrammer#(ProgramOutputCol programIfc)(OutColProgrammer);
       ndpParamQ.enq(tuple3(colId, vec({?,pack(param.isSigned)},?,?,?), colCnt + 1 == colNum));
    endrule
   
-   method Action setColNum(ColNumT numCols) if ( doSetDims);
-      colNum <= numCols;
+   method Action setColNum(Bit#(8) numCols) if ( doSetDims);
+      colNum <= truncate(numCols);
       doSetDims <= False;
-      programIfc.setColNum(numCols);
+      programIfc.setColNum(truncate(numCols));
    endmethod
    
-   
-   interface PipeIn programPort = toPipeIn(programQ);   
+   method Action setParam(Bit#(8) colId, OutColParamT param);
+      programQ.enq(tuple2(truncate(colId), param));
+   endmethod
 endmodule
 
 module mkOutColAutoProgram#(Vector#(numCols, OutColParamT) colInfo, ProgramOutputCol programIfc)(Empty);
@@ -201,9 +176,9 @@ module mkOutColAutoProgram#(Vector#(numCols, OutColParamT) colInfo, ProgramOutpu
       programmer.setColNum(fromInteger(valueOf(numCols)));
       doDim <= False;
    endrule
-   Reg#(ColNumT) colCnt <- mkReg(0);
+   Reg#(Bit#(8)) colCnt <- mkReg(0);
    rule doProgram if ( colCnt < fromInteger(valueOf(numCols)) );
-      programmer.programPort.enq(tuple2(truncate(colCnt), colInfo[colCnt]));
+      programmer.setParam(colCnt, colInfo[colCnt]);
       colCnt <= colCnt + 1;
    endrule
 endmodule

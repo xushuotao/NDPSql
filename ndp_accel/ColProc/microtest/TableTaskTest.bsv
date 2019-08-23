@@ -125,12 +125,12 @@ Vector#(NumInCols, InColParamT) inColInfos = vec(inColInfo_returnflag  ,
 ////////////////////////////////////////////////////////////////////////////////
 typedef 6 NumOutCols; 
 Integer numOutCols = valueOf(NumOutCols);
-OutColParamT outColInfo_returnflag     = OutColParamT{colType:Byte, dest:Drain,     isSigned: False};
-OutColParamT outColInfo_linestatus     = OutColParamT{colType:Byte, dest:Drain,     isSigned: False};
-OutColParamT outColInfo_quantity       = OutColParamT{colType:Int,  dest:Aggregate, isSigned: True};
-OutColParamT outColInfo_extended_price = OutColParamT{colType:Long, dest:Aggregate, isSigned: True};
-OutColParamT outColInfo_discount_price = OutColParamT{colType:Long, dest:Aggregate, isSigned: True};
-OutColParamT outColInfo_charge_price   = OutColParamT{colType:Long, dest:Aggregate, isSigned: True};
+OutColParamT outColInfo_returnflag     = OutColParamT{colType:Byte, dest:NDP_Drain,     isSigned: False};
+OutColParamT outColInfo_linestatus     = OutColParamT{colType:Byte, dest:NDP_Drain,     isSigned: False};
+OutColParamT outColInfo_quantity       = OutColParamT{colType:Int,  dest:NDP_Aggregate, isSigned: True};
+OutColParamT outColInfo_extended_price = OutColParamT{colType:Long, dest:NDP_Aggregate, isSigned: True};
+OutColParamT outColInfo_discount_price = OutColParamT{colType:Long, dest:NDP_Aggregate, isSigned: True};
+OutColParamT outColInfo_charge_price   = OutColParamT{colType:Long, dest:NDP_Aggregate, isSigned: True};
 Vector#(NumOutCols, OutColParamT) outColInfos = vec(outColInfo_returnflag     ,
                                                     outColInfo_linestatus     ,
                                                     outColInfo_quantity       ,
