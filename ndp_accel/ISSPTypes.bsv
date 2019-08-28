@@ -1,0 +1,73 @@
+typedef enum {Byte=0, Short=1, Int=2, Long=3, BigInt=4} ColType deriving (Bits, FShow, Eq);
+
+typedef 5 NDPDestCnt;
+typedef enum {NDP_Drain, NDP_Group, NDP_Aggregate, NDP_Bloom, NDP_Host} NDPDest deriving (Bits, Eq, FShow);
+
+
+typedef enum {
+   Pass = 0,
+   Copy = 1, 
+   Store = 2,
+   AluImm = 3, 
+   Alu = 4,
+   Cast = 5
+   } InstType deriving (Bits, Eq, FShow);
+
+
+typedef enum{Add=0, Sub=1, Mul=2, Mullo=3} AluOp deriving (Bits, Eq, FShow);
+
+typedef struct {
+   InstType iType;  // 3-bit
+   ColType inType; // 3-bit
+   ColType outType; // 3-bit total 12-bit
+   AluOp aluOp;     // 2-bit
+   Bool isSigned;   // 1-bit 
+   Bit#(20) imm;    // 20-bit
+   } DecodeInst deriving (Bits, Eq, FShow);  // 32-bit instr
+
+typedef struct{
+   ColType colType;
+   Bit#(64) numRows;
+   Bit#(64) baseAddr;
+   Bool forward;
+   Bool allRows;
+   Bit#(1) rdPort;
+   Bit#(64) lowTh;
+   Bit#(64) hiTh;
+   Bool isSigned;
+   Bool andNotOr; 
+   } RowSelectorParamT deriving (Bits, Eq, FShow);
+
+
+typedef struct{
+   ColType colType;
+   Bit#(64) baseAddr;
+   } InColParamT deriving (Bits, Eq, FShow);
+
+
+typedef struct{
+   ColType colType;
+   NDPDest dest;
+   Bool isSigned;
+   } OutColParamT deriving (Bits, Eq, FShow);
+
+
+interface RowSelectorProgramIfc;
+   method Action setParam(Bit#(8) colId, RowSelectorParamT param);
+endinterface
+
+
+interface InColProgramIfc;
+   method Action setDim(Bit#(64) numRows, Bit#(8) numCols);
+   method Action setParam(Bit#(8) colId, InColParamT param);
+endinterface
+
+interface ColXFormProgramIfc;
+   method Action setProgramLength(Bit#(8) colId, Bit#(8) progLength);
+   method Action setInstruction(Bit#(32) inst);
+endinterface
+
+interface OutColProgramIfc;
+   method Action setColNum(Bit#(8) numCols);
+   method Action setParam(Bit#(8) colId, OutColParamT param);
+endinterface
