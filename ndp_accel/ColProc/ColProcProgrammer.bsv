@@ -1,3 +1,4 @@
+import ISSPTypes::*;
 import NDPCommon::*;
 import Pipe::*;
 import FIFOF::*;
@@ -9,7 +10,7 @@ import ColXForm::*;
 import ColProc::*;
 import Connectable::*;
 
-module mkInColProgrammer#(ProgramColProcReader programIfc)(InColProgrammer);
+module mkInColProgramIfc#(ProgramColProcReader programIfc)(InColProgramIfc);
    FIFOF#(Tuple2#(ColIdT, InColParamT)) programQ <- mkFIFOF;
    
    Reg#(Bool) doSetDims <- mkReg(True);
@@ -31,20 +32,23 @@ module mkInColProgrammer#(ProgramColProcReader programIfc)(InColProgrammer);
    endrule
   
    method Action setDim(Bit#(64) numRows, Bit#(8) numCols) if ( doSetDims);
+      $display("(%m) setDim numRows = %d, numCols = %d", numRows, numCols);
       programIfc.setDims(numRows, truncate(numCols));
       colNum <= truncate(numCols);
       doSetDims <= False;
    endmethod
    
    method Action setParam(Bit#(8) colId, InColParamT param);
+      $display("(%m) setParam colId = %d, param = ", colId, fshow(param));
       programQ.enq(tuple2(truncate(colId), param));
    endmethod
 endmodule
 
 module mkInColAutoProgram#(Bit#(64) numRows, Vector#(numCols, InColParamT) colInfo, ProgramColProcReader programIfc)(Empty);
-   let programmer <- mkInColProgrammer(programIfc);
+   let programmer <- mkInColProgramIfc(programIfc);
    Reg#(Bool) doDim <- mkReg(True);
    rule doSetDim if (doDim);
+
       programmer.setDim(numRows, fromInteger(valueOf(numCols)));
       doDim <= False;
    endrule
@@ -56,7 +60,7 @@ module mkInColAutoProgram#(Bit#(64) numRows, Vector#(numCols, InColParamT) colIn
 endmodule
       
 
-module mkColXFormProgrammer#(ProgramColXForm#(engs) programIfc)(ColXFormProgrammer) provisos(
+module mkColXFormProgramIfc#(ProgramColXForm#(engs) programIfc)(ColXFormProgramIfc) provisos(
     Add#(a__, TLog#(engs), 8));
    Integer numEngs = valueOf(engs);
    Reg#(Bit#(TLog#(TAdd#(engs,1)))) engCnt_Length <- mkReg(0);
@@ -86,12 +90,15 @@ module mkColXFormProgrammer#(ProgramColXForm#(engs) programIfc)(ColXFormProgramm
    endrule
    
    method Action setProgramLength(Bit#(8) engId, Bit#(8) progLength) if ( engCnt_Length < fromInteger(numEngs) );
+      $display("(%m) setProgramLength endId = %d, progLength = %d",  engId, progLength);
       engCnt_Length <=  engCnt_Length + 1;
       progLengths[engId] <= progLength;
       programIfc.enq(tuple2(truncate(engId), tuple3(?, True, zeroExtend(progLength))));
    endmethod
    
    method Action setInstruction(Bit#(32) inst);
+      DecodeInst decodeInst = unpack(inst);
+      $display("(%m) setInstruction = ",  fshow(decodeInst));
       programQ.enq(inst);
    endmethod
 endmodule
@@ -100,7 +107,7 @@ module mkColXFormAutoProgram#(Vector#(engs, Bit#(w)) progLength,
                               Vector#(engs, Vector#(8, Bit#(32))) insts,
                               ProgramColXForm#(engs) programIfc)(Empty) provisos(Add#(a__, w, 8), Add#(b__, TLog#(engs), 8));
    
-   let programmer <- mkColXFormProgrammer(programIfc);
+   let programmer <- mkColXFormProgramIfc(programIfc);
    Reg#(Bit#(8)) engCnt <- mkReg(0);
    Reg#(Bool) programLength <- mkReg(True);
    rule doProgramLength if ( programLength);
@@ -131,7 +138,7 @@ endmodule
 
 
 
-module mkOutColProgrammer#(ProgramOutputCol programIfc)(OutColProgrammer);
+module mkOutColProgramIfc#(ProgramOutputCol programIfc)(OutColProgramIfc);
    FIFOF#(Tuple2#(ColIdT, OutColParamT)) programQ <- mkFIFOF;
    
    Reg#(Bool) doSetDims <- mkReg(True);
@@ -153,7 +160,7 @@ module mkOutColProgrammer#(ProgramOutputCol programIfc)(OutColProgrammer);
       else begin
          colCnt <= colCnt + 1;
       end
-      $display("(%m) outColProgrammer programCols = ", fshow(programQ.first));
+      $display("(%m) outColProgramIfc colId = %d, programCols = ", colId, fshow(programQ.first));      
       programIfc.colInfoPort.enq(tuple4(colId, param.colType, param.dest, colCnt + 1 == colNum));
       ndpParamQ.enq(tuple3(colId, vec({?,pack(param.isSigned)},?,?,?), colCnt + 1 == colNum));
    endrule
@@ -170,7 +177,7 @@ module mkOutColProgrammer#(ProgramOutputCol programIfc)(OutColProgrammer);
 endmodule
 
 module mkOutColAutoProgram#(Vector#(numCols, OutColParamT) colInfo, ProgramOutputCol programIfc)(Empty);
-   let programmer <- mkOutColProgrammer(programIfc);
+   let programmer <- mkOutColProgramIfc(programIfc);
    Reg#(Bool) doDim <- mkReg(True);
    rule doColNums if (doDim);
       programmer.setColNum(fromInteger(valueOf(numCols)));

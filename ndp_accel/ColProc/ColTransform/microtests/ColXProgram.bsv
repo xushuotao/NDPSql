@@ -1,6 +1,7 @@
 import Vector::*;
 import ColXFormPE::*;
 import BuildVector::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import SimdAlu256::*;
 

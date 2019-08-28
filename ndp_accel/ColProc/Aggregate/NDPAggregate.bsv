@@ -1,5 +1,6 @@
 import Pipe::*;
 import Vector::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import NDPPassThru::*;
 import Aggregate::*;
@@ -7,11 +8,11 @@ import BuildVector::*;
 
 interface NDPAggregate;
    interface NDPStreamIn streamIn;
-   interface PipeOut#(AggrResult#(16)) aggrResp;
+   interface PipeOut#(AggrResp) aggrResp;
    interface NDPConfigure configure;
 endinterface
 
-function PipeOut#(AggrResult#(16)) takeAggrResp(NDPAggregate ifc) = ifc.aggrResp;
+function PipeOut#(AggrResp) takeAggrResp(NDPAggregate ifc) = ifc.aggrResp;
 
 (*synthesize*)
 module mkNDPAggregate(NDPAggregate);
@@ -44,25 +45,25 @@ module mkNDPAggregate(NDPAggregate);
       end
    endrule
    
-   PipeOut#(AggrResult#(16)) emptyResult = (interface PipeOut#(AggrResult#(16))
-                                               method AggrResult#(16) first if (False);
-                                                  return ?;
-                                               endmethod
-                                               method Bool notEmpty = False;
-                                               method Action deq if (False);
-                                                  noAction;
-                                               endmethod
-                                            endinterface);
+   PipeOut#(AggrResp) emptyResult = (interface PipeOut#(AggrResp)
+                                        method AggrResp first if (False);
+                                           return ?;
+                                        endmethod
+                                        method Bool notEmpty = False;
+                                        method Action deq if (False);
+                                           noAction;
+                                        endmethod
+                                     endinterface);
       
    
-   Vector#(8, PipeOut#(AggrResult#(16))) aggregate_aggrResult = vec(emptyResult,               // 0
-                                                                    aggregate_char.aggrResp,   // 1
-                                                                    aggregate_short.aggrResp,  // 2
-                                                                    aggregate_uint.aggrResp,   // 3
-                                                                    aggregate_ulong.aggrResp,  // 4
-                                                                    aggregate_bigint.aggrResp, // 5
-                                                                    aggregate_int.aggrResp,    // 6
-                                                                    aggregate_long.aggrResp);  // 7
+   Vector#(8, PipeOut#(AggrResp)) aggregate_aggrResult = vec(emptyResult,               // 0
+                                                             aggregate_char.aggrResp,   // 1
+                                                             aggregate_short.aggrResp,  // 2
+                                                             aggregate_uint.aggrResp,   // 3
+                                                             aggregate_ulong.aggrResp,  // 4
+                                                             aggregate_bigint.aggrResp, // 5
+                                                             aggregate_int.aggrResp,    // 6
+                                                             aggregate_long.aggrResp);  // 7
    
    
    Reg#(Bit#(3)) sel <- mkReg(0);

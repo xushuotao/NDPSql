@@ -5,6 +5,7 @@ import Connectable::*;
 import FIFO::*;
 import FIFOF::*;
 import GetPut::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import Pipe::*;
 import Vector::*;
@@ -27,9 +28,9 @@ endinterface
 function AggrResp aggrExtend(AggrResult#(colBytes) in) provisos(
    Add#(a__, TMul#(colBytes, 8), 128));
    return AggrResp{sum: truncate(in.sum),
-                     cnt: in.cnt,
-                     min: zeroExtend(in.min),
-                     max: zeroExtend(in.max)};
+                   cnt: in.cnt,
+                   min: zeroExtend(in.min),
+                   max: zeroExtend(in.max)};
 endfunction
 
 function Tuple2#(Bool, Bit#(w)) minSigned2(Tuple2#(Bool, Bit#(w)) a, Tuple2#(Bool, Bit#(w)) b);

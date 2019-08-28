@@ -7,6 +7,7 @@ import FIFO::*;
 import FIFOF::*;
 import DualFlashPageBuffer::*;
 import GetPut::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 
 typedef Bit#(TLog#(PageBufSz)) BufTagT;

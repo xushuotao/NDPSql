@@ -1,3 +1,4 @@
+import ISSPTypes::*;
 import NDPCommon::*;
 import Pipe::*;
 import FIFOF::*;
@@ -130,7 +131,7 @@ module mkColReader(ColReader);
 ////////////////////////////////////////////////////////////////////////////////
    Reg#(Maybe#(Bit#(64))) lastPageId <- mkReg(tagged Invalid);
    Reg#(Bit#(64)) endPageId <- mkRegU;
-   Reg#(Bit#(64)) rowVec_reqCnt <- mkReg(0);
+   // Reg#(Bit#(64)) rowVec_reqCnt <- mkReg(0);
    
    FIFO#(void) releaseflashReq <- mkFIFO;
    
@@ -147,7 +148,24 @@ module mkColReader(ColReader);
    
    rule doAllRows_flashReq if ( state == AllRows || state == PartialRows);
       let req = rowVecReqQ.first();
+      rowVecReqQ.deq;
       
+      if (debug) $display("(%m):gen flash req rowVecCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, req.numRowVecs, totalRowVecs, req.last);
+      
+      dynamicAssert(req.numRowVecs <= zeroExtend(toRowVecsPerPage(colBytes)), "numRowVecs has to be smaller than numPages");
+      Bit#(64) rowVecIncr = req.numRowVecs;
+      Bool isLast = False;
+      
+      if ( req.last ) begin
+         isLast = True;
+         dynamicAssert(rowVecCnt + req.numRowVecs == totalRowVecs, "(%m) (Nonforward) totalRows should equal");
+         allRowVecsFinished <= True;
+         // state <= Idle;
+      end
+      
+      rowVecCnt <= rowVecCnt + req.numRowVecs;
+      
+      /*     
       // maximum step should
       Bit#(64) rowVecIncr = min(req.numRowVecs-rowVec_reqCnt, zeroExtend(rowVecsPerPage));
       
@@ -171,18 +189,20 @@ module mkColReader(ColReader);
       else begin
          rowVec_reqCnt <= rowVec_reqCnt + rowVecIncr;
       end
-      
+   */   
 
-      let nextPageId = rowVecToPageId(rowVecCnt + rowVec_reqCnt + rowVecIncr);
+      let nextPageId = rowVecToPageId(rowVecCnt + rowVecIncr);
       
-      // lastRowVecId <= rowVecCnt + rowVec_reqCnt + rowVecIncr;
       
-      let currPageId = rowVecToPageId(rowVecCnt + rowVec_reqCnt);
+      let currPageId = rowVecToPageId(rowVecCnt);
       
       
       Bool needRead_next = needRead || (state == AllRows || !req.maskZero);
-      if (debug) $display("(%m):gen flash req rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
+
       if (debug) $display("(%m): currPageId = %d, nextPageId = %d, needRead = %d, needRead_next = %d, isLast = %d", currPageId, nextPageId, needRead, needRead_next, isLast);
+
+      // if (debug) $display("(%m):gen flash req rowVecCnt = %d, rowVec_reqCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, rowVec_reqCnt, req.numRowVecs, totalRowVecs, req.last);
+      // if (debug) $display("(%m): currPageId = %d, nextPageId = %d, needRead = %d, needRead_next = %d, isLast = %d", currPageId, nextPageId, needRead, needRead_next, isLast);
       
 
       // on last RowVec of a page;

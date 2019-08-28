@@ -1,6 +1,7 @@
 import Vector::*;
 import BuildVector::*;
 import Aggregate::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import Pipe::*;
 import FIFO::*;

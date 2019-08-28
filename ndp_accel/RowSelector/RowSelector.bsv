@@ -4,6 +4,7 @@ import Vector::*;
 import ClientServerHelper::*;
 import FirstColReader::*;
 import ColReader::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import Connectable::*;
 import FlashCtrlIfc::*;

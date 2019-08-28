@@ -1,3 +1,4 @@
+import ISSPTypes::*;
 import NDPCommon::*;
 import FIFO::*;
 import FIFOF::*;
@@ -23,24 +24,6 @@ interface ColXFormPE;
 endinterface
 
 Bool debug = False;
-
-typedef enum {
-   Pass = 0,
-   Copy = 1, 
-   Store = 2,
-   AluImm = 3, 
-   Alu = 4,
-   Cast = 5
-   } InstType deriving (Bits, Eq, FShow);
-
-typedef struct {
-   InstType iType;  // 3-bit
-   AluOp aluOp;     // 2-bit
-   Bool isSigned;   // 1-bit 
-   ColType inType; // 3-bit
-   ColType outType; // 3-bit total 12-bit
-   Bit#(20) imm;    // 20-bit
-   } DecodeInst deriving (Bits, Eq, FShow);  // 32-bit instr
 
 typedef struct {
    InstType iType; // 3-bit

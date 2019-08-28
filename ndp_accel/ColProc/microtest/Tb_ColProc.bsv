@@ -23,6 +23,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import Vector::*;
 import BuildVector::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import Pipe::*;
 import AlgFuncs::*;
@@ -60,6 +61,7 @@ import Aggregate::*;
 import RowSelectorProgrammer::*;
 import ColProcProgrammer::*;
 
+import ISSPTypes::*;
 import NDPCommon::*;
 
 import TableTaskTest::*;

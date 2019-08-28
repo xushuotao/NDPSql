@@ -8,6 +8,7 @@ import GetPut::*;
 import FIFO::*;
 import SpecialFIFOs::*;
 import Assert::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 
 Bool debug = False;

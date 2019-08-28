@@ -16,6 +16,7 @@ import DualFlashPageBuffer::*;
 
 import RowMask::*;
 
+import ISSPTypes::*;
 import NDPCommon::*;
 import NDPDrain::*;
 import Aggregate::*;
@@ -23,8 +24,7 @@ import NDPAggregate::*;
 
 Bool debug = False;
 
-typedef 4 ColXFormEngs;
-
+typedef enum {SetColNum, SetCol, SetParam, Run} ProcState deriving (Bits, Eq, FShow);
 
 interface ProgramOutputCol;
    method Action setColNum(ColNumT colnum);

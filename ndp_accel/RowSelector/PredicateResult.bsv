@@ -1,4 +1,5 @@
 import FIFOF::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import RowMask::*;
 import Pipe::*;

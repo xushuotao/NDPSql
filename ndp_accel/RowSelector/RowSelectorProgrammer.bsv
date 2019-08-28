@@ -2,29 +2,11 @@ import Pipe::*;
 import FIFOF::*;
 import Vector::*;
 import BuildVector::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import RowSelector::*;
 
-typedef struct{
-   ColType colType;
-   Bit#(64) numRows;
-   Bit#(64) baseAddr;
-   Bool forward;
-   Bool allRows;
-   Bit#(1) rdPort;
-   Bit#(64) lowTh;
-   Bit#(64) hiTh;
-   Bool isSigned;
-   Bool andNotOr; 
-   } RowSelectorParamT deriving (Bits, Eq, FShow);
-
-// ColType, numRows, baseAddr, {forward,allRows,maskRdport}, lowTh, hiTh, isSigned, andNotOr,
-interface RowSelectorProgrammer;
-   method Action setParam(Bit#(8) colId, RowSelectorParamT param);
-endinterface
-
-
-module mkRowSelectorProgrammer#(ProgramRowSelector#(TMul#(numCols,2)) programIfc)(RowSelectorProgrammer) provisos(
+module mkRowSelectorProgramIfc#(ProgramRowSelector#(TMul#(numCols,2)) programIfc)(RowSelectorProgramIfc) provisos(
    Add#(TLog#(numCols), a__, TLog#(TMul#(numCols, 2))),
    Add#(a__, TLog#(numCols), TLog#(TAdd#(numCols, 1))),
    Add#(b__, TLog#(numCols), 8));
@@ -72,6 +54,7 @@ module mkRowSelectorProgrammer#(ProgramRowSelector#(TMul#(numCols,2)) programIfc
    endrule
 
    method Action setParam(Bit#(8) colId, RowSelectorParamT param);
+      $display("(%m) setParam colId = %d, param = ", colId, fshow(param));
       programFifo.enq(tuple2(truncate(colId), param));
    endmethod
 endmodule
@@ -81,7 +64,7 @@ module mkRowSelectAutoProgram#(Vector#(numCols, RowSelectorParamT) programInfo, 
    Add#(a__, TLog#(numCols), TLog#(TAdd#(numCols, 1))),
    Add#(b__, TLog#(numCols), 8));
    
-   RowSelectorProgrammer programmer <- mkRowSelectorProgrammer(programIfc);
+   RowSelectorProgramIfc programmer <- mkRowSelectorProgramIfc(programIfc);
    
    Reg#(Bit#(8)) colCnt <- mkReg(0);
    rule doProgram if ( colCnt < fromInteger(valueOf(numCols)));

@@ -6,9 +6,8 @@ import FIFO::*;
 import GetPut::*;
 
 import Assert::*;
+import ISSPTypes::*;
 
-
-typedef enum{Add, Sub, Mul, Mullo} AluOp deriving (Bits, Eq, FShow);
 
 interface SimdAlu256;
    method Action start(Bit#(256) a, Bit#(256) b, AluOp op, SimdMode mode, Bool isSigned);

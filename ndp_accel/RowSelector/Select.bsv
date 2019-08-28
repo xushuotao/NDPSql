@@ -1,5 +1,6 @@
 import FIFOF::*;
 import Pipe::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import Vector::*;
 import FIFO::*;

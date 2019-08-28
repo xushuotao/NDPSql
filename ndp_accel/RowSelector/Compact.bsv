@@ -2,6 +2,7 @@ import Vector::*;
 import FIFO::*;
 import SpecialFIFOs::*;
 import Pipe::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import FIFOF::*;
 import GetPut::*;

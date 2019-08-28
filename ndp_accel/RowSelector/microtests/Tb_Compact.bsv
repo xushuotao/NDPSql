@@ -24,6 +24,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import Vector::*;
 import BuildVector::*;
 import Compact::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import Pipe::*;
 import AlgFuncs::*;

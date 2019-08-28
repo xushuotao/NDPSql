@@ -2,10 +2,19 @@ import Vector::*;
 import Pipe::*;
 import Connectable::*;
 import FIFOF::*;
+import ISSPTypes::*;
+// `include "ISSPTypes.bsv"
 
-typedef enum {Byte, Short, Int, Long, BigInt} ColType deriving (Bits, FShow, Eq);
+typedef 4 SelectCols;
+typedef 8 MaxNumCol;
+typedef 4 ColXFormEngs;
 
-typedef 32 PageBufSz;
+typedef 64 PageBufSz;
+
+
+typedef Bit#(TLog#(MaxNumCol)) ColIdT;
+typedef Bit#(TLog#(TAdd#(MaxNumCol,1))) ColNumT;
+
 
 typedef Bit#(256) RowData;
 
@@ -42,62 +51,6 @@ typedef struct{
    Bit#(128) max;
    Bit#(64) cnt;
    } AggrResp deriving (Bits, Eq, FShow);
-
-
-typedef 5 NDPDestCnt;
-typedef enum {NDP_Drain, NDP_Group, NDP_Aggregate, NDP_Bloom, NDP_Host} NDPDest deriving (Bits, Eq, FShow);
-
-typedef enum {SetColNum, SetCol, SetParam, Run} ProcState deriving (Bits, Eq, FShow);
-
-
-typedef struct{
-   ColType colType;
-   Bit#(64) numRows;
-   Bit#(64) baseAddr;
-   Bool forward;
-   Bool allRows;
-   Bit#(1) rdPort;
-   Bit#(64) lowTh;
-   Bit#(64) hiTh;
-   Bool isSigned;
-   Bool andNotOr; 
-   } RowSelectorParamT deriving (Bits, Eq, FShow);
-
-
-typedef struct{
-   ColType colType;
-   Bit#(64) baseAddr;
-   } InColParamT deriving (Bits, Eq, FShow);
-
-
-typedef struct{
-   ColType colType;
-   NDPDest dest;
-   Bool isSigned;
-   } OutColParamT deriving (Bits, Eq, FShow);
-
-
-interface RowSelectorProgrammer;
-   method Action setParam(Bit#(8) colId, RowSelectorParamT param);
-endinterface
-
-
-interface InColProgrammer;
-   method Action setDim(Bit#(64) numRows, Bit#(8) numCols);
-   method Action setParam(Bit#(8) colId, InColParamT param);
-endinterface
-
-interface ColXFormProgrammer;
-   method Action setProgramLength(Bit#(8) colId, Bit#(8) progLength);
-   method Action setInstruction(Bit#(32) inst);
-endinterface
-
-interface OutColProgrammer;
-   method Action setColNum(Bit#(8) numCols);
-   method Action setParam(Bit#(8) colId, OutColParamT param);
-endinterface
-
-
 
 
 function ColType toColType(Bit#(5) colBytes);

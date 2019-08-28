@@ -25,6 +25,7 @@ import Vector::*;
 import BuildVector::*;
 import FIFO::*;
 import SimdAlu256::*;
+import ISSPTypes::*;
 import NDPCommon::*;
 import ColXFormPE::*;
 import GetPut::*;

@@ -1,3 +1,4 @@
+import ISSPTypes::*;
 import NDPCommon::*;
 import FIFO::*;
 import SpecialFIFOs::*;
