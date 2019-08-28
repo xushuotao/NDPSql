@@ -72,36 +72,36 @@ OutColParam outColparam_charge_price = OutColParam{.colname="charged_price"   , 
 
 
 DecodeInst peProg_0[8] = {DecodeInst{.iType=Pass,   .inType=Byte}, //pass rf
-						  DecodeInst{.iType=Pass,   .inType=Byte}, //pass ls
-						  DecodeInst{.iType=Pass,   .inType=Int }, //pass quantity
-						  DecodeInst{.iType=Pass,   .inType=Long}, //pass extended_price
-						  DecodeInst{.iType=AluImm, .inType=Long, .outType=Long, .aluOp=Sub, .isSigned=true, .imm=100}, //1 - discount
-						  DecodeInst{.iType=AluImm, .inType=Long, .outType=Long, .aluOp=Add, .isSigned=true, .imm=100} //1 + tax
+                          DecodeInst{.iType=Pass,   .inType=Byte}, //pass ls
+                          DecodeInst{.iType=Pass,   .inType=Int }, //pass quantity
+                          DecodeInst{.iType=Pass,   .inType=Long}, //pass extended_price
+                          DecodeInst{.iType=AluImm, .inType=Long, .outType=Long, .aluOp=Sub, .isSigned=true, .imm=100}, //1 - discount
+                          DecodeInst{.iType=AluImm, .inType=Long, .outType=Long, .aluOp=Add, .isSigned=true, .imm=100} //1 + tax
                          };
 
 
 DecodeInst peProg_1[8] = {DecodeInst{.iType=Pass, .inType=Byte}, //pass rf
-						  DecodeInst{.iType=Pass, .inType=Byte}, //pass ls
-						  DecodeInst{.iType=Pass, .inType=Int }, //pass quantity
-						  DecodeInst{.iType=Copy, .inType=Long, .outType=Long}, //copy extended_price
-						  DecodeInst{.iType=Alu,  .inType=Long, .outType=Long, .aluOp=Mullo, .isSigned=true}, //(1-discount)*extended_price
-						  DecodeInst{.iType=Pass, .inType=Long} //pass 1+tax
+                          DecodeInst{.iType=Pass, .inType=Byte}, //pass ls
+                          DecodeInst{.iType=Pass, .inType=Int }, //pass quantity
+                          DecodeInst{.iType=Copy, .inType=Long, .outType=Long}, //copy extended_price
+                          DecodeInst{.iType=Alu,  .inType=Long, .outType=Long, .aluOp=Mullo, .isSigned=true}, //(1-discount)*extended_price
+                          DecodeInst{.iType=Pass, .inType=Long} //pass 1+tax
                          };
 
 DecodeInst peProg_2[8] = {DecodeInst{.iType=Pass, .inType=Byte}, //pass rf
-						  DecodeInst{.iType=Pass, .inType=Byte}, //pass ls
-						  DecodeInst{.iType=Pass, .inType=Int }, //pass quantity
-						  DecodeInst{.iType=Pass, .inType=Long}, //pass extended_price
-						  DecodeInst{.iType=Copy, .inType=Long, .outType=Long}, //copy (1-discount)*extended_price
-						  DecodeInst{.iType=Alu,  .inType=Long, .outType=Long, .aluOp=Mullo, .isSigned=true} // (1+tax)*(1-discount)*extended_price
+                          DecodeInst{.iType=Pass, .inType=Byte}, //pass ls
+                          DecodeInst{.iType=Pass, .inType=Int }, //pass quantity
+                          DecodeInst{.iType=Pass, .inType=Long}, //pass extended_price
+                          DecodeInst{.iType=Copy, .inType=Long, .outType=Long}, //copy (1-discount)*extended_price
+                          DecodeInst{.iType=Alu,  .inType=Long, .outType=Long, .aluOp=Mullo, .isSigned=true} // (1+tax)*(1-discount)*extended_price
                          };
 
 DecodeInst peProg_3[8] = {DecodeInst{.iType=Pass, .inType=Byte}, //pass rf
-						  DecodeInst{.iType=Pass, .inType=Byte}, //pass ls
-						  DecodeInst{.iType=Pass, .inType=Int }, //pass quantity
-						  DecodeInst{.iType=Pass, .inType=Long}, //pass extended_price
-						  DecodeInst{.iType=Pass, .inType=Long}, //pass (1-discount)*extended_price
-						  DecodeInst{.iType=Pass, .inType=Long}  //pass (1+tax)*(1-discount)*extended_price
+                          DecodeInst{.iType=Pass, .inType=Byte}, //pass ls
+                          DecodeInst{.iType=Pass, .inType=Int }, //pass quantity
+                          DecodeInst{.iType=Pass, .inType=Long}, //pass extended_price
+                          DecodeInst{.iType=Pass, .inType=Long}, //pass (1-discount)*extended_price
+                          DecodeInst{.iType=Pass, .inType=Long}  //pass (1+tax)*(1-discount)*extended_price
                          };
 
 
@@ -110,27 +110,27 @@ DecodeInst peProg_3[8] = {DecodeInst{.iType=Pass, .inType=Byte}, //pass rf
 
 
 TableTask task = TableTask{
-	.numRows=totalRows,
-	.rowSels={rowSelParam_0, rowSelforward_param, rowSelforward_param, rowSelforward_param},
-	.numInCols=6,
-	.inCols={inColparam_returnflag ,
-			 inColparam_linestatus ,
-			 inColparam_quantity   ,
-			 inColparam_extendprice,
-			 inColparam_discount   ,
-			 inColparam_tax         },
-	.programLength={6,6,6,6},
-	.colXInsts={{peProg_0[0],peProg_0[1],peProg_0[2],peProg_0[3],peProg_0[4],peProg_0[5],peProg_0[6],peProg_0[7]},
-				{peProg_1[0],peProg_1[1],peProg_1[2],peProg_1[3],peProg_1[4],peProg_1[5],peProg_1[6],peProg_1[7]},
-				{peProg_2[0],peProg_2[1],peProg_2[2],peProg_2[3],peProg_2[4],peProg_2[5],peProg_2[6],peProg_2[7]},
-				{peProg_3[0],peProg_3[1],peProg_3[2],peProg_3[3],peProg_3[4],peProg_3[5],peProg_3[6],peProg_3[7]}},
-	.numOutCols=6,
-	.outCols={outColparam_returnflag  ,
-			  outColparam_linestatus  ,
-			  outColparam_quantity    ,
-			  outColparam_extendprice ,
-			  outColparam_disc_price  ,
-			  outColparam_charge_price}};
+    .numRows=totalRows,
+    .rowSels={rowSelParam_0, rowSelforward_param, rowSelforward_param, rowSelforward_param},
+    .numInCols=6,
+    .inCols={inColparam_returnflag ,
+             inColparam_linestatus ,
+             inColparam_quantity   ,
+             inColparam_extendprice,
+             inColparam_discount   ,
+             inColparam_tax         },
+    .programLength={6,6,6,6},
+    .colXInsts={{peProg_0[0],peProg_0[1],peProg_0[2],peProg_0[3],peProg_0[4],peProg_0[5],peProg_0[6],peProg_0[7]},
+                {peProg_1[0],peProg_1[1],peProg_1[2],peProg_1[3],peProg_1[4],peProg_1[5],peProg_1[6],peProg_1[7]},
+                {peProg_2[0],peProg_2[1],peProg_2[2],peProg_2[3],peProg_2[4],peProg_2[5],peProg_2[6],peProg_2[7]},
+                {peProg_3[0],peProg_3[1],peProg_3[2],peProg_3[3],peProg_3[4],peProg_3[5],peProg_3[6],peProg_3[7]}},
+    .numOutCols=6,
+    .outCols={outColparam_returnflag  ,
+              outColparam_linestatus  ,
+              outColparam_quantity    ,
+              outColparam_extendprice ,
+              outColparam_disc_price  ,
+              outColparam_charge_price}};
 
 
 

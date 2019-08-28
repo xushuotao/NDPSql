@@ -16,31 +16,31 @@
 extern "C" {
 #endif
 typedef struct RowSelectorParam{
-	std::string colname;
-	RowSelectorParamT param;
+    std::string colname;
+    RowSelectorParamT param;
 } RowSelectorParam;
 
 typedef struct InColParam{
-	std::string colname;
+    std::string colname;
     InColParamT param;
 } InColParam;
 
 
 typedef struct OutColParam{
-	std::string colname;
-	OutColParamT param;
+    std::string colname;
+    OutColParamT param;
 } OutColParam;
 
 
 typedef struct TableTask{
-	uint64_t         numRows;
-	RowSelectorParam rowSels[NUM_SELS];
-	uint8_t          numInCols;
-	InColParam       inCols[NUM_COLS];
-	uint8_t          programLength[NUM_COLXFORM_PES];
-	DecodeInst       colXInsts[NUM_COLXFORM_PES][8];
-	uint8_t          numOutCols;
-	OutColParam      outCols[NUM_COLS];
+    uint64_t         numRows;
+    RowSelectorParam rowSels[NUM_SELS];
+    uint8_t          numInCols;
+    InColParam       inCols[NUM_COLS];
+    uint8_t          programLength[NUM_COLXFORM_PES];
+    DecodeInst       colXInsts[NUM_COLXFORM_PES][8];
+    uint8_t          numOutCols;
+    OutColParam      outCols[NUM_COLS];
 } TableTask;
 #ifdef __cplusplus
 }
@@ -48,20 +48,20 @@ typedef struct TableTask{
 
 class ISSPProgrammer{
 public:
-	ISSPProgrammer();
-	~ISSPProgrammer();
-	void sendTableTask(TableTask* task);
+    ISSPProgrammer();
+    ~ISSPProgrammer();
+    void sendTableTask(TableTask* task);
 private:
 
-	uint32_t encode(DecodeInst inst);
-	static bool devInit;
-	static RowSelectorProgramIfcProxy* program_rowSel  ;
-	static InColProgramIfcProxy*       program_inCol   ;
-	static ColXFormProgramIfcProxy*    program_colXform;
-	static OutColProgramIfcProxy*      program_outCol  ;
+    uint32_t encode(DecodeInst inst);
+    static bool devInit;
+    static RowSelectorProgramIfcProxy* program_rowSel  ;
+    static InColProgramIfcProxy*       program_inCol   ;
+    static ColXFormProgramIfcProxy*    program_colXform;
+    static OutColProgramIfcProxy*      program_outCol  ;
 
-	static void init_device();
-	static void destory_device();
+    static void init_device();
+    static void destory_device();
 };
 
 #endif
