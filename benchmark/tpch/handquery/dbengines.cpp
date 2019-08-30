@@ -182,8 +182,28 @@ BAT* select(T* column, size_t count, T lv, T hv){
   return bn;
 }
 
+
+
+size_t count_pages(BAT* pos, size_t colBytes){
+  size_t pages = 0;
+  
+  size_t prevPageId = (size_t)-1;
+
+  const oid* p = (const oid*) Tloc(pos, 0);
+  for ( oid i = 0; i < pos->batCount; i++ ){
+    if ( i < pos->batCount - 1) {
+      assert( p[i] < p[i+1] );
+    }
+    size_t currPageId = p[i]/(8192/colBytes);
+    if ( prevPageId != currPageId ) pages++;
+    prevPageId = currPageId;
+  }
+  return pages;
+}
+
 template BAT* select(char* column, size_t count, char lv, char hv);
 template BAT* select(int* column, size_t count, int lv, int hv);
+template BAT* select(lng* column, size_t count, lng lv, lng hv);
 
 
 gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* g, BAT* e,
@@ -395,12 +415,12 @@ gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* g, BAT* e,
 
 template<typename TO, typename TI>
 gdk_return aggr_sum(const TI* col, BUN colsz, const BAT* s, const BAT* g, const BAT* hist, BAT** result){
-  if ( s )  assert(BATcount(s) == BATcount(g));
-  else assert(BATcount(g) == colsz);
+  if ( s && g )  assert(BATcount(s) == BATcount(g));
+  else if (g) assert(BATcount(g) == colsz);
 
   BUN cnt = s ? BATcount(s) : colsz;
 
-  BUN grpcnt = BATcount(hist);
+  BUN grpcnt = hist ? BATcount(hist) : 1;
 
   int tt;
 
@@ -418,7 +438,7 @@ gdk_return aggr_sum(const TI* col, BUN colsz, const BAT* s, const BAT* g, const 
   *result = bn;
 
   TO* aggr = (TO*) Tloc(bn, 0);
-  oid* grps = (oid*) Tloc(g, 0);
+  oid* grps = g? (oid*) Tloc(g, 0) : NULL;
   memset(aggr, 0,  grpcnt* sizeof(TO));
 
   
@@ -429,7 +449,7 @@ gdk_return aggr_sum(const TI* col, BUN colsz, const BAT* s, const BAT* g, const 
   for ( oid i = 0; i < cnt; i++ ){
     p = s ? cand[i] : i ;
     TI val = col[p];
-    oid grp = grps[i];
+    oid grp = grps ? grps[i] : 0;
     aggr[grp] += ((TO) val);
   }
 

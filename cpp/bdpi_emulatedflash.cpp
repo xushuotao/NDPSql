@@ -125,7 +125,7 @@ uint64_t getNumRows(char* fname){
 
 
 std::map<std::string,file_meta>::iterator findColumn(uint64_t pageAddr){
-  fprintf(stderr, "findColumn, pageaddr = %lu\n", pageAddr);
+  // fprintf(stderr, "findColumn, pageaddr = %lu\n", pageAddr);
   auto it = map.begin();
   for ( ;it!=map.end(); ++it){
     auto baseByteAddr = it->second.baseAddr;
@@ -144,7 +144,7 @@ std::map<std::string,file_meta>::iterator findColumn(uint64_t pageAddr){
 void getData(uint32_t* resultptr, uint64_t pageaddr, uint32_t wordOffset){
   auto it = findColumn(pageaddr);
   assert(it != map.end());
-  fprintf(stderr, "getData from %s\n", it->first.c_str());
+  //  fprintf(stderr, "getData from %s\n", it->first.c_str());
   for ( uint32_t i = 0; i < 4; i++ ){
     resultptr[i] = 0xdeadbeaf;
   }

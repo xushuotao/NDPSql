@@ -25,6 +25,7 @@ typedef struct
   // Client code may read these values if desired. Client code MUST NOT
   // modify any of these.
   int entries;
+  int added_entries;
   double error;
   int bits;
   int bytes;
@@ -67,6 +68,34 @@ typedef struct
  *
  */
 int bloom_init(Bloom * bloom, int entries, double error);
+
+
+
+/** ***************************************************************************
+ * Initialize the bloom filter for use.
+ *
+ * The filter is initialized with directly with the size of the filter and the 
+ * number of hash functions. No optimalization of hashes and filter size is applied here.
+ * This function is provided here to control the space and time complexity of bloom filter
+ * for limited hardware resources. (e.g. limited cache or compute engines)
+ *
+ *
+ * Parameters:
+ * -----------
+ *     bloom   - Pointer to an allocated Bloom (see above).
+ *     entries - The expected number of entries which will be inserted.
+ *     bits    - Number of bits of bloom filter
+ *     hashes  - Number of hash functions used in bloom filter
+ *
+ *
+ * Return:
+ * -------
+ *     0 - on success
+ *     1 - on failure
+ *
+ */
+int bloom_init_alt(Bloom * bloom, int entries, int filter_bits, int hashes);
+
 
 
 /** ***************************************************************************
@@ -116,7 +145,6 @@ int bloom_check(Bloom * bloom, const void * buffer, int len);
  *
  */
 int bloom_add(Bloom * bloom, const void * buffer, int len);
-
 
 /** ***************************************************************************
  * Print (to stdout) info about this bloom filter. Debugging aid.

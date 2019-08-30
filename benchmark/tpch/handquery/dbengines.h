@@ -110,6 +110,10 @@ BAT* maptoBAT(FRec *frec, int tt,  size_t nRows);
 template<typename T>
 BAT* select(T* column, size_t count, T lv, T hv);
 
+
+size_t count_pages(BAT* pos, size_t colBytes);
+
+
 gdk_return group(bte* column, BUN colsz, const BAT* s, BAT* g, BAT* e,
                  BAT** groups, BAT** extents, BAT** histo);
 

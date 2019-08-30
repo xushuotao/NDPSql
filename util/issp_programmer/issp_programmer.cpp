@@ -26,6 +26,7 @@ void ISSPProgrammer::init_device(){
         program_inCol    = new InColProgramIfcProxy(IfcNames_InColProgramIfcS2H);
         program_colXform = new ColXFormProgramIfcProxy(IfcNames_ColXFormProgramIfcS2H);
         program_outCol   = new OutColProgramIfcProxy(IfcNames_OutColProgramIfcS2H);
+		devInit = true;
     }
 }
 

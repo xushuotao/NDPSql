@@ -1,0 +1,7 @@
+l_shipdate  10/1051 4   1799989091
+l_returnflag    10/1047 1   1799989091
+l_linestatus    10/1050 1   1799989091
+l_quantity      10/1043 4   1799989091
+l_extendedprice 10/1044 8   1799989091
+l_discount      10/1045 8   1799989091
+l_tax           10/1046 8   1799989091

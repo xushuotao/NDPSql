@@ -34,7 +34,7 @@ DBFARM=$FARM/$DBNAME/
 
 PORT=51337
 
-MINS=$(realpath ../../MonetDB-install-3)
+MINS=$(realpath ../../MonetDB-install)
 
 SERVERCMD="$MINS/bin/mserver5 --set mapi_port=$PORT --daemon=yes --set gdk_nr_threads=0 --dbpath="
 # CLIENTCMD="$MINS/bin/mclient -fcsv -p $PORT "
@@ -46,66 +46,66 @@ CREATEDBCMD="echo createdb"
 TIMINGCMD="/usr/bin/time -o $DIR/.time -f %e "
 TIMEOUTCMD="timeout -k 35m 30m "
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install-3/lib/)
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install/lib/)
 
 cleanpagecache(){
     sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
 }
 
 
-# for n in `seq 1 22`;
-# do
-#     echo $n
-#     qn=$(printf "%02d" $n)
-#     QFILE=queries/q$qn.sql
+for n in `seq 1 22`;
+do
+    echo $n
+    qn=$(printf "%02d" $n)
+    QFILE=queries/q$qn.sql
 
-#     if [ ! -d $DBFARM ] ; then
-#         echo "DBFARM $DBFARM has not be initialized, run script ./script/loadtpch.sh"
-#         exit 1;
-#     fi
+    if [ ! -d $DBFARM ] ; then
+        echo "DBFARM $DBFARM has not be initialized, run script ./script/loadtpch.sh"
+        exit 1;
+    fi
 
-#     if [ ! -r $QFILE ]; then
-#         echo "TPCH Query $qn script is not found in querys folder, recheck"
-#         exit 1;
-#     fi
+    if [ ! -r $QFILE ]; then
+        echo "TPCH Query $qn script is not found in querys folder, recheck"
+        exit 1;
+    fi
 
-#     QUERY=`cat $QFILE | sed -e ':a;N;$!ba;s/\n/ /g'`
-#     CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
-#     PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME  -o perfoutput/$DBNAME-q$qn"
-
-
-
-#     shutdown() {
-#         kill $!
-#         # sleep 10
-#         # kill -9 $!
-#     }
+    QUERY=`cat $QFILE | sed -e ':a;N;$!ba;s/\n/ /g'`
+    CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
+    PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME  -o perfoutput/$DBNAME-q$qn"
 
 
-#     cleanpagecache;
 
-#     echo "$SERVERCMD$DBFARM &"
-#     eval "$SERVERCMD$DBFARM &"
+    shutdown() {
+        kill $!
+        # sleep 10
+        # kill -9 $!
+    }
+
+
+    cleanpagecache;
+
+    echo "$SERVERCMD$DBFARM &"
+    eval "$SERVERCMD$DBFARM &"
     
-#     PID=$!
+    PID=$!
 
-#     sleep 1
+    sleep 1
     
-#     echo "$PROFILECMD"
-#     eval "$PROFILECMD &"
+    echo "$PROFILECMD"
+    eval "$PROFILECMD &"
 
 
-#     echo "$CLIENTCMD"
-#     eval "$CLIENTCMD"
+    echo "$CLIENTCMD"
+    eval "$CLIENTCMD"
 
-#     kill $(pidof tomograph)
+    kill $(pidof tomograph)
 
-#     kill $(pidof mserver5)
-#     sleep 10
+    kill $(pidof mserver5)
+    sleep 10
 
-# done
+done
 
-# sleep 5;
+sleep 5;
 
 allfiles=""
 

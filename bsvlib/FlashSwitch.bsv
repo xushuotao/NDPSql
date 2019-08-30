@@ -28,7 +28,7 @@ typedef union tagged {
    Tuple2#(TagT, StatusT) AckStatus;
    } FlashRespT deriving (Bits, Eq, FShow);
 
-Bool verbose = False;
+Bool debug = False;
 module mkFlashSwitch(FlashSwitch#(n)) provisos(
    Alias#(Bit#(TLog#(n)), channelT)
    );
@@ -52,11 +52,11 @@ module mkFlashSwitch(FlashSwitch#(n)) provisos(
       let {orTag, channel, busId} <- reqRenameTb.readResp;
       let {d, reTag} = rsp;
       readWordQs[channel].enq(tuple2(d, orTag));
-      if (verbose) $display("(%m) distReadWord orTag, channel, bus, reTag, beatCnt, beatMax = {%d, %d, %d, %d, %d, %d}", orTag, channel, busId, reTag, beatCnts[busId], beatsPerPage);
+      if (debug) $display("(%m) distReadWord orTag, channel, bus, reTag, beatCnt, beatMax = {%d, %d, %d, %d, %d, %d}", orTag, channel, busId, reTag, beatCnts[busId], beatsPerPage);
       if ( beatCnts[busId] == fromInteger(beatsPerPage - 1) ) begin
          beatCnts[busId] <= 0;
          reqRenameTb.invalidEntry(reTag);
-         $display("(%m) distReadWord, one page read finished");
+         if (debug) $display("(%m) distReadWord, one page read finished");
       end
       else begin
          beatCnts[busId] <= beatCnts[busId] + 1;

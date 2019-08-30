@@ -59,14 +59,14 @@ namespace lockfree = boost::lockfree;
 #define	PAGES_PER_BLOCK (1UL<<LG_PAGES_PER_BLOCK)
 #define BLOCKS_PER_CHIP (1UL<<LG_BLOCKS_PER_CHIP)
 #define CHIPS_PER_BUS   (1UL<<LG_CHIPS_PER_BUS)
-#define NUM_BUSES (1UL<<LG_NUM_BUSES)
+#define NUM_BUSES		(1UL<<LG_NUM_BUSES)
 #define NUM_CARDS       (1UL<<LG_NUM_CARDS)
 
-#define SUPER_BLK_SZ (1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))
-#define TOTAL_BLKS (1<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_BLOCKS_PER_CHIP))
+#define SUPER_BLK_SZ	(1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))
+#define TOTAL_BLKS		(1<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_BLOCKS_PER_CHIP))
 
 #define FILEMAP_EXT     "/bdbm.fm"
-#define META_EXT "/bdbm.meta"  
+#define META_EXT		"/bdbm.meta"  
 #define FLASHSTATUS_EXT "/bdbm.fstat"
 #define FTL_EXT         "/bdbm.ftl"
 
@@ -75,6 +75,7 @@ namespace lockfree = boost::lockfree;
 
 #define FILE_DIR_SIZE 50
 
+typedef uint32_t uint;
 typedef uint64_t ulng;
 
 typedef struct {
@@ -92,18 +93,24 @@ typedef struct {
 // [LG_BLOCKS_PER_CHIP][LG_PAGES_PER_BLOCK][LG_CHIPS_PER_BUS][LG_NUM_BUSES][LG_NUM_CARDS]
 
 
-#define PGADDR2CARDID(addr) (addr&(NUM_CARDS-1)) // WARNING:: this requires NUM_CARDS is power of 2
-#define PGADDR2BUSID(addr)  ((addr>>LG_NUM_CARDS)&(NUM_BUSES-1))
-#define PGADDR2CHIPID(addr) ((addr>>(LG_NUM_CARDS+LG_NUM_BUSES))&(CHIPS_PER_BUS-1))
-#define PGADDR2PGID(addr)   ((addr>>(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))&(PAGES_PER_BLOCK-1))
-#define PGADDR2BLKID(addr)  ((addr>>(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_PAGES_PER_BLOCK))&(BLOCKS_PER_CHIP-1))
+#define PGADDR2CARDID(addr)		(addr&(NUM_CARDS-1))	// WARNING:: this requires NUM_CARDS is power of 2
+#define PGADDR2BUSID(addr)		((addr>>LG_NUM_CARDS)&(NUM_BUSES-1))
+#define PGADDR2CHIPID(addr)		((addr>>(LG_NUM_CARDS+LG_NUM_BUSES))&(CHIPS_PER_BUS-1))
+#define PGADDR2PGID(addr)		((addr>>(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))&(PAGES_PER_BLOCK-1))
+#define PGADDR2BLKID(addr)		((addr>>(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_PAGES_PER_BLOCK))&(BLOCKS_PER_CHIP-1))
 
-#define BLKADDR2CARDID(addr) PGADDR2CARDID(addr)
-#define BLKADDR2BUSID(addr)  PGADDR2BUSID(addr) 
-#define BLKADDR2CHIPID(addr) PGADDR2CHIPID(addr)
-#define BLKADDR2BLKID(addr)  ((addr>>(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))&(BLOCKS_PER_CHIP-1))
+#define BLKADDR2CARDID(addr)	PGADDR2CARDID(addr)
+#define BLKADDR2BUSID(addr)		PGADDR2BUSID(addr) 
+#define BLKADDR2CHIPID(addr)	PGADDR2CHIPID(addr)
+#define BLKADDR2BLKID(addr)		((addr>>(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))&(BLOCKS_PER_CHIP-1))
+#define PGADDR2BLKADDR(addr)	((addr&((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1)) |	\
+								 ((addr>>LG_PAGES_PER_BLOCK)&(~((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1))))
 
-#define PGADDR2BLKADDR(addr) ((addr&((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1)) | ((addr>>LG_PAGES_PER_BLOCK)&(~((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1))))
+#define BLKADDR2PAGEADDR(blkaddr, pageid) (((blkaddr<<LG_PAGES_PER_BLOCK)&	\
+											(~((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_PAGES_PER_BLOCK))-1))) |	\
+										   ((blkaddr)&((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1)) |	\
+										   ((pageid<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))&	\
+											(1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_PAGES_PER_BLOCK))))
 
 
 namespace fm = filemap_namespace;
@@ -138,6 +145,9 @@ typedef struct {
 #define DEBUG_PRINT(...) do{ } while ( false )
 #endif
 
+void print_progress(std::string message, uint64_t norm, uint64_t denom);
+
+
 class FlashManager{
 
 public:
@@ -145,24 +155,22 @@ public:
     FlashManager(std::string basedir);
     ~FlashManager();
 
-    // template<typename T>
-    // FileIterator<T> readfile(std::string file_name);
-    int openfile(std::string file_name);
-    void closefile(int fd);
-    size_t filesize(int fd);
-    bool aio_read_page(read_cb* cb);
-    uint64_t get_page_list(read_cb* cb);
-    bool aio_return(read_cb* cb);
-    bool aio_done(read_cb* cb); 
-  
-    void writefile(std::string file_name, const char* buf, size_t length);
+    int			openfile(std::string file_name);
+    void		closefile(int fd);
 
+    size_t		filesize(int fd);
+	
+    bool		aio_read_page(read_cb* cb);
+    bool		aio_return(read_cb* cb);
+    bool		aio_done(read_cb* cb);
+	
+    void		writefile(std::string file_name, const char* buf, size_t length);
+
+	// accelerator-related api
+	uint32_t	getPhysPageAddr(int fd, size_t byteOffset);
   
 
 private:
-    // static pthread_t read_thread;
-    // static void *read_done(void* ptr);
-
 
     static pthread_spinlock_t lock;
 
@@ -204,11 +212,11 @@ private:
             DEBUG_PRINT("LOG: eraseDone, tag=%d, status=%d, FPGA cycles = %lu\n", tag, status, cycles);
 
             pthread_spin_lock(&lock);
-            uint64_t phy_blk     = eraseTagTable[tag].addr;
-            uint64_t lgc_blk     = eraseTagTable[tag].addr2;
+            uint64_t	phy_blk  = eraseTagTable[tag].addr;
+            uint64_t	lgc_blk  = eraseTagTable[tag].addr2;
             flashStatus[phy_blk] = status == 0  ? ERASED : BAD;
       
-            if (status       == 0) {
+            if (status == 0) {
                 goodBlocksErased++;
                 ftl[lgc_blk]  = phy_blk;
                 DEBUG_PRINT("LOG:: eraseDone ftl[%lu]=%lu\n", lgc_blk, phy_blk);
@@ -279,7 +287,5 @@ private:
     fm::filemap* fmap;
     // uint32_t* ftl;
 };
-
-
 
 #endif

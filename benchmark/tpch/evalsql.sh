@@ -1,4 +1,4 @@
-ousage() { echo "Usage: $0 -n <query number> -s <scale factors> -p <directory prefix>" 1>&2; exit 1; }
+usage() { echo "Usage: $0 -n <query number> -s <scale factors> -p <directory prefix>" 1>&2; exit 1; }
 
 while getopts ":n:s:p:" o; do
     case "${o}" in
@@ -56,14 +56,15 @@ fi
 
 PORT=51337
 
-MINS=$(realpath ../../MonetDB-install-3)
+MINS=$(realpath ../../MonetDB-install)
 
-SERVERCMD="$MINS/bin/mserver5 --set mapi_port=$PORT --daemon=yes --set gdk_nr_threads=0 --dbpath="
+SERVERCMD="$MINS/bin/mserver5 --set mapi_port=$PORT --daemon=yes --set gdk_nr_threads=0 --set gdk_debug=2097152 --dbpath="
 # CLIENTCMD="$MINS/bin/mclient -fcsv -p $PORT "
 #CLIENTCMD="$MINS/bin/mclient -p $PORT "
 QUERY=`cat $QFILE | sed -e ':a;N;$!ba;s/\n/ /g'`
 #CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
-CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
+# CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
+CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME $QFILE"
 
 INITFCMD="echo "
 CREATEDBCMD="echo createdb"
@@ -71,7 +72,8 @@ CREATEDBCMD="echo createdb"
 TIMINGCMD="/usr/bin/time -o $DIR/.time -f %e "
 TIMEOUTCMD="timeout -k 35m 30m "
 
-PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME  -o perfoutput/$DBNAME-q$qn"
+# PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME  -o perfoutput/$DBNAME-q$qn"
+# PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME "
 # PROFILECMD="$MINS/bin/tachograph -p $PORT -u monetdb -P monetdb -d $DBNAME"
 # PROFILECMD="$MINS/bin/stethoscope -p $PORT -u monetdb -P monetdb -d $DBNAME "
 
@@ -83,21 +85,24 @@ shutdown() {
     # kill -9 $!
 }
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install-3/lib/)
+#unset LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$MINS/lib/
+
+echo $LD_LIBRARY_PATH
 
 echo "$SERVERCMD$DBFARM &"
 eval "$SERVERCMD$DBFARM &"
 
 PID=$!
 
-sleep 1
+sleep 10
     
-echo "$PROFILECMD"
-eval "$PROFILECMD &"
+# echo "$PROFILECMD"
+# eval "$PROFILECMD &"
 
 
 echo "$CLIENTCMD"
-eval "$CLIENTCMD"
+eval "time $CLIENTCMD"
 #eval "$CLIENTCMD$QFILE"
 #eval "$TIMEOUTCMD$TIMINGCMD$CLIENTCMD$QFILE"
 # echo "$CLIENTCMD\"$(cat $QFILE)\""

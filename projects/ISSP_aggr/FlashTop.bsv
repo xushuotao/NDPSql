@@ -144,6 +144,7 @@ interface FlashTop;
    interface InColProgramIfc inColProgramIfc;
    interface ColXFormProgramIfc colXFormProgramIfc;
    interface OutColProgramIfc outColProgramIfc;
+   interface PageFeeder pagefeeder;
    interface Vector#(1, MemReadClient#(DataBusWidth)) dmaReadClient;
    interface Vector#(1, MemWriteClient#(DataBusWidth)) dmaWriteClient;
    interface Top_Pins pins;
@@ -739,6 +740,7 @@ module mkFlashTop#(HostInterface host, FlashIndication flashIndication, ISSPIndi
    interface InColProgramIfc inColProgramIfc        = issp.programIfc.inCol;
    interface ColXFormProgramIfc colXFormProgramIfc  = issp.programIfc.colXForm;
    interface OutColProgramIfc outColProgramIfc      = issp.programIfc.outCol;
+   interface PageFeeder pagefeeder = issp.pagefeeder;
    
    interface dmaReadClient = vec(re.dmaClient);
    interface dmaWriteClient = vec(we.dmaClient);

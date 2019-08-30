@@ -1,1 +1,59 @@
-select sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end)/sum(l_extendedprice * (1 - l_discount))*100  from lineitem, part where l_partkey = p_partkey and l_shipdate >= date '1995-09-01' and l_shipdate < date '1995-09-01' + interval '1' month;
+-- select
+-- 	-- l_orderkey,
+-- 	-- sum(l_extendedprice * (1 - l_discount)) as revenue,
+-- 	-- o_orderdate,
+-- 	-- o_shippriority
+--     count(*)
+-- from
+-- 	customer,
+-- 	orders,
+-- 	lineitem
+-- where
+-- 	c_mktsegment = 'BUILDING'
+-- 	and c_custkey = o_custkey
+-- 	and l_orderkey = o_orderkey
+-- 	and o_orderdate < date '1995-03-15'
+-- 	and l_shipdate > date '1995-03-15';
+-- group by
+-- 	l_orderkey,
+-- 	o_orderdate,
+-- 	o_shippriority
+-- order by
+-- 	revenue desc,
+-- 	o_orderdate;
+-- limit 10;
+
+-- select
+--     count(*)
+--     -- c_custkey
+-- from
+--    	customer,
+--    	orders,
+-- 	lineitem
+-- where
+--     	c_mktsegment = 'BUILDING'
+-- 	and c_custkey = o_custkey
+-- 	and l_orderkey = o_orderkey
+-- 	and o_orderdate < date '1995-03-15'
+-- 	and l_shipdate > date '1995-03-15';
+
+select
+    -- count(*)
+    -- c_custkey
+    o_orderdate
+from
+   	orders
+limit 100;
+-- where
+	-- o_orderdate < date '1995-03-15';
+
+
+                        -- select
+--     -- count(*)
+--     o_custkey,
+--     o_orderdate
+-- from
+--     orders
+-- where
+--     o_orderdate < date '1995-03-15'
+-- limit 10;

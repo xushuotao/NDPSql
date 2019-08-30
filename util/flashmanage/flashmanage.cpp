@@ -1,4 +1,6 @@
 #include "flashmanage.h"
+#include <iostream>
+#include <chrono>
 
 // For the size of the file.
 #include <sys/stat.h>
@@ -6,6 +8,7 @@
 #include <sys/mman.h>
 
 #include <boost/filesystem.hpp>
+
 
 pthread_spinlock_t FlashManager::lock;
 
@@ -25,21 +28,32 @@ TagTableEntry FlashManager::eraseTagTable[NUM_TAGS];
 FlashStatusT* FlashManager::flashStatus;
 uint64_t*     FlashManager::ftl;
 
-
+#define PROG_BAR
 // pthread_t FlashManager::read_thread;
 
 char* FlashManager::readBuffers[NUM_TAGS];
 char* FlashManager::writeBuffers[NUM_TAGS];
 
 
+void print_progress(std::string message, uint64_t norm, uint64_t denom){
+#ifdef PROG_BAR
+	float progress = (float)norm/(float)denom;
+	assert(progress < 1.0);
+	int barWidth = 70;
+	std::cout << "\r" << message << ":[";
+	int pos = barWidth * progress;
+	for (int i = 0; i < barWidth; ++i) {
+		if (i < pos) std::cout << "=";
+		else if (i == pos) std::cout << ">";
+		else std::cout << " ";
+		}
+	std::cout << "] " << int(progress * 100.0) << " % ("<<norm<<"/"<<denom<<")";
+	std::cout.flush();
+#endif
+}
 
 FlashManager::FlashManager(std::string basedir): basename(basedir) {
     init_device();
-  
-    // if(pthread_create(&read_thread, NULL, read_done, 0)) {
-    //   fprintf(stderr, "Error creating thread\n");
-    //   exit(0);
-    // }
 
     char     cap[10];
     uint64_t cap_kB = TOTAL_BLKS*PAGES_PER_BLOCK*8;
@@ -56,12 +70,175 @@ FlashManager::FlashManager(std::string basedir): basename(basedir) {
 }
 
 FlashManager::~FlashManager(){
-    // init_device();
-
     destroy_fs();    
 }
 
 
+int FlashManager::openfile(std::string file_name){
+    fm::file_meta fmeta;
+    bool exists = fmap->readfilemap(file_name, fmeta);
+    fprintf(stderr, "%s exists=%d base = %lu, length = %lu\n", file_name.c_str(), exists, fmeta.base_page, fmeta.file_size);
+    int retval = -1;
+    if ( exists ){
+        for ( int i = 0; i < FILE_DIR_SIZE; i++){
+            if ( !fdir[i].busy ){
+                retval       = i;
+                fdir[i].base = fmeta.base_page;
+                fdir[i].size = fmeta.file_size;
+                fdir[i].busy = true;
+                break;
+            }
+        }
+    }
+    return retval;
+}
+
+void FlashManager::closefile(int filedes){
+    fdir[filedes].busy = false;
+}
+
+
+size_t FlashManager::filesize(int fd){
+    return fdir[fd].size;
+}
+
+bool FlashManager::aio_read_page(read_cb* cb){
+    if ( cb->busy == true ) return false;
+  
+    if ( !fdir[cb->fildes].busy ) {
+        fprintf(stderr, "Error: file descriptor invalid\n");
+        return false;
+    }
+    ulng base     = fdir[cb->fildes].base;
+    ulng fs       = fdir[cb->fildes].size;
+    size_t offset = cb->offset;
+
+    if ( (offset & (PAGE_SIZE-1)) != 0 ){
+        fprintf(stderr, "Error: offset not page aligned\n");
+        return false;
+    }
+
+    if ( offset > fs ){
+        fprintf(stderr, "Error: offset(%lu) should not exceed file size(%lu)\n", offset, fs);
+        return false;
+    }
+    
+    int tag;
+
+    if ( tagQueue.pop(tag) ){
+
+        ulng     pageaddr = base + (offset >> LG_PAGE_SIZE);
+        uint64_t blk      = ftl[PGADDR2BLKADDR(pageaddr)];
+
+        DEBUG_PRINT( "aio_read_page, pageaddr = %lu virtual blkid = %lu, physical blkid = %lu\n", pageaddr, PGADDR2BLKADDR(pageaddr), blk);
+        uint32_t card  = BLKADDR2CARDID(blk);
+        uint32_t bus   = BLKADDR2BUSID(blk);
+        uint32_t chip  = BLKADDR2CHIPID(blk);
+        uint32_t block = BLKADDR2BLKID(blk);
+        int      page  = PGADDR2PGID(pageaddr);
+
+        DEBUG_PRINT( "LOG: sending read page request with tag  = %d @%d %d %d %d %d, inflights=%u\n", tag, card, bus, chip, block, page, inflightReads.load() );
+        device->readPage(card,bus,chip,block,page,tag);
+        inflightReads++;
+        cb->buf_ptr            = (void*) (readBuffers[tag]);
+        cb->tag                = tag;
+        cb->busy               = true;
+        readTagTable[tag].busy = true;
+        readTagTable[tag].addr = (ulng)cb;
+
+#ifdef DEBUG
+        assert( readTagTable[tag].busy == false && cb->busy == false  );
+#endif
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool FlashManager::aio_return(read_cb* cb) {
+    // DEBUG_PRINT("aio_return:: beginning cb->busy = %d\n", cb->busy);
+    if ( !cb->busy ) return false;
+    int tag = cb->tag;
+#ifdef DEBUG
+    assert( (ulng)cb  == readTagTable[tag].addr && readTagTable[tag].busy == true);
+#endif
+    // DEBUG_PRINT("aio_return:: checking tag  = %d, readBuffer[tag][PAGE_SIZE] = %d\n", tag, readBuffers[tag][PAGE_SIZE_VALID]);
+    return readBuffers[tag][PAGE_SIZE_VALID]  == -1;
+}
+
+bool FlashManager::aio_done(read_cb* cb) {
+    if (!cb->busy) return true;
+    int tag = cb->tag;
+#ifdef DEBUG
+    assert( readTagTable[tag].busy == true && readTagTable[tag].addr == (ulng)cb );
+#endif
+    while ( !tagQueue.push(tag) );
+    readBuffers[tag][PAGE_SIZE_VALID] = 0;
+    readTagTable[tag].busy            = false;
+    cb->busy                          = false;
+    inflightReads--;
+    return true;
+}
+
+
+void FlashManager::writefile(std::string file_name, const char* buf, size_t length){
+    fm::file_meta fmeta;
+    bool exists = fmap->readfilemap(file_name, fmeta);
+    if ( exists) {
+        fprintf(stderr, "%s exits on base = %lu, length  = %lu", file_name.c_str(), fmeta.base_page, fmeta.file_size);
+        char resp = 'a';
+        int  ret  = 0;
+        while ( (resp != 'Y' && resp != 'y' && resp != 'n' && resp != 'N') || ret != 1 ){
+            printf("\nAre you sure that you want to overwrite this file by discarding the old mapping?(y/n): ");
+            ret = scanf("%c", &resp);
+            getchar(); // remove newline
+        }
+        if ( resp == 'n' || resp == 'N' ){
+            return;
+        }
+    }
+
+#ifndef FAKE_WRITE
+    if ( !eraseIfnecessary(length) ){
+        fprintf(stderr, "Erasing flash pages failed\n");
+        return;
+    }
+#endif
+  
+    fmeta = fm::file_meta{.base_page=meta[1], .file_size=length};
+
+    append(buf, length);
+
+    fmap->updatefilemap(file_name, fmeta);  
+    fmap->sync();
+}
+
+uint32_t FlashManager::getPhysPageAddr(int fd, size_t offset){
+    ulng base     = fdir[fd].base;
+    ulng fs       = fdir[fd].size;
+
+    if ( (offset & (PAGE_SIZE-1)) != 0 ){
+        fprintf(stderr, "Error: offset not page aligned\n");
+        return false;
+    }
+
+    if ( offset > fs ){
+        fprintf(stderr, "Error: offset(%lu) should not exceed file size(%lu)\n", offset, fs);
+        return false;
+    }
+
+    ulng    pageaddr = base + (offset >> LG_PAGE_SIZE);
+    ulng    blkaddr  =
+#ifndef FAKE_WRITE
+		ftl[PGADDR2BLKADDR(pageaddr)];
+#else
+	    PGADDR2BLKADDR(pageaddr);
+#endif
+		
+	uint pageid   = PGADDR2PGID(pageaddr);
+	fprintf(stderr, "getPhysPageAddr, pageaddr = %lu virtual blkid = %lu, physical blkid = %lu, pageId = %u\n", pageaddr, PGADDR2BLKADDR(pageaddr), blkaddr, pageid);
+    return (uint)BLKADDR2PAGEADDR(blkaddr, pageid);
+}
 
   
 void FlashManager::init_device(){
@@ -110,12 +287,12 @@ void FlashManager::init_device(){
 
     // devide up dma buffers for each read and write buffers
     for (int t = 0; t < NUM_TAGS; t++) {
-        readTagTable[t].busy                                             = false;
-        writeTagTable[t].busy                                            = false;
-        int                                                   byteOffset = t * DMABUF_SIZE;
-        readBuffers[t]                                                   = dstBuffer + byteOffset/sizeof(char);
-        readBuffers[t][PAGE_SIZE]                                        = 0; // make sure it is non valid;
-        writeBuffers[t]                                                  = srcBuffer + byteOffset/sizeof(char);
+        readTagTable[t].busy      = false;
+        writeTagTable[t].busy     = false;
+        int byteOffset            = t * DMABUF_SIZE;
+        readBuffers[t]            = dstBuffer + byteOffset/sizeof(char);
+        readBuffers[t][PAGE_SIZE] = 0;   // make sure it is non valid;
+        writeBuffers[t]           = srcBuffer + byteOffset/sizeof(char);
         while(!tagQueue.push(t));
     }
 
@@ -123,12 +300,11 @@ void FlashManager::init_device(){
     srand(time(NULL));
     device->start(rand());
 
-    inflightReads = 0;
+    inflightReads    = 0;
     inflightErases   = 0;
     inflightWrites   = 0;
     goodBlocksErased = 0;
     eraseJobQ        = new lockfree::queue<ulng>(NUM_TAGS);
-    // tagQueue      = lockfree::queue<int>(128);
 }
 
 void FlashManager::init_fs(){
@@ -169,7 +345,7 @@ void FlashManager::init_fs(){
     ftl = (uint64_t*)frec_ftl->base;
 
     if (newfile){
-        for ( int i        = 0; i < TOTAL_BLKS; i++){
+        for ( int i = 0; i < TOTAL_BLKS; i++){
             flashStatus[i] = UNINIT;
             ftl[i]         = UNMAPPED;
         }
@@ -180,7 +356,7 @@ void FlashManager::init_fs(){
         meta[3] = 0;                     // total erased blocks
     }
 
-    fmap                                 = new fm::filemap(fd_name.c_str());
+    fmap = new fm::filemap(fd_name.c_str());
     fprintf(stderr, "pbb=%lu (TOTAL_BLKS = %d), nextp = %lu\n", meta[0], TOTAL_BLKS, meta[1]);
 
     nexteraseblk = meta[2];
@@ -208,35 +384,36 @@ inline int FlashManager::waitIdleTag() {
 
 
 inline void FlashManager::eraseBlock(uint64_t logic_blk, uint64_t phys_blk) {
+#ifndef FAKE_WRITE
 
-    int card = BLKADDR2CARDID(phys_blk);
-    int bus = BLKADDR2BUSID(phys_blk);
-    int chip = BLKADDR2CHIPID(phys_blk);
+    int card  = BLKADDR2CARDID(phys_blk);
+    int bus   = BLKADDR2BUSID(phys_blk);
+    int chip  = BLKADDR2CHIPID(phys_blk);
     int block = BLKADDR2BLKID(phys_blk);
-    int tag = waitIdleTag();
-  
+    int tag   = waitIdleTag();
+	DEBUG_PRINT( "eraseBlock, logic_blk = %lu, phys_blk = %lu, tag = %u\n", logic_blk, phys_blk, tag);  
     pthread_spin_lock(&lock);
-    eraseTagTable[tag].addr = phys_blk;
+    eraseTagTable[tag].addr  = phys_blk;
     eraseTagTable[tag].addr2 = logic_blk;
     inflightErases++;
     pthread_spin_unlock(&lock);
   
     DEBUG_PRINT( "LOG: sending erase block request with tag = %d @%d %d %d %d, inflights=%u\n", tag, card, bus, chip, block, inflightErases.load() );
     device->eraseBlock(card,bus,chip,block,tag);
+#endif
 }
 
 
 inline bool FlashManager::eraseIfnecessary(size_t length){
     DEBUG_PRINT("eraseIfnecessary:: starting\n");
-    const uint64_t physblkbase = meta[0];
-    uint64_t       nextpageaddr = meta[1];
-    // uint64_t    nexterasedblk = meta[3];  
-    uint64_t totalerasedblk      = meta[3];
+    const uint64_t  physblkbase    = meta[0];
+    uint64_t        nextpageaddr   = meta[1];
+    uint64_t        totalerasedblk = meta[3];
 
-    uint64_t pagesneeded                           = (length+PAGE_SIZE-1)/PAGE_SIZE;
-    uint64_t new_nextpageaddr = nextpageaddr + pagesneeded;
+    uint64_t    pagesneeded      = (length+PAGE_SIZE-1)/PAGE_SIZE;
+    uint64_t    new_nextpageaddr = nextpageaddr + pagesneeded;
     DEBUG_PRINT("eraseIfnecessary:: nextpageaddr = %lu,  pagesneeded = %lu\n", nextpageaddr, pagesneeded);
-    uint64_t lastblk2write = PGADDR2BLKADDR(new_nextpageaddr);//(new_nextpageaddr+PAGES_PER_BLOCK-1)/PAGES_PER_BLOCK;
+    uint64_t lastblk2write       = PGADDR2BLKADDR(new_nextpageaddr);    //(new_nextpageaddr+PAGES_PER_BLOCK-1)/PAGES_PER_BLOCK;
     DEBUG_PRINT("eraseIfnecessary:: lastblkTowrite = %lu, nexterseblk = %lu\n", lastblk2write, nexteraseblk.load());
   
 
@@ -245,10 +422,9 @@ inline bool FlashManager::eraseIfnecessary(size_t length){
         return false;
     }
 
-    uint64_t newblksneeded = lastblk2write > nexteraseblk ? lastblk2write - nexteraseblk : 0;
-  
-    uint64_t superBlocksToErase = (newblksneeded + SUPER_BLK_SZ-1) / SUPER_BLK_SZ;
-    uint64_t blocksToErase      = superBlocksToErase * SUPER_BLK_SZ;
+    uint64_t    newblksneeded      = lastblk2write > nexteraseblk ? lastblk2write - nexteraseblk : 0;
+    uint64_t    superBlocksToErase = (newblksneeded + SUPER_BLK_SZ-1) / SUPER_BLK_SZ;
+    uint64_t    blocksToErase      = superBlocksToErase * SUPER_BLK_SZ;
   
     DEBUG_PRINT("eraseIfnecessary:: pagesneeded = %lu, superBlocksToErase = %lu, blocksToErase = %lu\n", pagesneeded, superBlocksToErase, blocksToErase);
 
@@ -259,21 +435,29 @@ inline bool FlashManager::eraseIfnecessary(size_t length){
     // nexteraseblk = meta[2];
     // pthread_spin_unlock(&lock);
     // for ( ulng i  = 0;  i < blocksToErase>NUM_TAGS?NUM_TAGS; i++ ){
-    ulng          i  = 0;
-    ulng          eraseReqCnt = 0;
-    ulng          logic_blk;
-    ulng          baseblk = physblkbase+nexteraseblk;
+    ulng    i           = 0;
+    ulng    eraseReqCnt = 0;
+    ulng    logic_blk;
+    ulng    baseblk     = physblkbase+totalerasedblk;
+	
 
+	std::chrono::high_resolution_clock::time_point tm_0 = std::chrono::high_resolution_clock::now();
+	std::chrono::high_resolution_clock::time_point tm_1;
 
     // sending in erasing Request into jobQ;
     while ( i < blocksToErase ){
         if (eraseJobQ->push(nexteraseblk + i)) {
             i++;
-        } else { // if eraseJobQ is full then go and send requests
+        } else { // if eraseJobQ is full then go and send all requests
             if (eraseJobQ->pop(logic_blk) ){
                 eraseBlock(logic_blk, (baseblk + eraseReqCnt++)&(TOTAL_BLKS-1) );
             }
         }
+		tm_1 = std::chrono::high_resolution_clock::now();	
+		if ( tm_1-tm_0 >= std::chrono::milliseconds(100) ){
+			tm_0 = tm_1;
+			print_progress("Erasing blocks", goodBlocksErased, blocksToErase);
+		}
     }
 
 
@@ -281,30 +465,37 @@ inline bool FlashManager::eraseIfnecessary(size_t length){
         if (eraseJobQ->pop(logic_blk) ){
             eraseBlock(logic_blk, (baseblk + eraseReqCnt++)&(TOTAL_BLKS-1) );
         }
+		tm_1 = std::chrono::high_resolution_clock::now();	
+		if ( tm_1-tm_0 >= std::chrono::milliseconds(100) ){
+			tm_0 = tm_1;
+			print_progress("Erasing blocks", goodBlocksErased, blocksToErase);
+		}
     }
     
-    totalerasedblk                               += eraseReqCnt;
+    totalerasedblk += eraseReqCnt;
     // pthread_spin_lock(&lock);
-    nexteraseblk+=blocksToErase;
-    DEBUG_PRINT("eraseInnecessary:: nexteraseblk  = %lu, totalerasedblk = %lu\n", nexteraseblk.load(), totalerasedblk);
-    meta[2]                                       = nexteraseblk;
-    meta[3]                                       = totalerasedblk;
+    nexteraseblk   += blocksToErase;
+    DEBUG_PRINT("eraseInnecessary:: nexteraseblk = %lu, totalerasedblk = %lu\n", nexteraseblk.load(), totalerasedblk);
+    meta[2] = nexteraseblk;
+    meta[3] = totalerasedblk;
 
 #ifdef DEBUG
     for ( int i = (blocksToErase>0 ? blocksToErase:SUPER_BLK_SZ); i > 0 ; i-- ){
-        DEBUG_PRINT("ftl[%lu] = %lu\n", nexteraseblk.load()-i, ftl[nexteraseblk.load()-i]);
+        fprintf(stderr, "ftl[%lu] = %lu\n", nexteraseblk.load()-i, ftl[nexteraseblk.load()-i]);
     }
 #endif
-    // pthread_spin_unlock(&lock);
 
     DEBUG_PRINT("eraseIfnecessary:: end\n");  
     return true;
 }
 
 inline void FlashManager::append(const char* buf, size_t length){
-    uint32_t num_of_chunks = (length + PAGE_SIZE - 1)/PAGE_SIZE;
+    uint64_t num_of_chunks = (length + PAGE_SIZE - 1)/PAGE_SIZE;
     uint64_t nextwrpage    = meta[1];
-    for ( uint32_t i = 0; i < num_of_chunks; i++ ){
+	std::chrono::high_resolution_clock::time_point tm_0 = std::chrono::high_resolution_clock::now();
+	std::chrono::high_resolution_clock::time_point tm_1;
+    for ( uint64_t i = 0; i < num_of_chunks; i++ ){
+#ifndef FAKE_WRITE
         int tag = waitIdleTag();
         memcpy(writeBuffers[tag], (buf+(i<<LG_PAGE_SIZE)), PAGE_SIZE);
         uint64_t blk = ftl[PGADDR2BLKADDR(nextwrpage)];
@@ -318,154 +509,23 @@ inline void FlashManager::append(const char* buf, size_t length){
         DEBUG_PRINT( "LOG: sending write page request with tag = %d @%d %d %d %d %d, inflights=%u\n", tag, card, bus, chip, block, page, inflightWrites.load() );
         device->writePage(card,bus,chip,block,page,tag);
         inflightWrites++;
+#endif
         nextwrpage++;
+		tm_1 = std::chrono::high_resolution_clock::now();	
+		if ( tm_1-tm_0 >= std::chrono::milliseconds(100) ){
+			tm_0 = tm_1;
+			print_progress("Writing Pages", i+1-inflightWrites.load(), num_of_chunks);
+		}
     }
 
-    while ( inflightWrites != 0){}
+    while ( inflightWrites != 0){
+		tm_1 = std::chrono::high_resolution_clock::now();	
+		if ( tm_1-tm_0 >= std::chrono::milliseconds(100) ){
+			tm_0 = tm_1;
+			print_progress("Writing Pages", num_of_chunks-inflightWrites.load(), num_of_chunks);
+		}
+	}
     meta[1] = nextwrpage;
 
     DEBUG_PRINT("LOG:: end of append, nextwrpage= %lu\n", nextwrpage);
-}
-
-
-void FlashManager::writefile(std::string file_name, const char* buf, size_t length){
-    fm::file_meta fmeta;
-    bool exists = fmap->readfilemap(file_name, fmeta);
-    if ( exists) {
-        fprintf(stderr, "%s exits on base = %lu, length  = %lu", file_name.c_str(), fmeta.base_page, fmeta.file_size);
-        char resp = 'a';
-        int  ret  = 0;
-        while ( (resp != 'Y' && resp != 'y' && resp != 'n' && resp != 'N') || ret != 1 ){
-            printf("\nAre you sure that you want to overwrite this file by discarding the old mapping?(y/n): ");
-            ret = scanf("%c", &resp);
-            // fprintf(stderr, "%c ", resp);
-        }
-        if ( resp == 'n' || resp == 'N' ){
-            return;
-        }
-    }
-
-    if ( !eraseIfnecessary(length) ){
-        fprintf(stderr, "Erasing flash pages failed\n");
-        return;
-    }
-  
-    fmeta = fm::file_meta{.base_page=meta[1], .file_size=length};
-  
-  
-    append(buf, length);
-  
-    fmap->updatefilemap(file_name, fmeta);  
-    fmap->sync();
-
-    // meta[1] = meta[1] + length;
-    
-
-}
-
-int FlashManager::openfile(std::string file_name){
-    fm::file_meta fmeta;
-    bool exists = fmap->readfilemap(file_name, fmeta);
-    fprintf(stderr, "%s exits=%d base = %lu, length = %lu\n", file_name.c_str(), exists, fmeta.base_page, fmeta.file_size);
-    int retval = -1;
-    if ( exists ){
-        for ( int i = 0; i < FILE_DIR_SIZE; i++){
-            if ( !fdir[i].busy ){
-                retval       = i;
-                fdir[i].base = fmeta.base_page;
-                fdir[i].size = fmeta.file_size;
-                fdir[i].busy = true;
-                break;
-            }
-        }
-    }
-    return retval;
-}
-
-size_t FlashManager::filesize(int fd){
-    return fdir[fd].size;
-}
-
-void FlashManager::closefile(int filedes){
-    fdir[filedes].busy = false;
-}
-
-bool FlashManager::aio_read_page(read_cb* cb){
-    if ( cb->busy == true ) return false;
-  
-    if ( !fdir[cb->fildes].busy ) {
-        fprintf(stderr, "Error: file descriptor invalid\n");
-        return false;
-    }
-    ulng base     = fdir[cb->fildes].base;
-    ulng fs       = fdir[cb->fildes].size;
-    size_t offset = cb->offset;
-
-    if ( (offset & (PAGE_SIZE-1)) != 0 ){
-        fprintf(stderr, "Error: offset not page aligned\n");
-        return false;
-    }
-
-    if ( offset > fs ){
-        fprintf(stderr, "Error: offset(%lu) should not exceed file size(%lu)\n", offset, fs);
-        return false;
-    }
-    
-    // int tag = waitIdleTag();
-    int tag;
-
-    if ( tagQueue.pop(tag) ){
-
-        ulng     pageaddr = base + (offset >> LG_PAGE_SIZE);
-        uint64_t blk      = ftl[PGADDR2BLKADDR(pageaddr)];
-
-        DEBUG_PRINT( "aio_read_page, pageaddr = %lu virtual blkid = %lu, physical blkid = %lu\n", pageaddr, PGADDR2BLKADDR(pageaddr), blk);
-        uint32_t card  = BLKADDR2CARDID(blk);
-        uint32_t bus   = BLKADDR2BUSID(blk);
-        uint32_t chip  = BLKADDR2CHIPID(blk);
-        uint32_t block = BLKADDR2BLKID(blk);
-        int      page  = PGADDR2PGID(pageaddr);
-
-        DEBUG_PRINT( "LOG: sending read page request with tag  = %d @%d %d %d %d %d, inflights=%u\n", tag, card, bus, chip, block, page, inflightReads.load() );
-        device->readPage(card,bus,chip,block,page,tag);
-        inflightReads++;
-        cb->buf_ptr            = (void*) (readBuffers[tag]);
-        cb->tag                = tag;
-        cb->busy               = true;
-        readTagTable[tag].busy = true;
-        readTagTable[tag].addr = (ulng)cb;
-
-#ifdef DEBUG
-        assert( readTagTable[tag].busy == false && cb->busy == false  );
-#endif
-        return true;
-    } else {
-        return false;
-    }
-
-}
-
-bool FlashManager::aio_return(read_cb* cb) {
-    // DEBUG_PRINT("aio_return:: beginning cb->busy = %d\n", cb->busy);
-    if ( !cb->busy ) return false;
-    int tag = cb->tag;
-#ifdef DEBUG
-    assert( (ulng)cb  == readTagTable[tag].addr && readTagTable[tag].busy == true);
-#endif
-    // DEBUG_PRINT("aio_return:: checking tag  = %d, readBuffer[tag][PAGE_SIZE] = %d\n", tag, readBuffers[tag][PAGE_SIZE_VALID]);
-    return readBuffers[tag][PAGE_SIZE_VALID]  == -1;
-}
-
-bool FlashManager::aio_done(read_cb* cb) {
-    if (!cb->busy) return true;
-    int tag = cb->tag;
-#ifdef DEBUG
-    assert( readTagTable[tag].busy == true && readTagTable[tag].addr == (ulng)cb );
-#endif
-    while ( !tagQueue.push(tag) );
-    readBuffers[tag][PAGE_SIZE_VALID] = 0;
-    readTagTable[tag].busy            = false;
-    cb->busy                          = false;
-    inflightReads--;
-    return true;
 }

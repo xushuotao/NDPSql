@@ -4,52 +4,67 @@
 
 uint64_t totalRows = 32;
 
+#ifdef SIMULATION
+std::string db_path         = "/mnt/nvme0/shuotao/tpch/.farms/monetdb-sf300/bat/";
+#else
+std::string db_path         = "bat/";
+#endif
+std::string l_shipdate      = "10/1051";
+std::string l_returnflag    = "10/1047";
+std::string l_linestatus    = "10/1050";
+std::string l_quantity      = "10/1043";
+std::string l_extendedprice = "10/1044";
+std::string l_discount      = "10/1045";
+std::string l_tax           = "10/1046";
+
+
+
 RowSelectorParamT rowSel0 = {
- colType : Int,
- numRows : totalRows,
- baseAddr : 0,
- forward: 0,
- allRows: 1,
- rdPort: 0,
- lowTh:((uint64_t)INT_MIN), 
- hiTh:729999, 
- isSigned:1,
- andNotOr:1};
+    .colType  = Int,
+    .numRows  = totalRows,
+    .baseAddr = 0,
+    .forward  = 0,
+    .allRows  = 1,
+    .rdPort   = 0,
+    .lowTh    = ((uint64_t)INT_MIN), 
+    .hiTh     = 729999, 
+    .isSigned = 1,
+    .andNotOr = 1};
 
 
 RowSelectorParam rowSelParam_0 = {
- colname:std::string("l_shipdate"),
- param:rowSel0};
+    .colname  = "l_shipdate",
+    .filename = db_path+l_shipdate,
+    .param    = rowSel0};
 
 
 RowSelectorParamT rowSelforward = {
- colType: Int,
- numRows : totalRows,
- baseAddr : 0,
- forward : true
-};
+    .colType  = Int,
+    .numRows  = totalRows,
+    .baseAddr = 0,
+    .forward  = true};
 
 RowSelectorParam rowSelforward_param = {
- colname:std::string("l_shipdate"),
- param:rowSelforward
-};
+    .colname  = "empty",
+    .filename = "",
+    .param    = rowSelforward};
 
 uint8_t inCols = 6;
 
-InColParamT inColInfo_returnflag  = InColParamT{.colType=Byte, .baseAddr=1};
-InColParamT inColInfo_linestatus  = InColParamT{.colType=Byte, .baseAddr=2};
-InColParamT inColInfo_quantity    = InColParamT{.colType=Int,  .baseAddr=3};
-InColParamT inColInfo_extendprice = InColParamT{.colType=Long, .baseAddr=4};
-InColParamT inColInfo_discount    = InColParamT{.colType=Long, .baseAddr=5};
-InColParamT inColInfo_tax         = InColParamT{.colType=Long, .baseAddr=6};
+InColParamT inColInfo_returnflag    = InColParamT{.colType=Byte, .baseAddr=1};
+InColParamT inColInfo_linestatus    = InColParamT{.colType=Byte, .baseAddr=2};
+InColParamT inColInfo_quantity      = InColParamT{.colType=Int,  .baseAddr=3};
+InColParamT inColInfo_extendedprice = InColParamT{.colType=Long, .baseAddr=4};
+InColParamT inColInfo_discount      = InColParamT{.colType=Long, .baseAddr=5};
+InColParamT inColInfo_tax           = InColParamT{.colType=Long, .baseAddr=6};
 
 
-InColParam inColparam_returnflag  = InColParam{.colname="returnflag" , .param=inColInfo_returnflag };
-InColParam inColparam_linestatus  = InColParam{.colname="linestatus" , .param=inColInfo_linestatus };
-InColParam inColparam_quantity    = InColParam{.colname="quantity"   , .param=inColInfo_quantity   };
-InColParam inColparam_extendprice = InColParam{.colname="extendprice", .param=inColInfo_extendprice};
-InColParam inColparam_discount    = InColParam{.colname="discount"   , .param=inColInfo_discount   };
-InColParam inColparam_tax         = InColParam{.colname="tax"        , .param=inColInfo_tax        };
+InColParam  inColparam_returnflag    = InColParam{.colname="returnflag"   , .filename=db_path+l_returnflag   , .param=inColInfo_returnflag   };
+InColParam  inColparam_linestatus    = InColParam{.colname="linestatus"   , .filename=db_path+l_linestatus   , .param=inColInfo_linestatus   };
+InColParam  inColparam_quantity      = InColParam{.colname="quantity"     , .filename=db_path+l_quantity     , .param=inColInfo_quantity     };
+InColParam  inColparam_extendedprice = InColParam{.colname="extendedprice", .filename=db_path+l_extendedprice, .param=inColInfo_extendedprice};                                                                                                          
+InColParam  inColparam_discount      = InColParam{.colname="discount"     , .filename=db_path+l_discount     , .param=inColInfo_discount     };
+InColParam  inColparam_tax           = InColParam{.colname="tax"          , .filename=db_path+l_tax          , .param=inColInfo_tax          };
 
 
 uint8_t outCols = 6;
@@ -116,7 +131,7 @@ TableTask task = TableTask{
     .inCols={inColparam_returnflag ,
              inColparam_linestatus ,
              inColparam_quantity   ,
-             inColparam_extendprice,
+             inColparam_extendedprice,
              inColparam_discount   ,
              inColparam_tax         },
     .programLength={6,6,6,6},
