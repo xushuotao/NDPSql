@@ -2570,8 +2570,7 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 
     blm = GDKzalloc(sizeof(Bloom));
     size_t blmcnt = sr? BATcount(sr) : BATcount(r);
-    /* if ( bloom_init(blm, 1UL<<24, 0.5) ){ */
-    if ( bloom_init_alt(blm, blmcnt, 4*(1UL<<23), 1) ){
+    if ( bloom_init(blm, blmcnt, 0.01) ){
       GDKerror("BAThashjoin: bloom init failed\n");
       GDKfree(blm);
       return GDK_FAIL;
@@ -2900,8 +2899,7 @@ hashjoin(BAT *r1, BAT *r2, BAT *l, BAT *r, BAT *sl, BAT *sr, int nil_matches,
 			r2->tseqbase = ((oid *) r2->theap.base)[0];
 	}
 
-    fprintf(stderr, "totalcnt = %d, hashcnt = %d, bloomcnt = %d\n", totalcnt, hashcnt, bloomcnt);
-    fprintf(stderr, "bloom correct rate = %.2lf, bloom filter_in rate = %.2lf, total joined rate = %.2lf\n", (dbl)BATcount(r1)/(dbl)hashcnt*100.0, (dbl)hashcnt/(dbl)totalcnt*100.0, (dbl)BATcount(r1)/(dbl)totalcnt*100.0);
+fprintf(stderr, "totalcnt = %d, hashcnt = %d, bloomcnt = %d\n", totalcnt, hashcnt, bloomcnt);
 	ALGODEBUG fprintf(stderr, "#hashjoin(l=%s,r=%s)=(%s#"BUNFMT"%s%s%s%s,%s#"BUNFMT"%s%s%s%s) " LLFMT "us\n",
 			  BATgetId(l), BATgetId(r),
 			  BATgetId(r1), BATcount(r1),

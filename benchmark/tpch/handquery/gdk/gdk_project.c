@@ -388,15 +388,13 @@ BATproject(BAT *l, BAT *r)
 
 	if (!BATtdense(r))
 		BATtseqbase(bn, oid_nil);
-    lng tdiff = GDKusec() - t0;
-    ALGODEBUG  fprintf(stderr, "#BATproject(l=%s,r=%s)=%s#"BUNFMT"%s%s%s%s " LLFMT "us (%.2lf MB/s)\n",
-                       BATgetId(l), BATgetId(r), BATgetId(bn), BATcount(bn),
-                       bn->tsorted ? "-sorted" : "",
-                       bn->trevsorted ? "-revsorted" : "",
-                       bn->tkey ? "-key" : "",
-                       bn->ttype == TYPE_str && bn->tvheap == r->tvheap ? " shared string heap" : "",
-                       tdiff,
-                       (BATcount(r)<<r->tshift)/(dbl)tdiff);
+	ALGODEBUG fprintf(stderr, "#BATproject(l=%s,r=%s)=%s#"BUNFMT"%s%s%s%s " LLFMT "us\n",
+			  BATgetId(l), BATgetId(r), BATgetId(bn), BATcount(bn),
+			  bn->tsorted ? "-sorted" : "",
+			  bn->trevsorted ? "-revsorted" : "",
+			  bn->tkey ? "-key" : "",
+			  bn->ttype == TYPE_str && bn->tvheap == r->tvheap ? " shared string heap" : "",
+			  GDKusec() - t0);
 	return bn;
 
   bailout:

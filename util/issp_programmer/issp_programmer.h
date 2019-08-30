@@ -17,13 +17,11 @@ extern "C" {
 #endif
 typedef struct RowSelectorParam{
     std::string colname;
-	std::string filename;
     RowSelectorParamT param;
 } RowSelectorParam;
 
 typedef struct InColParam{
     std::string colname;
-	std::string filename;
     InColParamT param;
 } InColParam;
 

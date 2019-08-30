@@ -24,8 +24,7 @@ std::string l_quantity = "10/1043";
 std::string l_extendedprice = "10/1044";
 std::string l_discount = "10/1045";
 std::string l_tax = "10/1046";
-// size_t nRows = 1799989091;
-size_t nRows = 1799989091/10000;//8192000;
+size_t nRows = 1799989091;
 // size_t nRows = 100000;
 
 

@@ -1,11 +1,87 @@
 #include "flashmanage.h"
 #include "issp_programmer.h"
-#include "pageaddr_feeder.h"
 #include "ISSPIndication.h"
 #include <string.h>
 #include <stdio.h>
 #include "TableTasks.h"
 #include <iostream>
+
+#if defined(SIMULATION)
+std::string db_path = "/mnt/nvme0/shuotao/tpch/.farms/monetdb-sf300/bat/";
+#else
+std::string db_path = "bat/";
+#endif
+
+std::string c_mktsegment = "03/344";     // varchar 8-byte
+std::string c_custkey    = "04/425";     //int
+std::string o_custkey    = "07/755";     // int
+std::string o_orderdate  = "07/746";     // int
+
+
+#if defined(SIMULATION)
+size_t rows_customers = 450000;
+size_t rows_orders    = 4500000;
+#else
+size_t rows_customers = 45000000;
+size_t rows_orders    = 450000000;
+
+#endif
+
+read_cb cb_array[128];
+
+
+
+
+void check_read_data(FlashManager* fmng, std::string fname, void* ref_array){
+    int fd = fmng->openfile(fname.c_str());
+
+    size_t  fs = fmng->filesize(fd);
+
+    fprintf(stderr, "%s file is of size %lu bytes\n", fname.c_str(), fs);
+
+
+    // for ( int i = 0; i < 128; i++ ) cb_array[i].busy = false;
+
+    size_t  req_offset = 0;
+    size_t  processed  = 0;
+
+    int bufid = 0;  
+    while ( processed < fs ) {
+
+        // sending reqs
+        // fprintf(stderr, "loopping:: req_offset = %lu, bufid = %d, processed= %lu\n", req_offset, bufid, processed);
+        if ( req_offset < fs && !cb_array[bufid].busy ){
+            cb_array[bufid].fildes = fd;
+            cb_array[bufid].offset = req_offset;
+            if ( fmng->aio_read_page(cb_array+bufid) ) {
+                req_offset += PAGE_SIZE;
+            }
+        }
+        bufid=(bufid+1)%128;
+
+        // checking resps
+        for ( int i = 0; i < 128; i++ ){
+            if ( fmng->aio_return(cb_array+i) ){
+                size_t  offset                                                                                        = cb_array[i].offset;
+                if ( memcmp(cb_array[i].buf_ptr, (char*)(ref_array) + offset, offset+8192 > fs ? fs - offset : 8192) != 0 ) {
+                    fprintf(stderr, "LOG::page comparasion error of file %s, at offset = %lu, pageNum = %lu\n",fname.c_str(), offset, offset/8192);
+                    exit(0);
+                }
+                else {
+                    // fprintf(stderr, "LOG::page comparasion success of file %s, at offset = %lu\n",fname.c_str(), cb_array[i].offset);
+                }
+                fmng->aio_done(cb_array+i);
+                processed += 8192;
+            }
+        }
+
+        // fprintf(stderr, "loopping:: end\n");
+    }
+    fprintf(stderr, "file %s read test passed\n", fname.c_str());
+    fmng->closefile(fd);
+
+
+}
 
 char * sprintf_int128( __int128_t n ) {
     static char str[41] = { 0 };        // sign + log10(2**128) + '\0'
@@ -45,123 +121,18 @@ public:
 
 
 
-read_cb cb_array[128];
-
-void check_read_data(FlashManager* fmng, std::string fname, void* ref_array){
-    int fd = fmng->openfile(fname.c_str());
-
-    size_t  fs = fmng->filesize(fd);
-
-    fprintf(stderr, "%s file is of size %lu bytes\n", fname.c_str(), fs);
-
-
-    // for ( int i = 0; i < 128; i++ ) cb_array[i].busy = false;
-
-    size_t  req_offset = 0;
-    size_t  processed  = 0;
-
-    int bufid = 0;
-	bool badread_dectected = false;
-    while ( processed < fs ) {
-
-        // sending reqs
-        // fprintf(stderr, "loopping:: req_offset = %lu, bufid = %d, processed= %lu\n", req_offset, bufid, processed);
-        if ( req_offset < fs && !cb_array[bufid].busy ){
-            cb_array[bufid].fildes = fd;
-            cb_array[bufid].offset = req_offset;
-            if ( fmng->aio_read_page(cb_array+bufid) ) {
-                req_offset += PAGE_SIZE;
-            }
-        }
-        bufid=(bufid+1)%128;
-
-        // checking resps
-        for ( int i = 0; i < 128; i++ ){
-            if ( fmng->aio_return(cb_array+i) ){
-                size_t  offset = cb_array[i].offset;
-                if ( memcmp(cb_array[i].buf_ptr, (char*)(ref_array) + offset, offset+8192 > fs ? fs - offset : 8192) != 0 && !badread_dectected) {
-                    fprintf(stderr, "LOG::page comparasion error of file %s, at offset = %lu, pageNum = %lu\n",fname.c_str(), offset, offset/8192);
-                    exit(0);
-                }
-                else {
-                    // fprintf(stderr, "LOG::page comparasion success of file %s, at offset = %lu\n",fname.c_str(), cb_array[i].offset);
-                }
-                fmng->aio_done(cb_array+i);
-                processed += 8192;
-            }
-        }
-
-        // fprintf(stderr, "loopping:: end\n");
-    }
-    fprintf(stderr, "file %s read test passed\n", fname.c_str());
-    fmng->closefile(fd);
-
-
-}
-
-void check_col_files(FlashManger* fmng, std::string list_name){
-	std::ifstream file((dir_path+"/filemap.txt").c_str());
-	std::string line;
-	if ( file.good() ){
-		std::string colname;
-		std::string fileid;
-		uint32_t colBytes;
-		uint64_t numRows;
-		while ( file >> colname >> fileid >> colBytes >> numRows ) {
-			std::string filename = db_path+fileid+".tail";
-			auto rec = mmapfile_readonly(filename.c_str());
-			uint64_t fs = colBytes * numRows;
-			assert(fs <= rec.fs);
-			check_read_data(fmng, filename, rec->base);
-		}
-	}
-	file.close();
-}
-
-void write_col_files(FlashManger* fmng, std::string list_name){
-	std::ifstream file((dir_path+"/filemap.txt").c_str());
-	std::string line;
-	if ( file.good() ){
-		std::string colname;
-		std::string fileid;
-		uint32_t colBytes;
-		uint64_t numRows;
-		while ( file >> colname >> fileid >> colBytes >> numRows ) {
-			std::string filename = db_path+fileid+".tail";
-			auto rec = mmapfile_readonly(filename.c_str());
-			uint64_t fs = colBytes * numRows;
-			assert(fs <= rec.fs);
-			fmng->writefile(filename.c_str(), (const char*)rec->base, fs);
-			unmmapfile(rec);
-		}
-	}
-	file.close();
-}
-
-
-
 int main(){
-    FlashManager* fmng = new FlashManager("testdir");
-	
-    ISSPProgrammer* issp_programmer = new ISSPProgrammer();
-	PageAddrFeeder* issp_pagefeeder = new PageAddrFeeder();
+    // FlashManager* fmng = new FlashManager("testdir");
+    // printf("fmng       = %p\n",fmng);
+
+    ISSPProgrammer* issp            = new ISSPProgrammer();
     ISSPIndication* issp_indication = new ISSPIndication(IfcNames_ISSPIndicationH2S);
-	
-	bool done = false;
+    
+    issp->sendTableTask(&task);
 
-	write_col_files(fmng, "filelist.txt");
-	check_col_files(fmng, "filelist.txt");
+    while (true){}
 
-	// if ( issp_pagefeeder->sendTableTask(&task, fmng, &done) != 0 ){
-	// 	return 1;
-	// }
-	// issp_programmer->sendTableTask(&task);
-
-    // while (true){}
-
-
-    // delete issp_programmer;
-	// delete issp_pagefeeder;
-
-	delete fmng;
+    // delete fmng;
+    delete issp;
+    //delete issp_indication;
 }

@@ -58,7 +58,7 @@ IDIR=$DIR/.install
 SDIR=$DIR/.sources
 
 MSRC=$(realpath ../MonetDB-11.27.9)
-MINS=$(realpath ../MonetDB-install/)
+MINS=$(realpath ../MonetDB-install-3/)
 
 
 mkdir -p $SDIR

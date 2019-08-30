@@ -15,22 +15,9 @@ import FIFO::*;
 // std::string l_tax = "10/1046";
 // size_t nRows = 1799989091;
 
-Bool debug = False;
-
-`ifdef SVDPI
-interface XSimFlashIfc;
-   method Bit#(128) getData(Bit#(64) pageaddr, Bit#(32) wordOffset);
-endinterface
-import "BVI" XSimFlash =
-module mkXSimFlashBVI(XSimFlashIfc);
-   method beat getData(pgaddr, wordOffset) ready (RDY_getData);
-   schedule (getData) CF (getData);
-module 
-`else
 import "BDPI" function Bit#(64) getBaseAddr(String fname);
 import "BDPI" function Bit#(128) getData(Bit#(64) pageaddr, Bit#(32) wordOffset);
 import "BDPI" function Bit#(64) getNumRows(String fname);
-`endif
 
 function Bit#(64) toPageAddr(FlashCmd cmd, Bit#(1) card);
    Bit#(TLog#(BlocksPerCE)) blockAddr = truncate(cmd.block);
@@ -96,11 +83,11 @@ module mkEmulatedFlashCtrl#(Bit#(1) i)(FlashCtrlVirtexIfc);
       
       prevCycleRd <= cycles;
       // if ( cycles - prevCycleRd > 1 ) 
-      //    if (debug) $display("(%d) %m gap in sending dumpy read data .. prevCycle = %d, gap = %d", cycles, prevCycleRd, cycles - prevCycleRd);
-      // if (debug) $display("(%d) %m sending dumpy read data ... tag = %d, readCnt = %d", cycles, readTag, readCnt);
+      //    $display("(%d) %m gap in sending dumpy read data .. prevCycle = %d, gap = %d", cycles, prevCycleRd, cycles - prevCycleRd);
+      // $display("(%d) %m sending dumpy read data ... tag = %d, readCnt = %d", cycles, readTag, readCnt);
       
       if ( readCnt == 0) begin
-         if (debug) $display("%m starting read for tag = %d @ cycles = %d", readTag, cycles);
+         $display("%m starting read for tag = %d @ cycles = %d", readTag, cycles);
       end
       rdDataQ.enq(tuple2(getData(pageAddr, readCnt), readTag));
       readBeatCnt <= readBeatCnt + 1;
@@ -119,8 +106,8 @@ module mkEmulatedFlashCtrl#(Bit#(1) i)(FlashCtrlVirtexIfc);
       end
       prevCycleWr <= cycles;
       // if ( cycles - prevCycleWr > 1 ) 
-      //    if (debug) $display("(%d) %m gap in receiving dumpy write data .. prevCycle = %d, gap = %d", cycles, prevCycleWr, cycles - prevCycleWr);
-      // if (debug) $display("(%d) %m receiving dumpy write data ... tag = %d, writeCnt = %d", cycles, writeTag, writeCnt);
+      //    $display("(%d) %m gap in receiving dumpy write data .. prevCycle = %d, gap = %d", cycles, prevCycleWr, cycles - prevCycleWr);
+      // $display("(%d) %m receiving dumpy write data ... tag = %d, writeCnt = %d", cycles, writeTag, writeCnt);
       let data = wrDataQ.first;
       wrDataQ.deq;
    endrule

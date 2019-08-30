@@ -25,11 +25,12 @@ module mkRenameTable(RenameTable#(numTags, dataT)) provisos(
    `ifdef USE_BRAM
    RWBramCore#(Bit#(TLog#(numTags)), dataT) tb <- mkRWBramCore;
    `else
-   FIFO#(dataT) readRespQ <- mkPipelineFIFO;
+   FIFO#(Bit#(TLog#(numTags))) readReqQ <- mkPipelineFIFO;
    RegFile#(Bit#(TLog#(numTags)), dataT) tb <- mkRegFileFull;
    `endif
    
    rule initialize (!init);
+      $display("initCnt = %d", initCnt);
       initCnt <= initCnt + 1;
       freeTagQ.enq(initCnt);
       if (initCnt == fromInteger(valueOf(numTags) - 1))
@@ -52,8 +53,7 @@ module mkRenameTable(RenameTable#(numTags, dataT)) provisos(
       `ifdef USE_BRAM
       tb.rdReq(tag);
       `else
-      let data = tb.sub(tag);
-      readRespQ.enq(data);
+      readReqQ.enq(tag);
       `endif
    endmethod
 
@@ -62,8 +62,8 @@ module mkRenameTable(RenameTable#(numTags, dataT)) provisos(
       tb.deqRdResp;
       return tb.rdResp;
       `else
-      let data <- toGet(readRespQ).get;
-      return data;
+      let tag <- toGet(readReqQ).get;
+      return tb.sub(tag);
       `endif
    endmethod
    

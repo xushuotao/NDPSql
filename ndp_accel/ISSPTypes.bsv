@@ -71,18 +71,3 @@ interface OutColProgramIfc;
    method Action setColNum(Bit#(8) numCols);
    method Action setParam(Bit#(8) colId, OutColParamT param);
 endinterface
-
-interface PageFeeder;
-   method Action sendPageAddr_0(Bit#(32) pageAddr);
-   method Action sendPageAddr_1(Bit#(32) pageAddr);
-   method Action sendPageAddr_2(Bit#(32) pageAddr);
-   method Action sendPageAddr_3(Bit#(32) pageAddr);
-   method Action sendPageAddr_4(Bit#(32) pageAddr);
-   method Action sendPageAddr_5(Bit#(32) pageAddr);
-   method Action sendPageAddr_6(Bit#(32) pageAddr);
-   method Action sendPageAddr_7(Bit#(32) pageAddr);
-   method Action sendPageAddr_8(Bit#(32) pageAddr);
-   method Action sendPageAddr_9(Bit#(32) pageAddr);
-   method Action sendPageAddr_10(Bit#(32) pageAddr);
-   method Action sendPageAddr_11(Bit#(32) pageAddr);
-endinterface

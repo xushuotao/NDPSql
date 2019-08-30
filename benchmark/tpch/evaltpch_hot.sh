@@ -34,7 +34,7 @@ DBFARM=$FARM/$DBNAME/
 
 PORT=51337
 
-MINS=$(realpath ../../MonetDB-install)
+MINS=$(realpath ../../MonetDB-install-3)
 
 SERVERCMD="$MINS/bin/mserver5 --set mapi_port=$PORT --daemon=yes --set gdk_nr_threads=0 --dbpath="
 # CLIENTCMD="$MINS/bin/mclient -fcsv -p $PORT "
@@ -46,51 +46,24 @@ CREATEDBCMD="echo createdb"
 TIMINGCMD="/usr/bin/time -o $DIR/.time -f %e "
 TIMEOUTCMD="timeout -k 35m 30m "
 
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install/lib/)
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install-3/lib/)
 
 cleanpagecache(){
     sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
 }
 
 
-# cleanpagecache;
+cleanpagecache;
 
-# if [ ! -d $DBFARM ] ; then
-#     echo "DBFARM $DBFARM has not be initialized, run script ./script/loadtpch.sh"
-#     exit 1;
-# fi
+if [ ! -d $DBFARM ] ; then
+    echo "DBFARM $DBFARM has not be initialized, run script ./script/loadtpch.sh"
+    exit 1;
+fi
 
-# echo "Staring server"
-# echo "$SERVERCMD$DBFARM &"
-# eval "$SERVERCMD$DBFARM &"
+echo "Staring server"
+echo "$SERVERCMD$DBFARM &"
+eval "$SERVERCMD$DBFARM &"
 
-
-# # for n in `seq 1 22`;
-# # do
-# #     echo $n
-# #     qn=$(printf "%02d" $n)
-# #     QFILE=queries/q$qn.sql
-
-# #     if [ ! -r $QFILE ]; then
-# #         echo "TPCH Query $qn script is not found in querys folder, recheck"
-# #         exit 1;
-# #     fi
-
-# #     QUERY=`cat $QFILE | sed -e ':a;N;$!ba;s/\n/ /g'`
-# #     CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
-
-    
-# #     PID=$!
-
-# #     sleep 1
-    
-
-# #     echo "$CLIENTCMD"
-# #     eval "$CLIENTCMD"
-
-# # done
-
-# sleep 5;
 
 # for n in `seq 1 22`;
 # do
@@ -105,27 +78,54 @@ cleanpagecache(){
 
 #     QUERY=`cat $QFILE | sed -e ':a;N;$!ba;s/\n/ /g'`
 #     CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
-#     PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME  -o perfoutput_hot/$DBNAME-q$qn"
-
-#     echo "$CLIENTCMD"
-#     eval "$CLIENTCMD"
 
     
-#     echo "$PROFILECMD"
-#     eval "$PROFILECMD &"
+#     PID=$!
 
 #     sleep 1
+    
 
 #     echo "$CLIENTCMD"
 #     eval "$CLIENTCMD"
 
-
-#     kill $(pidof tomograph)
-#     sleep 10
 # done
 
+sleep 5;
 
-# kill $(pidof mserver5)
+for n in `seq 1 22`;
+do
+    echo $n
+    qn=$(printf "%02d" $n)
+    QFILE=queries/q$qn.sql
+
+    if [ ! -r $QFILE ]; then
+        echo "TPCH Query $qn script is not found in querys folder, recheck"
+        exit 1;
+    fi
+
+    QUERY=`cat $QFILE | sed -e ':a;N;$!ba;s/\n/ /g'`
+    CLIENTCMD="$MINS/bin/mclient -p $PORT -d $DBNAME -s \"$QUERY\""
+    PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME  -o perfoutput_hot/$DBNAME-q$qn"
+
+    echo "$CLIENTCMD"
+    eval "$CLIENTCMD"
+
+    
+    echo "$PROFILECMD"
+    eval "$PROFILECMD &"
+
+    sleep 1
+
+    echo "$CLIENTCMD"
+    eval "$CLIENTCMD"
+
+
+    kill $(pidof tomograph)
+    sleep 10
+done
+
+
+kill $(pidof mserver5)
 
 
 sleep 5;

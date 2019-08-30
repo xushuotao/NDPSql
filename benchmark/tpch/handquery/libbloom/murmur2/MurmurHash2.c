@@ -15,35 +15,24 @@ unsigned int
 #ifdef INLINE
 inline 
 #endif
-
-#define mix_int(X)	(((unsigned int) (X) >> 7) ^	\
-                     ((unsigned int) (X) >> 13) ^	\
-                     ((unsigned int) (X) >> 21) ^	\
-                     (unsigned int) (X))
-
-
-murmurhash2(const void * key, int len, const unsigned int seed)
+ murmurhash2(const void * key, int len, const unsigned int seed)
 {
-  // 'm' and 'r' are mixing constants generated offline.
-  // They're not really 'magic', they just happen to work well.
+	// 'm' and 'r' are mixing constants generated offline.
+	// They're not really 'magic', they just happen to work well.
 
-  const unsigned int m = 0x5bd1e995;
-  const int r = 24;
+	const unsigned int m = 0x5bd1e995;
+	const int r = 24;
 
-  // Initialize the hash to a 'random' value
+	// Initialize the hash to a 'random' value
 
-  unsigned int h = seed ^ len;
+	unsigned int h = seed ^ len;
 
-  // Mix 4 bytes at a time into the hash
+	// Mix 4 bytes at a time into the hash
 
-  const unsigned char * data = (const unsigned char *)key;
+	const unsigned char * data = (const unsigned char *)key;
 
-  if ( len == 4 ){
-    h = mix_int(*(unsigned int*)key);
-  }
-  else {
-    while(len >= 4)
-      {
+	while(len >= 4)
+	{
 		unsigned int k = *(unsigned int *)data;
 
 		k *= m;
@@ -55,17 +44,17 @@ murmurhash2(const void * key, int len, const unsigned int seed)
 
 		data += 4;
 		len -= 4;
-      }
+	}
 
 	// Handle the last few bytes of the input array
 
 	switch(len)
-      {
-      case 3: h ^= data[2] << 16;
-      case 2: h ^= data[1] << 8;
-      case 1: h ^= data[0];
-        h *= m;
-      };
+	{
+	case 3: h ^= data[2] << 16;
+	case 2: h ^= data[1] << 8;
+	case 1: h ^= data[0];
+	        h *= m;
+	};
 
 	// Do a few final mixes of the hash to ensure the last few
 	// bytes are well-incorporated.
@@ -73,7 +62,6 @@ murmurhash2(const void * key, int len, const unsigned int seed)
 	h ^= h >> 13;
 	h *= m;
 	h ^= h >> 15;
-  }
 
-  return h;
+	return h;
 }

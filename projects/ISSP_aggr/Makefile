@@ -11,7 +11,6 @@ S2H_INTERFACES += RowSelectorProgramIfc:FlashTop.rowSelProgramIfc
 S2H_INTERFACES += InColProgramIfc:FlashTop.inColProgramIfc
 S2H_INTERFACES += ColXFormProgramIfc:FlashTop.colXFormProgramIfc
 S2H_INTERFACES += OutColProgramIfc:FlashTop.outColProgramIfc
-S2H_INTERFACES += PageFeeder:FlashTop.pagefeeder
 
 H2S_INTERFACES := FlashTop:FlashIndication,ISSPIndication:host
 
@@ -34,7 +33,7 @@ CONNECTALFLAGS += --bscflags="-D XILINX_INT_MUL_LATENCY=$(XILINX_INT_MUL_LATENCY
 endif
 
 BSVFILES = FlashTop.bsv $(ISSPBASEDIR)/ISSPTypes.bsv
-CPPFILES = ../../util/flashmanage/flashmanage.cpp ../../util/mmap_util/mmap_util.cpp ../../util/filemap/filemap.cpp  ../../util/issp_programmer/issp_programmer.cpp  ../../util/issp_programmer/pageaddr_feeder.cpp testfile.cpp 
+CPPFILES = ../../util/flashmanage/flashmanage.cpp ../../util/mmap_util/mmap_util.cpp ../../util/filemap/filemap.cpp  ../../util/issp_programmer/issp_programmer.cpp testfile.cpp 
 
 CONNECTALFLAGS += -l boost_system -l boost_filesystem -l boost_thread -I ../../util/filemap/ -I ../../util/flashmanage/ -I ../../util/mmap_util/ -I ../../util/issp_programmer/ --cflags=" --std=c++11 " --nonstrict
 

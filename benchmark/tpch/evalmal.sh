@@ -66,8 +66,8 @@ CREATEDBCMD="echo createdb"
 TIMINGCMD="/usr/bin/time -o $DIR/.time -f %e "
 TIMEOUTCMD="timeout -k 35m 30m "
 
-PROFILECMD="$MINS/bin/stethoscope -p $PORT -u monetdb -P monetdb -d $DBNAME"
-# PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d $DBNAME - $DBNAME"
+# PROFILECMD="$MINS/bin/stethoscope -p $PORT -u monetdb -P monetdb -d monetdb-sf300"
+PROFILECMD="$MINS/bin/tomograph -p $PORT -u monetdb -P monetdb -d monetdb-sf300 -D"
 # -o stethoscope
 
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(realpath ../../MonetDB-install/lib/)
@@ -85,11 +85,10 @@ sleep 5
 echo "$PROFILECMD"
 eval "$PROFILECMD &"
 
-PIDPRO=$!
 
 
 eval "$TIMEOUTCMD$TIMINGCMD$CLIENTCMD$QFILE"
 
-kill $PIDPRO
+
 kill $PID
 
