@@ -26,6 +26,7 @@ void ISSPProgrammer::init_device(){
         program_inCol    = new InColProgramIfcProxy(IfcNames_InColProgramIfcS2H);
         program_colXform = new ColXFormProgramIfcProxy(IfcNames_ColXFormProgramIfcS2H);
         program_outCol   = new OutColProgramIfcProxy(IfcNames_OutColProgramIfcS2H);
+		devInit = true;
     }
 }
 
@@ -76,5 +77,46 @@ void ISSPProgrammer::sendTableTask(TableTask* task){
     for ( uint8_t i = 0; i < NUM_SELS; i++ ){
         program_rowSel->setParam(i, (task->rowSels)[i].param);
     }
+}
 
+void ISSPProgrammer::sendTableTask(TableTask* task, FlashManager* fmng, size_t &totalBytes){
+    // program outCols;
+    program_outCol->setColNum(task->numOutCols);
+    for ( uint8_t i = 0; i < task->numOutCols; i++ ){
+        program_outCol->setParam(i, (task->outCols)[i].param);
+    }
+
+    // program colxformPEs; 
+    for ( uint8_t i = 0; i < NUM_COLXFORM_PES; i++ ){
+        program_colXform->setProgramLength(i, (task->programLength)[i]);
+    }
+
+    for ( uint8_t i = 0; i < NUM_COLXFORM_PES; i++ ){
+        for ( uint8_t j = 0; j < (task->programLength)[i]; j++){
+            program_colXform->setInstruction(encode((task->colXInsts)[i][j]));
+        }
+    }
+
+	totalBytes = 0;
+
+    // program inCols;
+    program_inCol->setDim(task->numRows, task->numInCols);
+    for ( uint8_t i = 0; i < task->numInCols; i++ ){
+		auto fd = fmng->openfile(task->inCols[i].filename);
+		auto fs = (task->numRows)<<((uint32_t)(task->inCols[i].param.colType));
+		totalBytes+=fs;
+		(task->inCols)[i].param.baseAddr = fmng->getPhysPageAddr(fd, 0);
+        program_inCol->setParam(i, (task->inCols)[i].param);
+    }
+
+    // program rowSels;
+    for ( uint8_t i = 0; i < NUM_SELS; i++ ){
+		if ( !(task->rowSels[i].param.forward) ){
+			auto fd = fmng->openfile(task->rowSels[i].filename);
+			auto fs = (task->numRows)<<((uint32_t)(task->rowSels[i].param.colType));
+			totalBytes+=fs;
+			task->rowSels[i].param.baseAddr = fmng->getPhysPageAddr(fd, 0);
+		}
+        program_rowSel->setParam(i, (task->rowSels)[i].param);
+    }
 }

@@ -22,6 +22,7 @@ endinterface
 
 
 interface RowSelector#(numeric type num);
+   interface Vector#(num, PipeIn#(Tuple2#(Bit#(64), Bool))) pageInPipes; 
    // interface Vector#(num, Client#(DualFlashAddr, Bit#(256))) flashRdClients;
    interface Vector#(num, PageBufferClient#(PageBufSz)) pageBufferClients;
    interface Client#(Bit#(9), void) reserveRowVecs;
@@ -73,9 +74,12 @@ module mkRowSelector(RowSelector#(n)) provisos (
    
    function PipeOut#(RowVecReq) getRowVecReqOut(PredicateEval ifc) = ifc.rowVecReqOut;
    Vector#(n, PipeOut#(RowVecReq)) outPipes = cons(firstColFilter.rowVecReq, map(getRowVecReqOut, colFilters));
-   
+
    zipWithM_(mkConnection,take(outPipes), inPipes);
    
+   function PipeIn#(Tuple2#(Bit#(64), Bool)) getPageInPipe(PredicateEval ifc) = ifc.pageInPipe;
+
+   interface pageInPipes = cons(firstColFilter.pageInPipe, map(getPageInPipe, colFilters));
    // interface flashRdClients = cons(firstColFilter.flashRdClient, map(getFlashRdClient, colFilters));
    interface pageBufferClients = cons(firstColFilter.pageBufClient, map(getPageBufferClient, colFilters));
    interface reserveRowVecs = firstColFilter.reserveRowVecs;

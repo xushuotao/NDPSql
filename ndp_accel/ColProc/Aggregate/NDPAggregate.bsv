@@ -2,9 +2,13 @@ import Pipe::*;
 import Vector::*;
 import ISSPTypes::*;
 import NDPCommon::*;
-import NDPPassThru::*;
+import NDPDrain::*;
 import Aggregate::*;
 import BuildVector::*;
+
+import Connectable::*;
+import OneToNRouter::*;
+
 
 interface NDPAggregate;
    interface NDPStreamIn streamIn;
@@ -17,7 +21,7 @@ function PipeOut#(AggrResp) takeAggrResp(NDPAggregate ifc) = ifc.aggrResp;
 (*synthesize*)
 module mkNDPAggregate(NDPAggregate);
    
-   let passThru <- mkNDPPassThru;
+   Vector#(4, NDPAccel) drains <- replicateM(mkNDPDrain);
    Aggregate#(1) aggregate_char <- mkAggregate(False);
    Aggregate#(2) aggregate_short <- mkAggregate(False);
    Aggregate#(4) aggregate_uint <- mkAggregate(False);
@@ -28,45 +32,73 @@ module mkNDPAggregate(NDPAggregate);
    Aggregate#(8) aggregate_long <- mkAggregate(True);
 
    
-   Vector#(8, NDPStreamIn) aggregate_streamIns = vec(passThru.streamIn,         // 0
-                                                     aggregate_char.streamIn,   // 1
-                                                     aggregate_short.streamIn,  // 2
+   Vector#(8, NDPStreamIn) aggregate_streamIns = vec(drains[0].streamIn,         // 0
+                                                     drains[1].streamIn,
+                                                     drains[2].streamIn,
+                                                     // aggregate_char.streamIn,   // 1
+                                                     // aggregate_short.streamIn,  // 2
                                                      aggregate_uint.streamIn,   // 3
                                                      aggregate_ulong.streamIn,  // 4
-                                                     aggregate_bigint.streamIn, // 5
+                                                     drains[3].streamIn,
+                                                     // aggregate_bigint.streamIn, // 5
                                                      aggregate_int.streamIn,    // 6
                                                      aggregate_long.streamIn);  // 7
-   rule doEmptyRule;
-      if ( passThru.streamOut.rowMask.notEmpty) begin
-         passThru.streamOut.rowMask.deq;
-      end
-      if ( passThru.streamOut.rowData.notEmpty) begin
-         passThru.streamOut.rowData.deq;
-      end
-   endrule
    
-   PipeOut#(AggrResp) emptyResult = (interface PipeOut#(AggrResp)
-                                        method AggrResp first if (False);
-                                           return ?;
-                                        endmethod
-                                        method Bool notEmpty = False;
-                                        method Action deq if (False);
-                                           noAction;
-                                        endmethod
-                                     endinterface);
+   function PipeOut#(AggrResp) genEmptyIfc() = (interface PipeOut#(AggrResp)
+                                                   method AggrResp first if (False);
+                                                      return ?;
+                                                   endmethod
+                                                   method Bool notEmpty = False;
+                                                   method Action deq if (False);
+                                                      noAction;
+                                                   endmethod
+                                                endinterface);
       
    
-   Vector#(8, PipeOut#(AggrResp)) aggregate_aggrResult = vec(emptyResult,               // 0
-                                                             aggregate_char.aggrResp,   // 1
-                                                             aggregate_short.aggrResp,  // 2
+   Vector#(8, PipeOut#(AggrResp)) aggregate_aggrResult = vec(genEmptyIfc(),               // 0
+                                                             genEmptyIfc(),
+                                                             genEmptyIfc(),
+                                                             // aggregate_char.aggrResp,   // 1
+                                                             // aggregate_short.aggrResp,  // 2
                                                              aggregate_uint.aggrResp,   // 3
                                                              aggregate_ulong.aggrResp,  // 4
-                                                             aggregate_bigint.aggrResp, // 5
+                                                             genEmptyIfc(),
+                                                             // aggregate_bigint.aggrResp, // 5
                                                              aggregate_int.aggrResp,    // 6
                                                              aggregate_long.aggrResp);  // 7
    
    
    Reg#(Bit#(3)) sel <- mkReg(0);
+   
+   /*   function Tuple2#(Bit#(3), d) toRouter(d) = tuple2(sel, d);
+   
+   OneToNRouter#(8, RowMask) rowMaskRouter <- mkOneToNRouterPipelined;
+   OneToNRouter#(8, RowData) rowDataRouter <- mkOneToNRouterPipelined;
+   
+   
+   function NDPStreamOut combineIfc(PipeOut#(RowData) a, PipeOut#(RowMask) b);
+      return (interface NDPStreamOut;
+                 interface rowData = a;
+                 interface rowMask = b;
+              endinterface);
+   endfunction
+   
+   
+   function PipeOut#(RowMask) extractRowMask(NDPStreamOut a) = a.rowMask;
+   function PipeOut#(RowData) extractRowData(NDPStreamOut a) = a.rowData;
+   
+   Vector#(8, NDPStreamOut) bundledRouterOut = zipWith(combineIfc, rowDataRouter.outPorts, rowMaskRouter.outPorts);
+   zipWithM_(mkConnection, bundledRouterOut, aggregate_streamIns);
+      
+   FunnelPipe#(1, 8, AggrResp, 1) aggrResult_out <- mkFunnelPipesPipelined(aggregate_aggrResult);
+
+   interface NDPStreamIn streamIn;// = select_streamIns[sel];
+      interface PipeIn rowData = mapPipeIn(toRouter, rowDataRouter.inPort);
+      interface PipeIn rowMask = mapPipeIn(toRouter, rowMaskRouter.inPort);
+   endinterface
+
+   interface PipeOut aggrResp = aggrResult_out[0];*/
+
    
    interface NDPStreamIn streamIn = aggregate_streamIns[sel];
    interface PipeOut aggrResp = aggregate_aggrResult[sel];

@@ -11,6 +11,8 @@ S2H_INTERFACES += RowSelectorProgramIfc:FlashTop.rowSelProgramIfc
 S2H_INTERFACES += InColProgramIfc:FlashTop.inColProgramIfc
 S2H_INTERFACES += ColXFormProgramIfc:FlashTop.colXFormProgramIfc
 S2H_INTERFACES += OutColProgramIfc:FlashTop.outColProgramIfc
+S2H_INTERFACES += PageFeeder:FlashTop.pagefeeder
+S2H_INTERFACES += ISSPDebug:FlashTop.isspDebug
 
 H2S_INTERFACES := FlashTop:FlashIndication,ISSPIndication:host
 
@@ -26,16 +28,24 @@ XILINX_INT_MUL_LATENCY = 16
 
 
 ifneq ($(BOARD), vcu108)
-CONNECTALFLAGS += --bscflags="-D XILINX_INT_MUL_LATENCY=$(XILINX_INT_MUL_LATENCY) \
-							  -D BSIM -D SIM_DMA_WRITE_LATENCY=1 -D SIM_DMA_READ_LATENCY=1"
+CONNECTALFLAGS += --bscflags="-D HOST \
+							  -D XILINX_INT_MUL_LATENCY=$(XILINX_INT_MUL_LATENCY) \
+							  -D CntrlUndefBSIM \
+							  -D BSIM -D SIM_DMA_WRITE_LATENCY=1 -D SIM_DMA_READ_LATENCY=1" \
+				  --cxxflags="-D CntrlUndefBSIM  -D FAKE_WRITE"
 else
-CONNECTALFLAGS += --bscflags="-D XILINX_INT_MUL_LATENCY=$(XILINX_INT_MUL_LATENCY)"
+CONNECTALFLAGS += --bscflags="-D HOST \
+							  -D XILINX_INT_MUL_LATENCY=$(XILINX_INT_MUL_LATENCY)"
 endif
 
 BSVFILES = FlashTop.bsv $(ISSPBASEDIR)/ISSPTypes.bsv
-CPPFILES = ../../util/flashmanage/flashmanage.cpp ../../util/mmap_util/mmap_util.cpp ../../util/filemap/filemap.cpp  ../../util/issp_programmer/issp_programmer.cpp testfile.cpp 
+CPPFILES = ../../util/flashmanage/flashmanage.cpp ../../util/mmap_util/mmap_util.cpp ../../util/filemap/filemap.cpp  ../../util/issp_programmer/issp_programmer.cpp ../../util/issp_programmer/pageaddr_feeder.cpp testissp.cpp ../flashFileManager/colfileloader.cpp
 
-CONNECTALFLAGS += -l boost_system -l boost_filesystem -l boost_thread -I ../../util/filemap/ -I ../../util/flashmanage/ -I ../../util/mmap_util/ -I ../../util/issp_programmer/ --cflags=" --std=c++11 " --nonstrict
+CONNECTALFLAGS += -l boost_system -l boost_filesystem -l boost_thread -I ../../util/filemap/ -I ../../util/flashmanage/ -I ../../util/mmap_util/ -I ../../util/issp_programmer/ -I../flashFileManager --cflags=" --std=c++11 " --nonstrict
+
+CONNECTALFLAGS += --verilog ../../verilog \
+				  --bsimsource ../../cpp/bvi_emulatedflash.cpp --cxxflags=" --std=c++11 " \
+				  --verilatorflags="-LDFLAGS \"-lboost_system -lboost_filesystem -lboost_thread\""
 
 ifeq ($(BOARD), vcu108)
 

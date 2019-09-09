@@ -30,9 +30,12 @@ namespace lockfree = boost::lockfree;
 
 
 
+#ifdef CntrlUndefBSIM
+#undef BSIM
+#endif
 
 
-#if defined(SIMULATION)
+#if defined(BSIM)
 #define	LG_PAGES_PER_BLOCK 4
 #define LG_BLOCKS_PER_CHIP 7
 #define LG_CHIPS_PER_BUS   3
@@ -110,7 +113,7 @@ typedef struct {
 											(~((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_PAGES_PER_BLOCK))-1))) |	\
 										   ((blkaddr)&((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1)) |	\
 										   ((pageid<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))&	\
-											(1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS+LG_PAGES_PER_BLOCK))))
+											(~((1UL<<(LG_NUM_CARDS+LG_NUM_BUSES+LG_CHIPS_PER_BUS))-1))))
 
 
 namespace fm = filemap_namespace;

@@ -24,9 +24,11 @@ std::string l_quantity = "10/1043";
 std::string l_extendedprice = "10/1044";
 std::string l_discount = "10/1045";
 std::string l_tax = "10/1046";
-size_t nRows = 1799989091;
-// size_t nRows = 1799989091/100000;//8192000;
+// size_t nRows = 1799989091;
+size_t nRows = 1799989091/1000;//8192000;
 // size_t nRows = 100000;
+
+size_t page_size = 8192;
 
 
 int main(){
@@ -45,9 +47,10 @@ int main(){
   std::string fname_shipdate = db_path+shipdate+".tail";
 
   auto date_rec = mapfile(fname_shipdate.c_str());
-  
+
+  fprintf(stderr, "lo = %d, hi = %d\n",todate(01, 01, 1994), todate(31, 12, 1994));
   auto pos = select((int*)date_rec->base, nRows, todate(01, 01, 1994), todate(31, 12, 1994));
-  fprintf(stderr, "pos count = %lu, filter rate = (%lu/%lu) %.2f\n", pos->batCount, pos->batCount, nRows, (float)pos->batCount/(float)nRows*100.0);
+  fprintf(stderr, "pos count = %lu, filter rate = (%lu/%lu) %.2f%%, numOfPages read = %lu\n", pos->batCount, pos->batCount, nRows, (float)pos->batCount/(float)nRows*100.0, (nRows*sizeof(int)+page_size-1)/page_size);
 
 
   std::string fname_discount = db_path+l_discount+".tail";
@@ -57,16 +60,19 @@ int main(){
   auto pos_discount = select<lng>((lng*)proj_discount->theap.base, proj_discount->batCount, 5, 7);
   // auto pos_discount = select((int*)discount_rec->base, nRows, 5, 7);
 
-  fprintf(stderr, "proj count = %lu, filter rate = (%lu/%lu) %.2f\n", pos_discount->batCount, pos_discount->batCount, pos->batCount, 100.0*pos_discount->batCount/pos->batCount);
+  auto pages_disc = count_pages(pos, sizeof(lng));
+  fprintf(stderr, "proj count = %lu, filter rate = (%lu/%lu) %.2f%%, numOfPages read = %lu\n", pos_discount->batCount, pos_discount->batCount, pos->batCount, 100.0*pos_discount->batCount/pos->batCount, pages_disc);
 
   std::string fname_quantity = db_path+l_quantity+".tail";
   auto quantity_rec = mapfile(fname_quantity.c_str());
   auto quantity_bat = maptoBAT(quantity_rec, TYPE_int, nRows);
-  BAT* proj_quantity = BATproject(BATproject(pos_discount, pos), quantity_bat);
+  BAT* proj_pos_discount = BATproject(pos_discount, pos);
+  BAT* proj_quantity = BATproject(proj_pos_discount, quantity_bat);
   auto pos_quantity = select<int>((int*)proj_quantity->theap.base, proj_quantity->batCount, INT_MIN, 23);
   // auto pos_quantity = select((int*)quantity_rec->base, nRows, 5, 7);
+  auto pages_quantity = count_pages(proj_pos_discount, sizeof(int));
 
-  fprintf(stderr, "proj count = %lu, filter rate = (%lu/%lu) %.2f\n", pos_quantity->batCount, pos_quantity->batCount, pos_discount->batCount, 100.0*pos_quantity->batCount/pos_discount->batCount);
+  fprintf(stderr, "proj count = %lu, filter rate = (%lu/%lu) %.2f%%, numOfPages read = %lu\n", pos_quantity->batCount, pos_quantity->batCount, pos_discount->batCount, 100.0*pos_quantity->batCount/pos_discount->batCount, pages_quantity);
 
   std::string fname_extendedprice = db_path+l_extendedprice+".tail";
   auto extendedprice_rec = mapfile(fname_extendedprice.c_str());

@@ -20,6 +20,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <openssl/md5.h>
+
 #ifndef INLINE
 #include "bloom.h"
 #include "murmurhash2.h"
@@ -64,8 +66,15 @@ inline static int bloom_check_add(Bloom * bloom,
   }
 
   int hits = 0;
-  register unsigned int a = murmurhash2(buffer, len, 0x9747b28c);
-  register unsigned int b = murmurhash2(buffer, len, a);
+  
+  /* register unsigned int a = murmurhash2(buffer, len, 0x9747b28c); */
+  /* register unsigned int b = murmurhash2(buffer, len, a); */
+  char hash[MD5_DIGEST_LENGTH];  
+  MD5(buffer, len, hash);
+  
+  register unsigned int a = ((unsigned int*)hash)[0];
+  register unsigned int b = ((unsigned int*)hash)[1];
+
   register unsigned int x;
   register unsigned int i;
 
@@ -81,16 +90,47 @@ inline static int bloom_check_add(Bloom * bloom,
 
   if (hits == bloom->hashes) {
     return 1;                // 1 == element already in (or collision)
-  }
+  } 
 
   return 0;
 }
 
 
 inline_export int bloom_init_size(Bloom * bloom, int entries, double error,
-                    unsigned int cache_size)
+                                  unsigned int cache_size)
 {
   return bloom_init(bloom, entries, error);
+}
+
+inline_export int bloom_init_alt(Bloom * bloom, int entries, int bits, int hashes)
+{
+  bloom->ready = 0;
+
+  bloom->entries = entries;
+  bloom->bits = bits;
+  bloom->bpe = (double) bits / (double) entries;
+  
+  if (bloom->bits % 8) {
+    bloom->bytes = (bloom->bits / 8) + 1;
+  } else {
+    bloom->bytes = bloom->bits / 8;
+  }
+
+  bloom->hashes = hashes;
+
+  int n = bloom->entries;
+  int k = bloom->hashes;
+  int m = bloom->bits;
+  bloom->error = pow(1- exp(-k/((double)m/n)), k);
+
+  
+  bloom->bf = (unsigned char *)calloc(bloom->bytes, sizeof(unsigned char));
+  if (bloom->bf == NULL) {                                   // LCOV_EXCL_START
+    return 1;
+  }                                                          // LCOV_EXCL_STOP
+ 
+  bloom->ready = 1;
+  return 0;
 }
 
 
@@ -101,7 +141,6 @@ inline_export int bloom_init(Bloom * bloom, int entries, double error)
   if (entries < 1000 || error == 0) {
     return 1;
   }
-
   bloom->entries = entries;
   bloom->error = error;
 
@@ -118,7 +157,7 @@ inline_export int bloom_init(Bloom * bloom, int entries, double error)
     bloom->bytes = bloom->bits / 8;
   }
 
-  bloom->hashes = (int)ceil(0.693147180559945 * bloom->bpe);  // ln(2)
+  bloom->hashes = (int)round(0.693147180559945 * bloom->bpe);  // ln(2)
 
   bloom->bf = (unsigned char *)calloc(bloom->bytes, sizeof(unsigned char));
   if (bloom->bf == NULL) {                                   // LCOV_EXCL_START

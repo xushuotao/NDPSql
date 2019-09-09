@@ -102,8 +102,9 @@ int main(){
   }
 
   BAT *lid, *rid;
-
-  auto status = BATjoin(&lid, &rid, c_custkey_bat, o_custkey_bat, mask_cust, mask_order, 0, 0);
+  auto proj_o_custkey = BATproject(mask_order, o_custkey_bat);
+  // BATsetcount(proj_o_custkey, BATcount(proj_o_custkey)/10);
+  auto status = BATjoin(&lid, &rid, BATproject(mask_cust, c_custkey_bat), proj_o_custkey, NULL, NULL, 0, 0);
 
   fprintf(stderr, "(c and o join result on custkey) lid->batCount = %ld, rid->batCount = %ld\n", BATcount(lid), BATcount(rid));
 
@@ -117,32 +118,27 @@ int main(){
   }
   
 
-  std::string fname_l_shipdate = db_path+l_shipdate+".tail";
-  auto l_shipdate_rec = mapfile(fname_l_shipdate.c_str());
+  // std::string fname_l_shipdate = db_path+l_shipdate+".tail";
+  // auto l_shipdate_rec = mapfile(fname_l_shipdate.c_str());
 
-  auto mask_lineitem = select<int>((int*)l_shipdate_rec->base, rows_lineitem, todate(15, 03, 1995)+1, INT_MAX);
+  // auto mask_lineitem = select<int>((int*)l_shipdate_rec->base, rows_lineitem, todate(15, 03, 1995)+1, INT_MAX);
 
-  fprintf(stderr, "mask_lineitem count = %lu, filter rate = (%lu/%lu) %.2f\n", BATcount(mask_lineitem), BATcount(mask_lineitem), rows_lineitem, (float)BATcount(mask_lineitem)/(float)rows_lineitem*100.0);
+  // fprintf(stderr, "mask_lineitem count = %lu, filter rate = (%lu/%lu) %.2f\n", BATcount(mask_lineitem), BATcount(mask_lineitem), rows_lineitem, (float)BATcount(mask_lineitem)/(float)rows_lineitem*100.0);
 
-  std::string fname_l_orderkey = db_path+l_orderkey+".tail";
-  auto l_orderkey_rec = mapfile(fname_l_orderkey.c_str());
-  BAT* l_orderkey_bat = maptoBAT(l_orderkey_rec, TYPE_int, rows_lineitem);
-
-
-  std::string fname_o_orderkey = db_path+o_orderkey+".tail";
-  auto o_orderkey_rec = mapfile(fname_o_orderkey.c_str());
-  BAT* o_orderkey_bat = maptoBAT(o_orderkey_rec, TYPE_int, rows_orders);
+  // std::string fname_l_orderkey = db_path+l_orderkey+".tail";
+  // auto l_orderkey_rec = mapfile(fname_l_orderkey.c_str());
+  // BAT* l_orderkey_bat = maptoBAT(l_orderkey_rec, TYPE_int, rows_lineitem);
 
 
-  BAT *lid_1, *rid_1;
+  // std::string fname_o_orderkey = db_path+o_orderkey+".tail";
+  // auto o_orderkey_rec = mapfile(fname_o_orderkey.c_str());
+  // BAT* o_orderkey_bat = maptoBAT(o_orderkey_rec, TYPE_int, rows_orders);
 
-  status = BATjoin(&lid_1, &rid_1, l_orderkey_bat, BATproject(rid, o_orderkey_bat), mask_lineitem, NULL, 0, 0);
+
+  // BAT *lid_1, *rid_1;
+
+  // status = BATjoin(&lid_1, &rid_1, BATproject(mask_lineitem, l_orderkey_bat), BATproject(rid, o_orderkey_bat), NULL, NULL, 0, 0);
   
-
-
-  // std::string fname_o_orderdate = db_path+o_orderdate+".tail";
-  // auto o_orderdate_rec = mapfile(fname_o_orderdate.c_str());
-
 
 
   unmapfile(o_orderdate_rec);

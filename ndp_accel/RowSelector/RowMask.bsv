@@ -63,6 +63,8 @@ module mkRowMaskBuff(RowMaskBuff#(nSlaves));
    
    Vector#(nSlaves, FIFO#(Bit#(1))) outstandingReadQ <- replicateM(mkPipelineFIFO());
    
+   FIFO#(Bit#(TLog#(nSlaves))) requesterQ <- mkPipelineFIFO;
+   
    function Put#(RowMaskWrite) genWritePort(Integer i);
       return (interface Put#(RowMaskWrite);
                  method Action put(RowMaskWrite req);
@@ -78,10 +80,12 @@ module mkRowMaskBuff(RowMaskBuff#(nSlaves));
                     method Action put(RowMaskRead req);
                        maskTb[req.src].rdReq(req.id);
                        outstandingReadQ[i].enq(req.src);
+                       requesterQ.enq(fromInteger(i));
                     endmethod
                  endinterface
                  interface Get response;
-                    method ActionValue#(RowVectorMask) get();
+                    method ActionValue#(RowVectorMask) get() if ( requesterQ.first == fromInteger(i));
+                       requesterQ.deq;
                        let src <- toGet(outstandingReadQ[i]).get();
                        maskTb[src].deqRdResp;
                        return maskTb[src].rdResp;

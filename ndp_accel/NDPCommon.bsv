@@ -9,7 +9,10 @@ typedef 4 SelectCols;
 typedef 8 MaxNumCol;
 typedef 4 ColXFormEngs;
 
-typedef 64 PageBufSz;
+typedef 128 PageBufSz;
+
+typedef 1024 PageBufTraceSz;
+typedef Bit#(TLog#(PageBufTraceSz)) PageBufTraceIdx;
 
 
 typedef Bit#(TLog#(MaxNumCol)) ColIdT;

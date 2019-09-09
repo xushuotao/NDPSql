@@ -18,7 +18,6 @@ import DualFlashPageBuffer::*;
 
 Bool debug = False;
 
-typedef 8 MaxNumCol;
 
 typedef Bit#(TLog#(MaxNumCol)) ColIdT;
 typedef Bit#(TLog#(TAdd#(MaxNumCol,1))) ColNumT;
@@ -35,6 +34,7 @@ interface ProgramColProcReader;
 endinterface
 
 interface ColProcReader;
+   interface Vector#(MaxNumCol, PipeIn#(Tuple2#(Bit#(64), Bool))) pageInPipes;
    interface PipeIn#(RowVecReq) rowVecReq;
    interface PipeOut#(Tuple2#(Bit#(64),Bool)) rowVecOut;
    interface PipeOut#(RowData) outPipe;
@@ -105,7 +105,7 @@ module mkColProcReader(ColProcReader);
       rowVecReqQ.deq;
       dynamicAssert(req.numRowVecs == 1, "numRowVecs needs to be one");
       rowVecCnt <= rowVecCnt + 1;
-      if (debug) $display("%m, rowVecCnt = %d, rowVecReq = ", rowVecCnt, fshow(req));
+      if (debug) $display("%m, received rowvecreq (@%t) rowVecCnt = %d, rowVecReq = ", $time, rowVecCnt, fshow(req));
       if ( (toIterId(rowVecCnt) != toIterId(rowVecCnt + 1)) || req.last ) begin
          hasData <= False;
          if (debug) $display("%m, issue pageBatch = %d", hasData || !req.maskZero);
@@ -139,7 +139,7 @@ module mkColProcReader(ColProcReader);
       else begin
          if (debug) $display("skipping flash page request this time, colCnt = %d, pageReqCnt = %d", colCnt, pageReqCnt);
       end
-      if (debug) $display("schedulePageReq colCnt = %d, pageReqCnt = %d, rowCnt = %d, rowsPerIter = %d, rowNum = %d", colCnt, pageReqCnt, rowCnt, rowsPerIter, rowNum);
+      if (debug) $display("(@%t) schedulePageReq colCnt = %d, pageReqCnt = %d, rowCnt = %d, rowsPerIter = %d, rowNum = %d", $time, colCnt, pageReqCnt, rowCnt, rowsPerIter, rowNum);
       
       // scheduling logic
       // make sure that same amount of row vecs are issued per iteration
@@ -201,7 +201,7 @@ module mkColProcReader(ColProcReader);
    Vector#(MaxNumCol, Reg#(Bit#(8))) colBeatCnts <- replicateM(mkReg(0));
    
    // need to buffer 4-cycle latency: reqQ here + reqQ buffer + bram + resp
-   FIFO#(Tuple5#(BufIdT, Bool, Bool, Maybe#(Bit#(64)), Bool)) flashRespMetaQ <- mkSizedFIFO(6);
+   FIFO#(Tuple5#(BufIdT, Bool, Bool, Maybe#(Bit#(64)), Bool)) flashRespMetaQ <- mkSizedFIFO(7);
    
    Reg#(Bit#(9)) rowVecCnt_fRsp <- mkReg(0);
    
@@ -240,7 +240,7 @@ module mkColProcReader(ColProcReader);
          
          lastRowVec = last&& (colBeatCnts[0] >= truncate((maxBeats - zeroExtend(beatsPerRowVec_V[0]))));
          
-         if (colBeatCnts[0] == maxBound ) begin
+         if (colBeatCnts[0] + zeroExtend(beatsPerRowVec_V[0]) == 0 ) begin
             rowVecCnt_fRsp <= 0;
          end
          else begin
@@ -257,7 +257,9 @@ module mkColProcReader(ColProcReader);
       if ( needDeqTag ) begin
          colReadEng_V[colId].doneFirstInflight;
       end
-      if (debug) $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b, maxBeats = %d, needDeqTag = %d, maybeRowVec = ", tag, colId, colBeatCnts[colId], maxBeats, needDeqTag, fshow(maybeRowVec));
+      
+      Maybe#(UInt#(64)) maybeRowVec_display = unpack(pack(maybeRowVec));
+      if (debug) $display("%m sending pageBuffer deqRequest tag = %d, colBeatsCnts[%d] = %b, rowVecCnt_fRsp = %d, maxBeats = %d, needDeqTag = %d, maybeRowVec = ", tag, colId, colBeatCnts[colId], rowVecCnt_fRsp, maxBeats, needDeqTag, fshow(maybeRowVec_display));
    endrule
    
    FIFOF#(Tuple2#(Bit#(64),Bool)) rowVecOutQ <- mkFIFOF;
@@ -290,11 +292,14 @@ module mkColProcReader(ColProcReader);
       $display("%m doNormalize, minLgColBeatsPerIter = %d, max_colBeatsPerIter = %d, colBeatsPerIter_V <= ", minLgColBeatsPerIter, max_colBeatsPerIter >> minLgColBeatsPerIter,  fshow(map(normalize, readVReg(colBeatsPerIter_V))));
       max_colBeatsPerIter <= max_colBeatsPerIter >> minLgColBeatsPerIter;
       rowsPerIter <= 8192 >> minLgColBeatsPerIter;
-      lgRowVecsPerIter <= (8 >> minLgColBeatsPerIter);
+      lgRowVecsPerIter <= (8 - minLgColBeatsPerIter);
       
       state <= Ready;
    endrule
    
+   function PipeIn#(Tuple2#(Bit#(64), Bool)) getPageInPipe(ColReadEng#(tagT) ifc) = ifc.pageInPipe;
+   
+   interface pageInPipes = map(getPageInPipe, colReadEng_V);
  
    interface PipeIn rowVecReq = toPipeIn(rowVecReqQ);
    interface PipeOut rowVecOut = toPipeOut(rowVecOutQ);

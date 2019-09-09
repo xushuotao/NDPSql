@@ -21,6 +21,7 @@ import Connectable::*;
 import DualFlashPageBuffer::*;
 
 interface FirstPredicateEval;
+      interface PipeIn#(Tuple2#(Bit#(64), Bool)) pageInPipe;
    interface PageBufferClient#(PageBufSz) pageBufClient;
    interface Client#(Bit#(9), void) reserveRowVecs;
    interface Get#(RowMaskWrite) rowMaskWrite;
@@ -29,6 +30,7 @@ interface FirstPredicateEval;
 endinterface
 
 interface PredicateEval;
+   interface PipeIn#(Tuple2#(Bit#(64), Bool)) pageInPipe;
    interface PageBufferClient#(PageBufSz) pageBufClient;
    
    interface Client#(RowMaskRead, RowVectorMask) rowMaskRead;
@@ -65,7 +67,7 @@ module mkFirstPredicateEval(FirstPredicateEval);
                              rowVecReqOutSel <= forward ? 0 : 1;
                           endmethod
                        endinterface);
-
+   interface pageInPipe = colReader.pageInPipe;
    // interface Client flashRdClient = colReader.flashRdClient;
    interface pageBufClient = colReader.pageBufClient;
    interface Client reserveRowVecs = colReader.reserveRowVecs;
@@ -101,6 +103,7 @@ module mkPredicateEval(PredicateEval);
                           endmethod
                        endinterface);
 
+   interface pageInPipe = colReader.pageInPipe;
    interface pageBufClient = colReader.pageBufClient;
    interface Client rowMaskRead = colReader.maskRdClient;
    interface Get rowMaskWrite = predResult.rowMaskWrite;

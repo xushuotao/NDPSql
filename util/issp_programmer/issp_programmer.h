@@ -6,6 +6,7 @@
 #include "InColProgramIfc.h"
 #include "ColXFormProgramIfc.h"
 #include "OutColProgramIfc.h"
+#include "flashmanage.h"
 #include <string>
 
 #define NUM_SELS         4
@@ -17,11 +18,13 @@ extern "C" {
 #endif
 typedef struct RowSelectorParam{
     std::string colname;
+	std::string filename;
     RowSelectorParamT param;
 } RowSelectorParam;
 
 typedef struct InColParam{
     std::string colname;
+	std::string filename;
     InColParamT param;
 } InColParam;
 
@@ -50,7 +53,8 @@ class ISSPProgrammer{
 public:
     ISSPProgrammer();
     ~ISSPProgrammer();
-    void sendTableTask(TableTask* task);
+	void sendTableTask(TableTask* task);
+    void sendTableTask(TableTask* task, FlashManager* fmng, size_t & size);
 private:
 
     uint32_t encode(DecodeInst inst);

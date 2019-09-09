@@ -230,7 +230,8 @@ module mkColXFormPE(ColXFormPE);
    interface outPipe = toPipeOut(outQ);
    interface PipeIn programPort;// = toPipeIn(progQ);
       method Action enq(Tuple3#(Bit#(3), Bool, Bit#(32)) v);
-         if (debug) $display("%m programPort, setting iMem = ", fshow(v));
+         // if (debug) 
+         $display("%m programPort, setting iMem = ", fshow(v));
          let {pc, setPcMax, inst} = v;
          if ( !setPcMax )
             iMem.upd(pc, unpack(inst));

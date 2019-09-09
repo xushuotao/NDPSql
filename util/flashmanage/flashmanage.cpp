@@ -236,7 +236,14 @@ uint32_t FlashManager::getPhysPageAddr(int fd, size_t offset){
 #endif
 		
 	uint pageid   = PGADDR2PGID(pageaddr);
-	fprintf(stderr, "getPhysPageAddr, pageaddr = %lu virtual blkid = %lu, physical blkid = %lu, pageId = %u\n", pageaddr, PGADDR2BLKADDR(pageaddr), blkaddr, pageid);
+
+	uint32_t card  = BLKADDR2CARDID(blkaddr);
+	uint32_t bus   = BLKADDR2BUSID(blkaddr);
+	uint32_t chip  = BLKADDR2CHIPID(blkaddr);
+	uint32_t block = BLKADDR2BLKID(blkaddr);
+	int      page  = PGADDR2PGID(pageaddr);
+	DEBUG_PRINT("getPhysPageAddr @%d %d %d %d %d\n", card, bus, chip, block, page);
+	DEBUG_PRINT("getPhysPageAddr, pageaddr = %lu virtual blkid = %lu, physical blkid = %lu, pageId = %u\n", pageaddr, PGADDR2BLKADDR(pageaddr), blkaddr, pageid);
     return (uint)BLKADDR2PAGEADDR(blkaddr, pageid);
 }
 

@@ -62,7 +62,7 @@ module mkNDPSelect(NDPAccel);
    
    
    Reg#(Bit#(3)) sel <- mkReg(1);
-   /*
+/*
    function Tuple2#(Bit#(3), d) toRouter(d) = tuple2(sel, d);
    
    OneToNRouter#(6, RowMask) rowMaskRouter <- mkOneToNRouterPipelined;
@@ -92,7 +92,7 @@ module mkNDPSelect(NDPAccel);
    endinterface
 
    interface NDPStreamOut streamOut = combineIfc(out_data[0], out_mask[0]);// = select_streamOuts[sel];
-  */
+*/
    
    interface NDPStreamIn streamIn = select_streamIns[sel];
    interface NDPStreamOut streamOut = select_streamOuts[sel];

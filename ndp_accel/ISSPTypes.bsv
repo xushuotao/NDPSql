@@ -71,3 +71,37 @@ interface OutColProgramIfc;
    method Action setColNum(Bit#(8) numCols);
    method Action setParam(Bit#(8) colId, OutColParamT param);
 endinterface
+
+interface PageFeeder;
+   method Action sendPageAddr_11(Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_10(Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_9 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_8 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_7 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_6 (Bit#(64) pageAddr, Bool last);   
+   method Action sendPageAddr_5 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_4 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_3 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_2 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_1 (Bit#(64) pageAddr, Bool last);
+   method Action sendPageAddr_0 (Bit#(64) pageAddr, Bool last);
+endinterface
+
+interface ISSPDebug;
+   method Action dumpTrace_PageBuf();
+endinterface
+
+typedef struct{
+   Bit#(64) sum_lo;
+   Bit#(64) sum_hi;
+   Bit#(64) min_lo;
+   Bit#(64) min_hi;
+   Bit#(64) max_lo;
+   Bit#(64) max_hi;
+   Bit#(64) cnt   ;
+   } AggrRespTransport deriving (Bits, Eq, FShow);
+
+interface ISSPIndication;
+   method Action aggrResp(Bit#(8) colId, AggrRespTransport v);
+   method Action trace_PageBuf(Bit#(8) resTag, Bit#(64) resCycle, Bit#(8) relTag, Bit#(64) relCycle);
+endinterface

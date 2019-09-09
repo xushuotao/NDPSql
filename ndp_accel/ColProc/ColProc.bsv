@@ -22,7 +22,7 @@ import NDPDrain::*;
 import Aggregate::*;
 import NDPAggregate::*;
 
-Bool debug = False;
+Bool debug = True;
 
 typedef enum {SetColNum, SetCol, SetParam, Run} ProcState deriving (Bits, Eq, FShow);
 
@@ -38,6 +38,7 @@ endinterface
 
 
 interface ColProc;
+   interface Vector#(MaxNumCol, PipeIn#(Tuple2#(Bit#(64), Bool))) pageInPipes;
    interface PageBufferClient#(PageBufSz) pageBufferClient;
    
    interface PipeIn#(RowVecReq) rowVecReq;
@@ -150,7 +151,7 @@ module mkColProc(ColProc);
          colCntMask <= colCntMask + 1;
       end
       
-      if (debug) $display("(%m) collect and distribute rowmask rowVecId = %d, colCntMask = %d, mask = %b, last = %d", rowVecId, colCntMask, mask, last);
+      if (debug) $display("(%m) @%t collect and distribute rowmask rowVecId = %d, colCntMask = %d, mask = %b, last = %d", $time, rowVecId, colCntMask, mask, last);
       rowMaskToNDP[colCntMask].inPort.enq(tuple2(toNDPId(destSel[colCntMask]),RowMask{rowVecId: rowVecId,
                                                                                       mask: mask,
                                                                                       isLast: last,
@@ -163,6 +164,8 @@ module mkColProc(ColProc);
    Reg#(Bit#(5)) beatCnt <- mkReg(0);
    
    Reg#(Bit#(64)) beatNum <- mkReg(0);
+   
+   FIFO#(Tuple2#(Bit#(TLog#(MaxNumCol)), Bit#(256))) dataBuf <- mkSizedFIFO(8);
    
    rule collectData if (state == Run);
       if ( beatCnt + 1 == beatsPerRowVec_V[colCntData] ) begin
@@ -180,11 +183,17 @@ module mkColProc(ColProc);
       beatNum <= beatNum + 1;
       let d = colXForm.outPipe.first;
       colXForm.outPipe.deq;
-      if (debug) $display("(%m) collect Data beatCnt = %d, colCntData = %d, data = %h, beatNum = %d", beatCnt, colCntData, d, beatNum);
+      if (debug) $display("(%m) @%t collect Data beatCnt = %d, colCntData = %d, data = %h, beatNum = %d", $time, beatCnt, colCntData, d, beatNum);
+      dataBuf.enq(tuple2(colCntData, d));
+   endrule
+   
+   rule releaseData;
+      let {colCntData, d} <- toGet(dataBuf).get();
       rowDataToNDP[colCntData].inPort.enq(tuple2(toNDPId(destSel[colCntData]),d));
    endrule
       
    
+   interface pageInPipes = colProcReader.pageInPipes;
    // interface flashRdClient = colProcReader.flashRdClient;
    interface pageBufferClient = colProcReader.flashBufClient;
    

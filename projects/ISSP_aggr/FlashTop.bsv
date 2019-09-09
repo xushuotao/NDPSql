@@ -75,9 +75,10 @@ import ColProc::*;
 
 // `define EmptyFlash
 
-`ifdef EmptyFlash
-import EmptyFlash::*;
-`endif
+// `ifdef EmptyFlash
+// import EmptyFlash::*;
+// `endif
+import EmulatedFlash::*;
 
 
 interface Top_Pins;
@@ -113,30 +114,6 @@ interface FlashIndication;
    method Action debugDumpResp(Bit#(32) card, Bit#(32) debug0, Bit#(32) debug1, Bit#(32) debug2, Bit#(32) debug3, Bit#(32) debug4, Bit#(32) debug5);
 endinterface
 
-typedef struct{
-   Bit#(64) sum_lo;
-   Bit#(64) sum_hi;
-   Bit#(64) min_lo;
-   Bit#(64) min_hi;
-   Bit#(64) max_lo;
-   Bit#(64) max_hi;
-   Bit#(64) cnt   ;
-   } AggrRespTransport deriving (Bits, Eq, FShow);
-
-function AggrRespTransport toAggrRespTransport(AggrResp v);
-   return AggrRespTransport{sum_lo: truncate(v.sum),
-                            sum_hi: truncateLSB(v.sum),
-                            min_lo: truncate(v.min),
-                            min_hi: truncateLSB(v.min),
-                            max_lo: truncate(v.max),
-                            max_hi: truncateLSB(v.max),
-                            cnt   : v.cnt};
-endfunction
-
-interface ISSPIndication;
-   method Action aggrResp(Bit#(8) colId, AggrRespTransport v);
-endinterface
-
 
 interface FlashTop;
    interface FlashRequest flashRequest;
@@ -144,6 +121,8 @@ interface FlashTop;
    interface InColProgramIfc inColProgramIfc;
    interface ColXFormProgramIfc colXFormProgramIfc;
    interface OutColProgramIfc outColProgramIfc;
+   interface PageFeeder pagefeeder;
+   interface ISSPDebug isspDebug;
    interface Vector#(1, MemReadClient#(DataBusWidth)) dmaReadClient;
    interface Vector#(1, MemWriteClient#(DataBusWidth)) dmaWriteClient;
    interface Top_Pins pins;
@@ -204,8 +183,9 @@ module mkFlashTop#(HostInterface host, FlashIndication flashIndication, ISSPIndi
    flashCtrls <- replicateM(mkEmptyFlashCtrl);
    `else
    `ifdef BSIM
-   flashCtrls[0] <- mkFlashCtrlModel(gtx_clk_fmcs[0].gt_clk_p_ifc, gtx_clk_fmcs[0].gt_clk_n_ifc, clk110, rst110);
-   flashCtrls[1] <- mkFlashCtrlModel(gtx_clk_fmcs[1].gt_clk_p_ifc, gtx_clk_fmcs[1].gt_clk_n_ifc, clk110, rst110);
+   // flashCtrls[0] <- mkFlashCtrlModel(gtx_clk_fmcs[0].gt_clk_p_ifc, gtx_clk_fmcs[0].gt_clk_n_ifc, clk110, rst110);
+   // flashCtrls[1] <- mkFlashCtrlModel(gtx_clk_fmcs[1].gt_clk_p_ifc, gtx_clk_fmcs[1].gt_clk_n_ifc, clk110, rst110);
+   flashCtrls <- mapM(mkEmulatedFlashCtrl, genWith(fromInteger));
    `else
    flashCtrls[0] <- mkFlashCtrlVirtex1(gtx_clk_fmcs[0].gt_clk_p_ifc, gtx_clk_fmcs[0].gt_clk_n_ifc, clk110, rst110);
    flashCtrls[1] <- mkFlashCtrlVirtex2(gtx_clk_fmcs[1].gt_clk_p_ifc, gtx_clk_fmcs[1].gt_clk_n_ifc, clk110, rst110);
@@ -226,6 +206,18 @@ module mkFlashTop#(HostInterface host, FlashIndication flashIndication, ISSPIndi
    let issp <- mkISSP;
    zipWithM_(mkConnection, issp.flashClients, acclFlashUsers);
    
+
+   function AggrRespTransport toAggrRespTransport(AggrResp v);
+      return AggrRespTransport{sum_lo: truncate(v.sum),
+                               sum_hi: truncateLSB(v.sum),
+                               min_lo: truncate(v.min),
+                               min_hi: truncateLSB(v.min),
+                               max_lo: truncate(v.max),
+                               max_hi: truncateLSB(v.max),
+                               cnt   : v.cnt};
+   endfunction
+
+   
    module mkSplitAggrResp#(PipeOut#(AggrResp) pipeOut, Integer i)(Empty);
       rule doSplit;
          let aggr = pipeOut.first;
@@ -235,6 +227,11 @@ module mkFlashTop#(HostInterface host, FlashIndication flashIndication, ISSPIndi
    endmodule
    
    zipWithM_(mkSplitAggrResp, issp.isspOutput.aggrResultOut, genVector());
+   
+   rule doDumpTrace_PageBuffer;
+      let {t0, v0, t1, v1} <- issp.debugResp.trace_PageBuf;
+      isspIndication.trace_PageBuf(t0, v0, t1, v1);
+   endrule
    
    
 ////////////////////////////////////////////////////////////////////////////////
@@ -739,10 +736,12 @@ module mkFlashTop#(HostInterface host, FlashIndication flashIndication, ISSPIndi
    interface InColProgramIfc inColProgramIfc        = issp.programIfc.inCol;
    interface ColXFormProgramIfc colXFormProgramIfc  = issp.programIfc.colXForm;
    interface OutColProgramIfc outColProgramIfc      = issp.programIfc.outCol;
+   interface PageFeeder pagefeeder = issp.pagefeeder;
    
    interface dmaReadClient = vec(re.dmaClient);
    interface dmaWriteClient = vec(we.dmaClient);
-
+   
+   interface ISSPDebug isspDebug = issp.debug;
 
    interface Top_Pins pins;      
       `ifndef SIMULATION

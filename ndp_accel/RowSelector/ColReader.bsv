@@ -37,6 +37,7 @@ typedef enum {Idle, SetParam, Forward, AllRows, PartialRows} ColReaderState deri
 interface ColReader;
    // interactions with flash and rowMasks
    // interface Client#(DualFlashAddr, Bit#(256)) flashRdClient;
+   interface PipeIn#(Tuple2#(Bit#(64), Bool)) pageInPipe;
    interface PageBufferClient#(PageBufSz) pageBufClient;
    
    interface Client#(RowMaskRead, RowVectorMask) maskRdClient;   
@@ -153,7 +154,7 @@ module mkColReader(ColReader);
       if (debug) $display("(%m):gen flash req rowVecCnt = %d, req.numRowVecs = %d, totalRowVecs = %d, req.last = %d", rowVecCnt, req.numRowVecs, totalRowVecs, req.last);
       
       dynamicAssert(req.numRowVecs <= zeroExtend(toRowVecsPerPage(colBytes)), "numRowVecs has to be smaller than numPages");
-      Bit#(64) rowVecIncr = req.numRowVecs;
+      Bit#(9) rowVecIncr = truncate(req.numRowVecs);
       Bool isLast = False;
       
       if ( req.last ) begin
@@ -161,6 +162,7 @@ module mkColReader(ColReader);
          dynamicAssert(rowVecCnt + req.numRowVecs == totalRowVecs, "(%m) (Nonforward) totalRows should equal");
          allRowVecsFinished <= True;
          // state <= Idle;
+         
       end
       
       rowVecCnt <= rowVecCnt + req.numRowVecs;
@@ -191,7 +193,7 @@ module mkColReader(ColReader);
       end
    */   
 
-      let nextPageId = rowVecToPageId(rowVecCnt + rowVecIncr);
+      let nextPageId = rowVecToPageId(rowVecCnt + zeroExtend(rowVecIncr));
       
       
       let currPageId = rowVecToPageId(rowVecCnt);
@@ -337,6 +339,7 @@ module mkColReader(ColReader);
       end
    endrule
    
+   interface pageInPipe = colPageEng.pageInPipe;
    // interface Client flashRdClient = toClient(addrQ, flashRespQ);
    interface pageBufClient = flashReader.pageBufferClient;
    interface Client maskRdClient = toClient(maskRdReqQ, rowMaskRespQ);
