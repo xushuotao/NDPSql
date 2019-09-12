@@ -1,6 +1,25 @@
-import FIFO::*;
-import FIFOF::*;
-import Clocks::*;
+// Copyright (C) 2019
+
+// Shuotao Xu <shuotao@csail.mit.edu>
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this
+// software and associated documentation files (the "Software"), to deal in the Software
+// without restriction, including without limitation the rights to use, copy, modify,
+// merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to the following
+// conditions:
+
+// The above copyright notice and this permission notice shall be included in all copies
+// or substantial portions of the Software.  
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+// CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+// OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
 import Vector::*;
 import BuildVector::*;
 
@@ -36,9 +55,10 @@ endfunction
 ///              bitonic vectors, in which top vector values are bigger than
 ///              the bottom
 /// Arguments:   in         ==> two sorted vectors {top, bot}
-///              descending ==> input vectors are sorted in descending order
-///                             i.e (top[i+1] > top[i])
-/// 
+///              descending ==> sorting order is descending order
+///                             i.e (out[i+1] > out[i]), and vice versa
+/// Return:      two non-overlapping bitonic sequences where 
+///              any(out[0]) <(>) any(out[1])
 ////////////////////////////////////////////////////////////////////////////////
 function Vector#(2, Vector#(vcnt, itype)) halfClean(Vector#(2, Vector#(vcnt, itype)) in, Bool descending) 
    provisos(Ord#(itype));
@@ -56,8 +76,38 @@ function Vector#(2, Vector#(TDiv#(cnt,2), itype)) splitHalf(Vector#(cnt, itype) 
 endfunction
 
 typeclass RecursiveBitonic#(numeric type n, type itype);
+      
+////////////////////////////////////////////////////////////////////////////////
+/// function:    sort_bitonic
+/// Description: this function sorts a input vector of bitonic sequence 
+///              using partial bitonic sorting network
+/// Arguments:   in         ==> vector of a bitonic sequence
+///              descending ==> sorting order is descending order
+///                             i.e (out[i+1] > out[i]), and vice versa
+/// Return:      vector of sorted input sequence in descending or ascending order
+////////////////////////////////////////////////////////////////////////////////
    function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool descending);
+   
+////////////////////////////////////////////////////////////////////////////////
+/// function:    bitonic_merge
+/// Description: this function merge-sorts a input vector of two sorted sequences
+///              using bitonic sorting network
+/// Arguments:   in         ==> vector of two sorted sequences
+///                             in[n-1:n/2] and in[n/2-1:0]
+///              descending ==> sorting order is descending order
+///                             i.e (out[i+1] > out[i]), and vice versa
+/// Return:      vector of sorted input sequence in descending or ascending order
+////////////////////////////////////////////////////////////////////////////////
    function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool descending);
+
+////////////////////////////////////////////////////////////////////////////////
+/// function:    bitonic sort
+/// Description: this function sort in input vector using bitonic sorting network
+/// Arguments:   in         ==> unsorted vector
+///              descending ==> sorting order is descending order
+///                             i.e (out[i+1] > out[i]), and vice versa
+/// Return:      vector of sorted input sequence in descending or ascending order
+////////////////////////////////////////////////////////////////////////////////
    function Vector#(n, itype) bitonic_sort(Vector#(n, itype) in, Bool descending);
 endtypeclass
 
