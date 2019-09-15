@@ -9,15 +9,15 @@ import Bitonic::*;
 
 Bool debug = False;
 
-// merge sort two sorted streams of same size of totalcnt
-interface MergeSort#(type iType,
-                     numeric type incnt,
-                     numeric type totalcnt);
+// merge two sorted streams of same size of totalcnt
+interface Merge#(type iType,
+                 numeric type incnt,
+                 numeric type totalcnt);
    interface Vector#(2, PipeIn#(Vector#(incnt, iType))) inPipes;
    interface PipeOut#(Vector#(incnt, iType)) outPipe;
 endinterface
 
-module mkStreamingMergeSort#(Bool descending)(MergeSort#(iType, incnt, totalcnt))
+module mkStreamingMerge#(Bool descending)(Merge#(iType, incnt, totalcnt))
    provisos(Bits#(Vector::Vector#(incnt, iType), a__),
             Add#(1, c__, incnt),
             Div#(totalcnt, incnt, totalbeats),

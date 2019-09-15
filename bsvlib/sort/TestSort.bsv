@@ -42,7 +42,7 @@ endmodule
 typedef 32 TotalCnt;
 
 module mkStreamingMergeTest(Empty);
-   MergeSort#(UInt#(32), 8, TotalCnt) sorter <- mkStreamingMergeSort(descending);
+   Merge#(UInt#(32), 8, TotalCnt) merger <- mkStreamingMerge(descending);
 
    Integer testLen = 1000;
    
@@ -85,7 +85,7 @@ module mkStreamingMergeTest(Empty);
 
          inBuf <= shiftOutFrom0(?, in, 8);
 
-         sorter.inPipes[i].enq(take(in));
+         merger.inPipes[i].enq(take(in));
       endrule
    end
    
@@ -103,8 +103,8 @@ module mkStreamingMergeTest(Empty);
    Reg#(Bit#(32)) resultCnt <- mkReg(0);
    
    rule doResult;
-      sorter.outPipe.deq;
-      let merged = sorter.outPipe.first;
+      merger.outPipe.deq;
+      let merged = merger.outPipe.first;
       Vector#(TMul#(TotalCnt,2), UInt#(32)) resultV = drop(append(outBuf, merged));
       outBuf <= resultV;
       $display("(@%t)Merged Sequence = ", $time, fshow(merged));
