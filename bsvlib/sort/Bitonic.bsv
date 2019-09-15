@@ -23,8 +23,6 @@
 import Vector::*;
 import BuildVector::*;
 
-import Randomizable::*;
-
 function Bool isSorted(Vector#(n, itype) in, Bool descending)
    provisos(Ord#(itype));
    Bool unSorted = False;
@@ -167,35 +165,3 @@ instance RecursiveBitonic#(n, itype)
       end
    endfunction
 endinstance
-
-typedef 16 ElemCnt;
-
-module mkBitonicTest(Empty);
-   Reg#(Bit#(32)) testCnt <- mkReg(0);
-   Integer testLen = 10000;
-   Bool descending = True;
-   rule doTest;
-      testCnt <= testCnt + 1;
-      Vector#(ElemCnt, UInt#(32)) inV;
-      for (Integer i = 0; i < valueOf(ElemCnt); i = i + 1) begin
-         let v <- rand32();
-         inV[i] = unpack(v);
-      end
-      
-      let outV = bitonic_sort(inV, descending);
-      
-      $display("Seq[%d] Input  = ", testCnt, fshow(inV));
-      $display("Seq[%d] Output = ", testCnt, fshow(outV));
-      
-      if ( !isSorted(outV, descending) ) begin
-         $display("FAILED: BitonicSort");
-         $finish;
-      end
-      
-      if (testCnt + 1 == fromInteger(testLen)) begin
-         $display("PASSED: BitonicSort");
-         $finish;
-      end
-   endrule
-endmodule
-
