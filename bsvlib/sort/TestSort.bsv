@@ -6,9 +6,10 @@ import FIFO::*;
 import GetPut::*;
 import Pipe::*;
 import Randomizable::*;
+import BuildVector::*;
 
 Bool descending = True;
-typedef 16 ElemCnt;
+typedef 8 VecSz;
 
 module mkBitonicTest(Empty);
    Reg#(Bit#(32)) testCnt <- mkReg(0);
@@ -16,8 +17,8 @@ module mkBitonicTest(Empty);
 
    rule doTest;
       testCnt <= testCnt + 1;
-      Vector#(ElemCnt, UInt#(32)) inV;
-      for (Integer i = 0; i < valueOf(ElemCnt); i = i + 1) begin
+      Vector#(VecSz, UInt#(32)) inV;
+      for (Integer i = 0; i < valueOf(VecSz); i = i + 1) begin
          let v <- rand32();
          inV[i] = unpack(v);
       end
@@ -39,12 +40,13 @@ module mkBitonicTest(Empty);
    endrule
 endmodule
 
-typedef 32 TotalCnt;
+typedef 32 SortedSz;
 
-module mkStreamingMergeTest(Empty);
-   Merge#(UInt#(32), 8, TotalCnt) merger <- mkStreamingMerge(descending);
+module mkStreamingMerge2Test(Empty);
+   Merge2#(UInt#(32), VecSz, SortedSz) merger <- mkStreamingMerge2(descending);
 
    Integer testLen = 1000;
+   Bit#(32) vecSz = fromInteger(valueOf(VecSz));
    
    Reg#(Bit#(32)) cycle <- mkReg(0);
    Reg#(Bit#(32)) prevCycle <- mkReg(0);   
@@ -52,7 +54,7 @@ module mkStreamingMergeTest(Empty);
       cycle <= cycle + 1;
    endrule
    
-   Vector#(2, FIFO#(Vector#(TotalCnt, UInt#(32)))) inputQs <- replicateM(mkFIFO);
+   Vector#(2, FIFO#(Vector#(SortedSz, UInt#(32)))) inputQs <- replicateM(mkFIFO);
    
    for (Integer i = 0; i < 2; i = i + 1) begin
       Reg#(Bit#(32)) testCnt <- mkReg(0);
@@ -60,21 +62,21 @@ module mkStreamingMergeTest(Empty);
       
       Reg#(Bit#(32)) gear <- mkReg(0);
       
-      Reg#(Vector#(TotalCnt, UInt#(32))) inBuf <- mkRegU;
+      Reg#(Vector#(SortedSz, UInt#(32))) inBuf <- mkRegU;
 
       rule doGenInput if ( testCnt < fromInteger(testLen) );
-         if ( gear+8 == fromInteger(valueOf(TotalCnt)) ) begin
+         if ( gear+vecSz == fromInteger(valueOf(SortedSz)) ) begin
             gear <= 0;
             testCnt <= testCnt + 1;
          end
          else begin
-            gear <= gear + 8;
+            gear <= gear + vecSz;
          end
          
          let in = inBuf;
          if ( gear == 0) begin
-            Vector#(TotalCnt, UInt#(32)) inV;
-            for (Integer i = 0; i < valueOf(TotalCnt); i = i + 1) begin
+            Vector#(SortedSz, UInt#(32)) inV;
+            for (Integer i = 0; i < valueOf(SortedSz); i = i + 1) begin
                let v <- rand32();
                inV[i] = unpack(v);
             end
@@ -83,13 +85,13 @@ module mkStreamingMergeTest(Empty);
             inputQs[i].enq(sortedStream);
          end
 
-         inBuf <= shiftOutFrom0(?, in, 8);
+         inBuf <= shiftOutFrom0(?, in, valueOf(VecSz));
 
          merger.inPipes[i].enq(take(in));
       endrule
    end
    
-   FIFO#(Vector#(TMul#(2,TotalCnt), UInt#(32))) expectedQ <- mkFIFO;
+   FIFO#(Vector#(TMul#(2,SortedSz), UInt#(32))) expectedQ <- mkFIFO;
    
    rule genExpectedResult;
       function doGet(x)=x.get;
@@ -98,14 +100,14 @@ module mkStreamingMergeTest(Empty);
    endrule
       
 
-   Reg#(Vector#(TMul#(TotalCnt,2), UInt#(32))) outBuf <- mkRegU;   
+   Reg#(Vector#(TMul#(SortedSz,2), UInt#(32))) outBuf <- mkRegU;   
    Reg#(Bit#(32)) outGear <- mkReg(0);
    Reg#(Bit#(32)) resultCnt <- mkReg(0);
    
    rule doResult;
       merger.outPipe.deq;
       let merged = merger.outPipe.first;
-      Vector#(TMul#(TotalCnt,2), UInt#(32)) resultV = drop(append(outBuf, merged));
+      Vector#(TMul#(SortedSz,2), UInt#(32)) resultV = drop(append(outBuf, merged));
       outBuf <= resultV;
       $display("(@%t)Merged Sequence = ", $time, fshow(merged));
       prevCycle <= cycle;
@@ -115,7 +117,7 @@ module mkStreamingMergeTest(Empty);
          $finish();
       end
       
-      if ( outGear+8 == fromInteger(2*valueOf(TotalCnt)) ) begin
+      if ( outGear+vecSz == fromInteger(2*valueOf(SortedSz)) ) begin
          outGear <= 0;
          resultCnt <= resultCnt + 1;
          let expected <- toGet(expectedQ).get;
@@ -131,7 +133,85 @@ module mkStreamingMergeTest(Empty);
          end
       end
       else begin
-         outGear <= outGear + 8;
+         outGear <= outGear + vecSz;
+      end
+   endrule
+endmodule
+
+// typedef TDiv#(8192, 8) TotalElms;
+typedef TMul#(8, VecSz) TotalElms;
+
+module mkStreamingMergeSortTest(Empty);
+   MergeSort#(UInt#(32), VecSz, TotalElms) sorter <- mkStreamingMergeSort(descending);
+   
+   Reg#(Bit#(32)) inCnt <- mkReg(0);
+   
+   Integer totalElms = valueOf(TotalElms);
+   Integer vecSz = valueOf(VecSz);
+
+   Reg#(Bit#(32)) cycle <- mkReg(0);
+   Reg#(Bit#(32)) prevCycle <- mkReg(0);
+   
+   Reg#(Bit#(32)) testCntIn <- mkReg(0);
+   Reg#(Bit#(32)) testCntOut <- mkReg(0);
+   
+   Integer testLen = 1000;
+   
+   rule incrCycle;
+      cycle <= cycle + 1;
+   endrule
+   
+   rule genInput if ( testCntIn < fromInteger(testLen) );
+      if ( inCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin              
+         inCnt <= 0;
+         testCntIn <= testCntIn + 1;
+      end
+      else begin
+         inCnt <= inCnt + fromInteger(vecSz);
+      end
+      
+      Vector#(VecSz, UInt#(32)) inV;
+      for (Integer i = 0; i < valueOf(VecSz); i = i + 1) begin
+         let v <- rand32();
+         inV[i] = unpack(v);
+      end
+      sorter.inPipe.enq(inV);
+   endrule
+   
+   Reg#(UInt#(32)) prevMax <- mkReg(minBound);
+   
+   Reg#(Bit#(32)) outCnt <- mkReg(0);
+   
+   rule getOutput;
+      let d = sorter.outPipe.first;
+      sorter.outPipe.deq;
+
+
+      $display("Sort Result [%d] [@%d] = ", outCnt, cycle, fshow(d));
+      
+      prevCycle <= cycle;
+      if ( cycle - prevCycle != 1 && !(outCnt == 0&&testCntOut==0)) begin
+         $display("FAIL: StreamingMergeSort not streaming");
+         $finish();
+      end
+
+      if ( !isSorted(d, descending) || !isSorted(vec(prevMax, head(d)), descending)) begin
+         $display("FAILED: StreamingMergeSort result not sorted");
+         $finish();
+      end
+
+      if (outCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin
+         outCnt <= 0;
+         prevMax <= minBound;
+         testCntOut <= testCntOut + 1;
+         if ( testCntOut + 1 == fromInteger(testLen) ) begin
+            $display("PASSED: StreamingMergeSort");
+            $finish();
+         end
+      end
+      else begin
+         outCnt <= outCnt + fromInteger(vecSz);
+         prevMax <= last(d);
       end
    endrule
 endmodule

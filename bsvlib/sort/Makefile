@@ -6,9 +6,9 @@ BASEDIR=$(abspath ../../platform)
 
 bsvdir=$(connectal_dir):..:$(connectal_dir)/../lib/bsv/:$(BASEDIR)/xilinx/aurora_8b10b_fmc_vcu108:$(BASEDIR)/controller/src/common:$(BASEDIR)/controller/src/model_virtex:$(BASEDIR)/controller/src/hw_virtex:$(BASEDIR)/lib/
 
-bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@  -info-dir build_dir -p %:+:$(bsvdir)  +RTS -K1G -RTS  -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0
+bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@  -info-dir build_dir -p %:+:$(bsvdir)  +RTS -K1G -RTS  -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -steps-max-intervals 10000000
 
-targets := Bitonic StreamingMerge
+targets := Bitonic StreamingMerge2 StreamingMergeSort
 
 $(targets): TestSort.bsv
 	touch ConnectalProjectConfig.bsv
