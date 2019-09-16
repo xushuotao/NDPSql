@@ -119,17 +119,16 @@ instance RecursiveMerger#(iType,vSz,sortedSz,n) provisos (
    module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
       Vector#(TDiv#(n,2), Merge2#(iType, vSz, sortedSz)) mergers <- replicateM(mkStreamingMerge2(descending));
    
-
-      function Vector#(2, PipeIn#(Vector#(vSz, iType))) getPipeIn(Merge2#(iType, vSz, sortedSz) ifc) = ifc.inPipes;
-      function PipeOut#(Vector#(vSz, iType)) getPipeOut(Merge2#(iType, vSz, sortedSz) ifc) = ifc.outPipe;
-      // function getPipeIn(ifc) = ifc.inPipes;
+      function PipeOut#(Vector#(vSz,iType)) getPipeOut(Merge2#(iType, vSz, sortedSz) ifc) = ifc.outPipe;
+      function getPipeIn(ifc) = ifc.inPipes;
    
       MergeN#(iType, vSz, TMul#(sortedSz,2), TDiv#(n,2)) mergeN_2 <- mkStreamingMergeN(descending);
-      zipWithM_(mkConnection, map(getPipeOut, mergers), mergeN_2.inPipes);
+
+      zipWithM_(mkConnection, map(getPipeOut,mergers), mergeN_2.inPipes);
    
       MergeN#(iType,vSz,sortedSz,n) retifc = (interface MergeN;
-                                                interface inPipes = concat(map(getPipeIn,mergers));
-                                                interface outPipe = mergeN_2.outPipe;
+                                                 interface inPipes = concat(map(getPipeIn,mergers));
+                                                 interface outPipe = mergeN_2.outPipe;
                                              endinterface);
       return retifc;
    endmodule
