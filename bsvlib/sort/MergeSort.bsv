@@ -80,8 +80,9 @@ typeclass RecursiveMerger#(type iType,
 ////////////////////////////////////////////////////////////////////////////////
 /// module:      mkStreamingMergeN
 /// Description: this module takes N in-streams, each has sorted elements of 
-///              sortedSz streaming at vSz elements per beat, and merge them into 
-///              a single sorted out-stream using a binary merge-tree
+///              sortedSz streaming @ vSz elements per beat, and merge them into 
+///              a single sorted out-stream of N*sortedSz elements with a binary
+///              merge-tree
 ////////////////////////////////////////////////////////////////////////////////
    module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
 endtypeclass
