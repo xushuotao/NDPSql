@@ -116,7 +116,7 @@ instance RecursiveBitonic#(1, itype) provisos(Ord#(itype));
    function Vector#(1, itype) bitonic_sort(Vector#(1, itype) in, Bool descending) = in;   
 endinstance
 
-
+// normal cases
 instance RecursiveBitonic#(n, itype) 
    provisos(Ord#(itype),
             Add#(TDiv#(n, 2), a__, n),
@@ -126,20 +126,15 @@ instance RecursiveBitonic#(n, itype)
       );
    
    function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool descending);
-      if ( valueOf(n) == 1 ) begin
-         return sort_bitonic(in, descending);
-      end
-      else begin
-         let halves = splitHalf(in);
+      let halves = splitHalf(in);
    
-         let bot_bitonic_seq = zipWith(descending?min:max, halves[1], halves[0]);
-         let top_bitonic_seq = zipWith(descending?max:min, halves[1], halves[0]);
+      let bot_bitonic_seq = zipWith(descending?min:max, halves[1], halves[0]);
+      let top_bitonic_seq = zipWith(descending?max:min, halves[1], halves[0]);
          
-         let bot_sorted_seq = sort_bitonic(bot_bitonic_seq, descending);
-         let top_sorted_seq = sort_bitonic(top_bitonic_seq, descending);
+      let bot_sorted_seq = sort_bitonic(bot_bitonic_seq, descending);
+      let top_sorted_seq = sort_bitonic(top_bitonic_seq, descending);
    
-         return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
-      end
+      return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
    endfunction
    
    function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool descending);
@@ -154,14 +149,9 @@ instance RecursiveBitonic#(n, itype)
 
 
    function Vector#(n, itype) bitonic_sort(Vector#(n, itype) in, Bool descending);
-      if ( valueOf(n) == 1 ) begin
-         return bitonic_sort(in, descending);
-      end
-      else begin
-         let halves = splitHalf(in);
-         let sorted_bot = bitonic_sort(halves[0], descending);
-         let sorted_top = bitonic_sort(halves[1], descending);
-         return bitonic_merge(concat(vec(sorted_bot, sorted_top)), descending);
-      end
+      let halves = splitHalf(in);
+      let sorted_bot = bitonic_sort(halves[0], descending);
+      let sorted_top = bitonic_sort(halves[1], descending);
+      return bitonic_merge(concat(vec(sorted_bot, sorted_top)), descending);
    endfunction
 endinstance

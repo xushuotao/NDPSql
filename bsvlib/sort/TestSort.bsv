@@ -9,7 +9,7 @@ import Randomizable::*;
 import BuildVector::*;
 
 Bool descending = True;
-typedef 8 VecSz;
+typedef 16 VecSz;
 
 module mkBitonicTest(Empty);
    Reg#(Bit#(32)) testCnt <- mkReg(0);
@@ -113,7 +113,7 @@ module mkStreamingMerge2Test(Empty);
       prevCycle <= cycle;
       
       if ( cycle - prevCycle != 1 && !(resultCnt == 0 && outGear == 0)) begin
-         $display("FAIL: StreamingMerge not streaming");
+         $display("FAIL: StreamingMerge2 not streaming");
          $finish();
       end
       
@@ -122,13 +122,13 @@ module mkStreamingMerge2Test(Empty);
          resultCnt <= resultCnt + 1;
          let expected <- toGet(expectedQ).get;
          if ( expected != resultV ) begin
-            $display("FAILED: StreamingMerge result not sorted resultV vs expected");
+            $display("FAILED: StreamingMerge2 result not sorted resultV vs expected");
             $display("result   = ",  fshow(resultV));
             $display("expected = ",  fshow(expected));
             $finish;
          end
          if ( resultCnt + 1 == fromInteger(testLen) ) begin
-            $display("PASSED: StreamingMerge ");
+            $display("PASSED: StreamingMerge2 ");
             $finish;
          end
       end
@@ -178,7 +178,7 @@ module mkStreamingMergeSortTest(Empty);
       sorter.inPipe.enq(inV);
    endrule
    
-   Reg#(UInt#(32)) prevMax <- mkReg(minBound);
+   Reg#(UInt#(32)) prevMax <- mkReg(descending?minBound:maxBound);
    
    Reg#(Bit#(32)) outCnt <- mkReg(0);
    
@@ -202,7 +202,7 @@ module mkStreamingMergeSortTest(Empty);
 
       if (outCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin
          outCnt <= 0;
-         prevMax <= minBound;
+         prevMax <= descending?minBound:maxBound;
          testCntOut <= testCntOut + 1;
          if ( testCntOut + 1 == fromInteger(testLen) ) begin
             $display("PASSED: StreamingMergeSort");
