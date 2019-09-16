@@ -41,9 +41,9 @@ endinterface
 
 ////////////////////////////////////////////////////////////////////////////////
 /// module:      mkStreamingMergeSort
-/// Description: this module takes a in-stream of unsorted totalSz elements 
-///              of vSz per beat and sort it into a sorted out-stream using
-///              merge sort algorithm
+/// Description: this module takes a in-stream of unsorted elements of totalSz,
+///              which is streaming @ vSz elements per beat and sort them into a
+///              sorted out-stream using merge-sort algorithm
 ////////////////////////////////////////////////////////////////////////////////
 module mkStreamingMergeSort#(Bool descending)(MergeSort#(iType, vSz, totalSz)) provisos(
    Div#(totalSz, vSz, n),
@@ -79,9 +79,9 @@ typeclass RecursiveMerger#(type iType,
                            numeric type n);
 ////////////////////////////////////////////////////////////////////////////////
 /// module:      mkStreamingMergeN
-/// Description: this module takes a N in-streams, each has sorted elements of 
-///              sortedSz streaming @ vSz per beat, and merge them into a single 
-///              sorted out-stream using a binary merge-tree
+/// Description: this module takes N in-streams, each has sorted elements of 
+///              sortedSz streaming at vSz elements per beat, and merge them into 
+///              a single sorted out-stream using a binary merge-tree
 ////////////////////////////////////////////////////////////////////////////////
    module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
 endtypeclass
