@@ -8,13 +8,15 @@ bsvdir=$(connectal_dir):..:$(connectal_dir)/../lib/bsv/:$(BASEDIR)/xilinx/aurora
 
 bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ -simdir build_dir/$@  -info-dir build_dir -p %:+:$(bsvdir)  +RTS -K1G -RTS  -Xc++ -D_GLIBCXX_USE_CXX11_ABI=0 -steps-max-intervals 10000000
 
-targets := Bitonic StreamingMerge2 StreamingMergeSort
+targets := Bitonic StreamingMerge2 StreamingMergeSort StreamingMerge2Var
 
-$(targets): TestSort.bsv
+src = $(wildcard *.bsv) $(wildcard *.cpp)
+
+$(targets): $(src)
 	touch ConnectalProjectConfig.bsv
 	mkdir -p build_dir/$@
-	bsc $(bscflags) -sim -u -g mk$@Test $^
-	bsc $(bscflags) -sim -u -e mk$@Test -o $@
+	bsc $(bscflags) -sim -u -g mk$@Test TestSort.bsv
+	bsc $(bscflags) -sim -u -e mk$@Test -o $@ bdpi_sort.cpp
 
 
 all: $(targets)
