@@ -43,6 +43,15 @@ instance Connectable#(VariableStreamIn#(vSz, iType),
    endmodule
 endinstance
 
+instance Connectable#(VariableStreamOut#(vSz, iType),
+                      VariableStreamIn#(vSz, iType)); 
+   module mkConnection#(VariableStreamOut#(vSz, iType) out, 
+                        VariableStreamIn#(vSz, iType) in)(Empty);
+      mkConnection(out.dataChannel,in.dataChannel);
+      mkConnection(out.lenChannel, in.lenChannel);
+   endmodule
+endinstance
+
 
 interface MergeNVar#(type iType,
                      numeric type vSz,
@@ -53,64 +62,62 @@ endinterface
 
 
 
-// typeclass RecursiveMergerVar#(type iType,
-//                               numeric type vSz,
-//                               numeric type n);
-// ////////////////////////////////////////////////////////////////////////////////
-// /// module:      mkStreamingMergeNVar
-// /// Description: this module takes N in-streams, each has sorted elements of 
-// ///              variable length of l_i streaming @ vSz elements per beat, and 
-// ///              merge them  into a single sorted out-stream of sum(l_i) elements 
-// ///              with a binary merge-tree
-// ////////////////////////////////////////////////////////////////////////////////
-//    module mkStreamingMergeNVar#(Bool descending)(MergeNVar#(iType,vSz,n));
-// endtypeclass
+typeclass RecursiveMergerVar#(type iType,
+                              numeric type vSz,
+                              numeric type n);
+////////////////////////////////////////////////////////////////////////////////
+/// module:      mkStreamingMergeNVar
+/// Description: this module takes N in-streams, each has sorted elements of 
+///              variable length of l_i streaming @ vSz elements per beat, and 
+///              merge them  into a single sorted out-stream of sum(l_i) elements 
+///              with a binary merge-tree
+////////////////////////////////////////////////////////////////////////////////
+   module mkStreamingMergeNVar#(Bool descending)(MergeNVar#(iType,vSz,n));
+endtypeclass
 
 
-// instance RecursiveMergerVar#(iType,vSz,2) provisos(
-//    Bitonic::RecursiveBitonic#(vSz, iType),
-//    Ord#(iType),
-//    Add#(vSz, a__, sortedSz),
-//    Add#(1, b__, vSz),
-//    Bits#(iType, c__),
-//    Mul#(vSz, c__, d__)
-//    );
-//    module mkStreamingMergeNVar#(Bool descending)(MergeNVar#(iType,vSz,sortedSz,2));
-//       let merger <- mkStreamingMerge2Var(descending);
-//       return merger;
-//    endmodule
-// endinstance
+instance RecursiveMergerVar#(iType,vSz,2) provisos(
+   Bitonic::RecursiveBitonic#(vSz, iType),
+   Ord#(iType),
+   Add#(1, b__, vSz),
+   Bits#(iType, c__),
+   Mul#(vSz, c__, d__)
+   );
+   module mkStreamingMergeNVar#(Bool descending)(MergeNVar#(iType,vSz,2));
+      let merger <- mkStreamingMerge2Var(descending);
+      return merger;
+   endmodule
+endinstance
 
-// // NORMAL CASE
-// instance RecursiveMergerVar#(iType,vSz,n) provisos (
-//    Add#(2, a__, n),               // n >= 2
-//    NumAlias#(TExp#(TLog#(n)), n), //n is power of 2
-//    Bitonic::RecursiveBitonic#(vSz, iType),
-//    Ord#(iType),
-//    Add#(vSz, b__, sortedSz),
-//    Add#(1, c__, vSz),
-//    Bits#(iType, d__),
-//    Mul#(vSz, d__, e__),
-//    MergeSort::RecursiveMergerVar#(iType, vSz, TDiv#(n, 2)),
-//    Mul#(TDiv#(n, 2), 2, n)
-// );
-//    module mkStreamingMergeNVar#(Bool descending)(MergeNVar#(iType,vSz,sortedSz,n));
-//       Vector#(TDiv#(n,2), Merge2#(iType, vSz, sortedSz)) mergers <- replicateM(mkStreamingMerge2(descending));
+// NORMAL CASE
+instance RecursiveMergerVar#(iType,vSz,n) provisos (
+   Add#(2, a__, n),               // n >= 2
+   NumAlias#(TExp#(TLog#(n)), n), //n is power of 2
+   Bitonic::RecursiveBitonic#(vSz, iType),
+   Ord#(iType),
+   Add#(1, c__, vSz),
+   Bits#(iType, d__),
+   Mul#(vSz, d__, e__),
+   MergeSortVar::RecursiveMergerVar#(iType, vSz, TDiv#(n, 2)),
+   Mul#(TDiv#(n, 2), 2, n)
+);
+   module mkStreamingMergeNVar#(Bool descending)(MergeNVar#(iType,vSz,n));
+      Vector#(TDiv#(n,2), Merge2Var#(iType, vSz)) mergers <- replicateM(mkStreamingMerge2Var(descending));
    
-//       function VariableStreamOut getPipeOut(Merge2Var#(iType, vSz, sortedSz) ifc) = ifc.outStream;
-//       function getPipeIn(ifc) = ifc.inStreams;
+      function VariableStreamOut#(vSz, iType) getPipeOut(Merge2Var#(iType, vSz) ifc) = ifc.outStream;
+      function getPipeIn(ifc) = ifc.inStreams;
    
-//       MergeNVar#(iType, vSz, TMul#(sortedSz,2), TDiv#(n,2)) mergeN_2 <- mkStreamingMergeNVar(descending);
+      MergeNVar#(iType, vSz, TDiv#(n,2)) mergeN_2 <- mkStreamingMergeNVar(descending);
 
-//       zipWithM_(mkConnection, map(getPipeOut,mergers), mergeN_2.inStreams);
+      zipWithM_(mkConnection, map(getPipeOut,mergers), mergeN_2.inStreams);
    
-//       MergeNVar#(iType,vSz,sortedSz,n) retifc = (interface MergeNVar;
-//                                                  interface inStreams = concat(map(getPipeIn,mergers));
-//                                                  interface outStream = mergeN_2.outStream;
-//                                              endinterface);
-//       return retifc;
-//    endmodule
-// endinstance
+      MergeNVar#(iType,vSz,n) retifc = (interface MergeNVar;
+                                           interface inStreams = concat(map(getPipeIn,mergers));
+                                           interface outStream = mergeN_2.outStream;
+                                        endinterface);
+      return retifc;
+   endmodule
+endinstance
 
 // merge two sorted streams of same size of sortedSz
 typedef MergeNVar#(iType, vSz, 2) Merge2Var#(type iType,
@@ -122,12 +129,11 @@ module mkStreamingMerge2Var#(Bool descending)(Merge2Var#(iType, vSz)) provisos (
    Bits#(Vector::Vector#(vSz, iType), a__),
    Add#(1, c__, vSz),
    Ord#(iType),
-   Eq#(iType),
    Bitonic::RecursiveBitonic#(vSz, iType)
    );
    
-   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkPipelineFIFOF);
-   Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkPipelineFIFOF);
+   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkFIFOF);
+   Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkFIFOF);
    
    Reg#(Maybe#(Vector#(vSz, iType))) prevTopBuf <- mkReg(tagged Invalid);
    
@@ -144,8 +150,10 @@ module mkStreamingMerge2Var#(Bool descending)(Merge2Var#(iType, vSz)) provisos (
                       vInCnt[1] < vLenQ[1].first );
       
 
-      if ( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True) )
+      if ( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True) ) begin
+         $display("(%m) vLens = ", fshow(map(getFirst, vLenQ)));
          lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
+      end
       
       function doGet(x) = x.get;
       let inVec <- mapM(doGet, map(toGet, vInQ));
@@ -208,33 +216,6 @@ module mkStreamingMerge2Var#(Bool descending)(Merge2Var#(iType, vSz)) provisos (
       end
    endrule
    
-   // rule dumpQ0 (!isValid(prevTopBuf) && 
-   //              vInCnt[0] < vLenQ[0].first &&
-   //              vInCnt[1] == vLenQ[1].first );
- 
-   //    let in <- toGet(vInQ[0]).get;
-
-   //    if ( vInCnt[0] + 1 == vLenQ[0].first ) begin
-   //       mapM_(doDeq, vLenQ);
-   //       writeVReg(vInCnt, replicate(0));         
-   //    end
-
-   //    bitonicOutQ.enq(in);
-   // endrule
-
-
-   // rule dumpQ1 (!isValid(prevTopBuf) && 
-   //              vInCnt[1] < vLenQ[1].first &&
-   //              vInCnt[0] == vLenQ[0].first );
- 
-   //    let in <- toGet(vInQ[1]).get;
-
-   //    if ( vInCnt[1] + 1 == vLenQ[1].first ) begin
-   //       mapM_(doDeq, vLenQ);
-   //       writeVReg(vInCnt, replicate(0));         
-   //    end
-   //    bitonicOutQ.enq(in);
-   // endrule
    
    function sortOut(x) = sort_bitonic(x, descending);
    interface inStreams = zipWith(toVariableStreamIn, map(toPipeIn,vInQ), map(toPipeIn, vLenQ));

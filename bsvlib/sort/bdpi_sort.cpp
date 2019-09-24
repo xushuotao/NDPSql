@@ -16,7 +16,7 @@ uint32_t total1 = 0;
 
 extern "C" {
 	void genSortedSeq0(uint32_t size, bool descending){
-		srand(time(NULL));
+		// srand(time(NULL));
 		inputBuf0.clear();
 		for ( uint32_t i = 0; i < size; i++){
 			inputBuf0.push_back(rand());
@@ -45,7 +45,7 @@ extern "C" {
 	}
 
 	void genSortedSeq1(uint32_t size, bool descending){
-		srand(time(NULL));
+		// srand(time(NULL));
 		inputBuf1.clear();
 		for ( uint32_t i = 0; i < size; i++){
 			inputBuf1.push_back(rand());
