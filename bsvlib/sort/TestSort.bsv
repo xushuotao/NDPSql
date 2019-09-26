@@ -43,6 +43,57 @@ module mkBitonicTest(Empty);
    endrule
 endmodule
 
+module mkBitonicPipelinedTest(Empty);
+   Reg#(Bit#(32)) testCnt <- mkReg(0);
+   Reg#(Bit#(32)) testCnt_out <- mkReg(0);
+   Integer testLen = 10000;
+   
+   StreamNode#(VecSz, UInt#(32)) sorter <- mkBitonicSort(descending);
+   
+   FIFO#(Vector#(VecSz, UInt#(32))) inQ <- mkSizedFIFO(128);
+
+   rule doEnqTest if ( testCnt < fromInteger(testLen) );
+      testCnt <= testCnt + 1;
+      Vector#(VecSz, UInt#(32)) inV;
+      for (Integer i = 0; i < valueOf(VecSz); i = i + 1) begin
+         let v <- rand32();
+         inV[i] = unpack(v);
+      end
+      
+      sorter.inPipe.enq(inV);
+      inQ.enq(inV);     
+      $display("(@%t)Seq[%d] Input  = ", $time, testCnt, fshow(inV));
+
+      
+   endrule
+   
+   rule doDeqTest;
+      testCnt_out <= testCnt_out + 1;
+      
+      let inV <- toGet(inQ).get();
+      let outV = sorter.outPipe.first;
+      sorter.outPipe.deq;
+      
+      $display("(@%t)Seq[%d] Output = ", $time, testCnt_out, fshow(outV));
+      if ( !isSorted(outV, descending) ) begin
+         $display("FAILED: BitonicSort not sorted");
+         $finish;
+      end
+      
+      if (fold(\+ ,inV) != fold(\+ ,outV))  begin
+         $display("FAILED: BitonicSort Sum not match");
+         $finish;
+      end
+      
+      if (testCnt_out + 1 == fromInteger(testLen)) begin
+         $display("PASSED: BitonicSort");
+         $finish;
+      end
+
+   endrule
+endmodule
+
+
 typedef 32 SortedSz;
 
 module mkStreamingMerge2Test(Empty);

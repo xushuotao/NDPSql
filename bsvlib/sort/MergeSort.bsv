@@ -26,8 +26,10 @@ import GetPut::*;
 import Vector::*;
 import BuildVector::*;
 import Connectable::*;
-
+import FIFO::*;
 import Bitonic::*;
+
+import OneToNRouter::*;
 
 Bool debug = False;
 
@@ -48,19 +50,58 @@ endinterface
 module mkStreamingMergeSort#(Bool descending)(MergeSort#(iType, vSz, totalSz)) provisos(
    Div#(totalSz, vSz, n),
    MergeSort::RecursiveMerger#(iType, vSz, vSz, n),
-   Bitonic::RecursiveBitonic#(vSz, iType)
+   Bitonic::RecursiveBitonic#(vSz, iType),
+   Bits#(Vector::Vector#(vSz, iType), a__),
+   Add#(1, b__, n),
+   Add#(1, c__, TMul#(TDiv#(n, 2), 2)),
+   Add#(n, d__, TMul#(TDiv#(n, 2), 2))
    );
-   MergeN#(iType, vSz, vSz, n) mergerTree <- mkStreamingMergeN(descending);
    
+   function Vector#(n, PipeIn#(Vector#(vSz, iType))) takeInPipes(MergeN#(iType, vSz, vSz, n) merger) = merger.inPipes;
+   function f_sort(d) = bitonic_sort(d, descending);
+   
+   OneToNRouter#(n, Vector#(vSz, iType)) distributor <- mkOneToNRouterPipelined;
+   MergeN#(iType, vSz, vSz, n) mergerTree <- mkStreamingMergeN(descending);      
+   // zipWithM_(mkConnection, zipWith(mapPipe, replicate(f_sort), takeOutPorts(distributor)), takeInPipes(mergerTree));
+   zipWithM_(mkConnection, takeOutPorts(distributor), takeInPipes(mergerTree));
+
+   StreamNode#(vSz, iType) sorter <- mkBitonicSort(descending);
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
+   rule doEnqMergeTree;
+      let d = sorter.outPipe.first;
+      sorter.outPipe.deq;
+      distributor.inPort.enq(tuple2(fanInSel, d));
+      fanInSel <= fanInSel + 1;
+   endrule
+   // Reg#(Bool) init <- mkReg(False);
+   // FIFO#(Bit#(TLog#(n))) freePortQ <- mkSizedFIFO(valueOf(n)+1);
    
-   interface PipeIn inPipe;
-      method Action enq(Vector#(vSz, iType) d);
-         mergerTree.inPipes[fanInSel].enq(bitonic_sort(d, descending));
-         fanInSel <= fanInSel + 1;
-      endmethod
-      method Bool notFull = mergerTree.inPipes[fanInSel].notFull;
-   endinterface
+   // rule doInit if (!init);
+   //    freePortQ.enq(fanInSel);
+   //    fanInSel <= fanInSel + 1;
+   //    if ( fanInSel == fromInteger( valueOf(n) - 1) ) begin
+   //       init <= True;
+   //    end
+   // endrule
+
+   // for ( Integer i = 0; i < valueOf(n); i = i + 1) begin
+   //    rule doConnection;
+   //       let d = distributor.outPorts[i].first;
+   //       distributor.outPorts[i].deq;
+   //       freePortQ.enq(fromInteger(i));
+   //       mergerTree.inPipes[i].enq(bitonic_sort(d, descending));
+   //    endrule
+   // end
+
+   interface PipeIn inPipe = sorter.inPipe;
+   //    method Action enq(Vector#(vSz, iType) d);// if (init);
+   //       // let sel <- toGet(freePortQ).get;
+   //       // distributor.inPort.enq(tuple2(sel, d));
+   //       distributor.inPort.enq(tuple2(fanInSel, d));
+   //       fanInSel <= fanInSel + 1;
+   //    endmethod
+   //    method Bool notFull = distributor.inPort.notFull;
+   // endinterface
    interface PipeOut outPipe = mergerTree.outPipe;
 endmodule
 
