@@ -528,7 +528,7 @@ module mkMergeNFoldBRAMTest(Empty);
          end
          if ( resultCnt + 1 == fromInteger(testLen) ) begin
             $display("PASSED: StreamingMerge2Var ");
-            $display("Throughput cycles for beat = %d, log_fanIn_N = %d", cycle/(sortedBeats*fromInteger(valueOf(NumPages)*testLen)), log2(valueOf(NumPages))/log2(valueOf(FanIn)));
+            $display("Throughput cycles for beat = (%d/%d) %d, log_fanIn_N = %d", cycle, sortedBeats*fromInteger(valueOf(NumPages)*testLen), cycle/(sortedBeats*fromInteger(valueOf(NumPages)*testLen)), log2(valueOf(NumPages))/log2(valueOf(FanIn)));
             $finish;
          end
       end
