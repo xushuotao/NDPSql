@@ -39,10 +39,10 @@ Bool debug = False;
 
 
 interface MergeNFold#(type iType,
-                         numeric type vSz,
-                         numeric type sortedSz,
-                         numeric type n,
-                         numeric type fanIn);
+                      numeric type vSz,
+                      numeric type sortedSz,
+                      numeric type n,
+                      numeric type fanIn);
    interface PipeIn#(Vector#(vSz, iType)) inPipe;
    interface PipeOut#(Vector#(vSz, iType)) outPipe;
 endinterface
@@ -91,13 +91,13 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
       blkId_init <= blkId_init + 1;
       if (debug) $display("blkId_init, blkId = %d", blkId_init);
       freeBlockQ.enq(blkId_init);
-      if ( blkId_init == fromInteger(valueOf(totalBlocks)*2 - 1) ) 
+      if ( blkId_init == fromInteger(valueOf(totalBlocks)+valueOf(totalBlocks)/valueOf(fanIn) - 1) ) 
          init <= True;
    endrule
    
    Vector#(fanIn, FIFO#(Tuple2#(Maybe#(blkBurstT),blkIdT))) sortedBlockQs <- replicateM(mkSizedFIFO(valueOf(totalBlocks)));
    
-   MergeNVar#(iType, vSz, fanIn) merger <- mkStreamingMergeNVar(descending);
+   MergeNVar#(iType, vSz, fanIn) merger <- mkStreamingMergeNVar(descending, 0, 0);
    
    
    FIFOF#(Vector#(vSz, iType)) inQ <- mkFIFOF;
@@ -159,6 +159,7 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
    
    Reg#(blkBurstT) blkCnt_mergeResp <- mkReg(0);
    FIFO#(Tuple4#(Maybe#(blkIdT), blkBurstT, Bool, Bool)) reservedBlkQ <- mkSizedFIFO(totalBlks);
+   
    rule doMergeResp;
       let lineBurst = merger.outStream.lenChannel.first;
       dynamicAssert(lineBurst % fromInteger(blkLines) == 0, "burst should be sortedSz/vecSz aligned");
@@ -184,36 +185,17 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
          reservedBlkQ.enq(tuple4(tagged Valid blkId, blksNeeded,first,last));
       end
    endrule
+
+   Array#(Reg#(Bool)) burstLock <- mkCReg(2, False);   
+   Array#(Reg#(blkBurstT)) inflightblks <- mkCReg(2, 0);
    
    Reg#(blkLineT) lineCnt_mergeResp <- mkReg(0); 
-   Reg#(Bit#(TLog#(fanIn))) fanSel_mergeResp <- mkReg(0);
-   rule doMergeRespData;
-      let {currBlkId,blkBurst,first,last} = reservedBlkQ.first;
-      let d = merger.outStream.dataChannel.first;
-      merger.outStream.dataChannel.deq;
-      if (lineCnt_mergeResp == 0) if (debug) $display("doMergeRespData, lineCnt_mergeResp = %d, fanSel_mergeResp = %d, blkBurst = %d, first = %d, last = %d, currBlkId = ", lineCnt_mergeResp, fanSel_mergeResp, blkBurst, first, last, fshow(currBlkId));
-      if ( lineCnt_mergeResp == maxBound ) begin
-         reservedBlkQ.deq;
-         if ( currBlkId matches tagged Valid .blkId ) begin
-            sortedBlockQs[fanSel_mergeResp].enq(tuple2(first?tagged Valid blkBurst:tagged Invalid, blkId));
-            if ( last ) begin 
-               fanSel_mergeResp <= fanSel_mergeResp + 1;
-            end
-         end
-      end
-      lineCnt_mergeResp <= lineCnt_mergeResp + 1;
-      
-      if ( currBlkId matches tagged Valid. blkId ) begin
-         mems[0].request.put(MemoryRequest{addr: toAddr(blkId, lineCnt_mergeResp), datain: d, write: True});
-      end
-      else begin
-         outQ.enq(d);
-      end
-   endrule
+   // Reg#(Bit#(TLog#(fanIn))) fanSel_mergeResp <- mkReg(0);
+
    
+   (* descending_urgency="doDeqInPipe, doMergeRespData_feedback" *)
       
-         
-   rule doDeqInPipe if (init);
+   rule doDeqInPipe if (init && inflightblks[0] < fromInteger(valueOf(n)));// && !burstLock[1]);
       let d <- toGet(inQ).get;
       let blkId = currBlkId;
       if (lineCnt == 0 ) begin
@@ -225,6 +207,7 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
       if ( lineCnt == maxBound ) begin
          sortedBlockQs[fanSel].enq(tuple2(tagged Valid 1, blkId));
          fanSel <= fanSel + 1;
+         inflightblks[0] <= inflightblks[0] + 1;
       end
       
       lineCnt <= lineCnt + 1;
@@ -232,7 +215,45 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
    endrule
 
    
+   rule doMergeRespData_feedback (isValid(tpl_1(reservedBlkQ.first)) && inflightblks[1] == fromInteger(valueOf(n)));
+      // $display("inflightblks[1] = %d", inflightblks[1]);
+      dynamicAssert(inflightblks[1]==fromInteger(valueOf(n)), "feedback is only allowed when all blocks are accumulated");
+      let {currBlkId,blkBurst,first,last} = reservedBlkQ.first;
+      let blkId = fromMaybe(?, currBlkId);
+      let d = merger.outStream.dataChannel.first;
+      merger.outStream.dataChannel.deq;
+      if (lineCnt_mergeResp == 0) begin
+         // if (debug) $display("doMergeRespData, lineCnt_mergeResp = %d, fanSel_mergeResp = %d, blkBurst = %d, first = %d, last = %d, currBlkId = ", lineCnt_mergeResp, fanSel_mergeResp, blkBurst, first, last, fshow(currBlkId));
+         // if (first) burstLock[0] <= True;
+      end
+      if ( lineCnt_mergeResp == maxBound ) begin
+         reservedBlkQ.deq;
+         sortedBlockQs[fanSel].enq(tuple2(first?tagged Valid blkBurst:tagged Invalid, blkId));
+         if ( last ) begin 
+            fanSel <= fanSel + 1;
+            // burstLock[0] <= False;
+         end
+      end
+      lineCnt_mergeResp <= lineCnt_mergeResp + 1;
 
+      mems[0].request.put(MemoryRequest{addr: toAddr(blkId, lineCnt_mergeResp), datain: d, write: True});
+
+   endrule
+   
+   rule doMergeRespData_output (!isValid(tpl_1(reservedBlkQ.first)));
+      // let {currBlkId,blkBurst,first,last} = reservedBlkQ.first;
+      lineCnt_mergeResp <= lineCnt_mergeResp + 1;
+      let d = merger.outStream.dataChannel.first;
+      merger.outStream.dataChannel.deq;
+      if ( lineCnt_mergeResp == maxBound ) begin
+         reservedBlkQ.deq;
+         inflightblks[1] <= inflightblks[1] - 1;
+      end
+      dynamicAssert(inflightblks[1]>0, "inflightblks should not go below 0");
+      outQ.enq(d);
+   endrule
+
+   
 
    interface inPipe = toPipeIn(inQ);
    interface outPipe = toPipeOut(outQ);

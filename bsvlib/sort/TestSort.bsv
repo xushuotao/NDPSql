@@ -48,7 +48,7 @@ typedef 32 SortedSz;
 module mkStreamingMerge2Test(Empty);
    Merge2#(UInt#(32), VecSz, SortedSz) merger <- mkStreamingMerge2(descending);
 
-   Integer testLen = 1000;
+   Integer testLen = 10;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));
    
    Reg#(Bit#(32)) cycle <- mkReg(0);
@@ -232,7 +232,7 @@ import "BDPI" function UInt#(32) getNextData1(UInt#(32) size,Bool descending, UI
                  
 
 module mkStreamingMerge2VarTest(Empty);
-   Merge2Var#(UInt#(32), VecSz) merger <- mkStreamingMerge2Var(descending);
+   Merge2Var#(UInt#(32), VecSz) merger <- mkStreamingMerge2Var(descending, 0, 0);
 
    Integer testLen = 1000;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));
@@ -396,10 +396,11 @@ endmodule
 
                  
 typedef TDiv#(8192, 4) PageSz;
-typedef 8 NumPages;                 
+typedef 64 NumPages;                 
+typedef 4 FanIn;                 
                  
 module mkMergeNFoldBRAMTest(Empty);
-   MergeNFold#(UInt#(32), VecSz, PageSz, NumPages, 2) merger <- mkMergeNFoldBRAM(descending);
+   MergeNFold#(UInt#(32), VecSz, PageSz, NumPages, FanIn) merger <- mkMergeNFoldBRAM(descending);
 
    Integer testLen = 100;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));
@@ -445,7 +446,8 @@ module mkMergeNFoldBRAMTest(Empty);
       
       Vector#(VecSz, UInt#(32)) beatIn = ?;
       for (Integer j = 0; j < valueOf(VecSz); j = j + 1 )begin
-         beatIn[j] = getNextData(unpack(sortedBeats*vecSz), !descending, fromInteger(j), beatCnt*vecSz);
+         beatIn[j] = getNextData(unpack(sortedBeats*vecSz)// *fromInteger(valueOf(NumPages))
+            , !descending, fromInteger(j), beatCnt*vecSz);
       end
          
       $display("Merge inStream [%d][%d][%d] data = ", testCnt, pageCnt, beatCnt, fshow(beatIn));         
@@ -490,7 +492,7 @@ module mkMergeNFoldBRAMTest(Empty);
       
       if ( cycle - prevCycle != 1 && !(outBeat == 0)) begin
          $display("FAIL: StreamingMerge2Var not streaming for a specific merge");
-         $finish();
+         // $finish();
       end
       
       $display("(@%t)Merged Sequence [%d][%d] = ", $time, resultCnt, outBeat, fshow(merged));
@@ -526,6 +528,7 @@ module mkMergeNFoldBRAMTest(Empty);
          end
          if ( resultCnt + 1 == fromInteger(testLen) ) begin
             $display("PASSED: StreamingMerge2Var ");
+            $display("Throughput cycles for beat = %d, log_fanIn_N = %d", cycle/(sortedBeats*fromInteger(valueOf(NumPages)*testLen)), log2(valueOf(NumPages))/log2(valueOf(FanIn)));
             $finish;
          end
       end
