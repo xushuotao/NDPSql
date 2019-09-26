@@ -59,8 +59,10 @@ module mkMergeNFoldBRAM#(Bool descending)(MergeNFold#(iType, vSz, sortedSz, n, f
    Add#(d__, TAdd#(TLog#(TDiv#(totalLines, blockLines)), 1), aw),
    Add#(e__, TLog#(TAdd#(TDiv#(totalLines, blockLines), 1)), 32)
    );
-   
-   BRAM2Port#(Bit#(aw), Vector#(vSz, iType)) bram <- mkBRAM2Server(defaultValue);
+   BRAM_Configure cfg = defaultValue;
+   Integer totalLns = valueOf(totalLines);
+   cfg.memorySize = totalLns + totalLns/valueOf(fanIn);
+   BRAM2Port#(Bit#(aw), Vector#(vSz, iType)) bram <- mkBRAM2Server(cfg);
    Vector#(2, MemoryServer#(Bit#(aw), Vector#(vSz, iType))) mems <- mapM(mkMemServer, vec(bram.portA, bram.portB));
    let merger <- mkMergeNFold(descending, mems);
    return merger;

@@ -450,7 +450,7 @@ module mkMergeNFoldBRAMTest(Empty);
             , !descending, fromInteger(j), beatCnt*vecSz);
       end
          
-      $display("Merge inStream [%d][%d][%d] data = ", testCnt, pageCnt, beatCnt, fshow(beatIn));         
+      // $display("Merge inStream [%d][%d][%d] data = ", testCnt, pageCnt, beatCnt, fshow(beatIn));         
       dynamicAssert(isSorted(beatIn, descending),"input vec not sorted internally");
       dynamicAssert(isSorted(vec(prevMaxIn, head(beatIn)), descending),"input vec not sorted externally");
          
@@ -495,7 +495,7 @@ module mkMergeNFoldBRAMTest(Empty);
          // $finish();
       end
       
-      $display("(@%t)Merged Sequence [%d][%d] = ", $time, resultCnt, outBeat, fshow(merged));
+      // $display("(@%t)Merged Sequence [%d][%d] = ", $time, resultCnt, outBeat, fshow(merged));
       
       if ( !isSorted(merged, descending) ) begin
          $display("FAILED: StreamingMergeSort2Var result not sorted internally");

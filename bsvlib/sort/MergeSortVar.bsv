@@ -9,6 +9,8 @@ import Assert::*;
 
 import Bitonic::*;
 
+Bool debug = False;
+
 
 interface VariableStreamIn#(numeric type vSz, type iType);
    interface PipeIn#(Vector#(vSz, iType)) dataChannel;
@@ -150,6 +152,7 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
    function t getFirst(FIFOF#(t) x)=x.first;
    function plusOne(x)=x+1;
    
+   // if (debug)
    Vector#(2, Reg#(iType)) prevMaxs <- replicateM(mkReg(descending?minBound:maxBound));
    rule mergeTwoInQs (!isValid(prevTopBuf) && 
                       vInCnt[0] < vLenQ[0].first &&
@@ -157,26 +160,25 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
       
 
       if ( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True) ) begin
-         $display("(%m) merger %0d_%0d, vLens = ", level, id, fshow(map(getFirst, vLenQ)));
+         if (debug) $display("(%m) merger %0d_%0d, vLens = ", level, id, fshow(map(getFirst, vLenQ)));
          lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
       end
       
       function doGet(x) = x.get;
       let inVec <- mapM(doGet, map(toGet, vInQ));
 
-      writeVReg(prevMaxs, map(last, inVec));
-      
-      for (Integer i = 0; i < 2; i = i + 1) begin
-         String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(i);
-         dynamicAssert(isSorted(inVec[i], descending), msg+" is not sorted internally");
-         dynamicAssert(isSorted(vec(prevMaxs[i], head(inVec[i])), descending), msg+" is not sorted externally");
+      if (debug) begin
+         writeVReg(prevMaxs, map(last, inVec));
+         for (Integer i = 0; i < 2; i = i + 1) begin
+            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(i);
+            dynamicAssert(isSorted(inVec[i], descending), msg+" is not sorted internally");
+            dynamicAssert(isSorted(vec(prevMaxs[i], head(inVec[i])), descending), msg+" is not sorted externally");
+         end
       end
       
 
       writeVReg(vInCnt, map(plusOne, readVReg(vInCnt)));
-      
-
-         
+               
       let cleaned = halfClean(inVec, descending);
       bitonicOutQ.enq(cleaned[0]);
       prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
@@ -202,37 +204,43 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
             in = inVec1;
             vInCnt[1] <= vInCnt[1] + 1;
             vInQ[1].deq;
-            prevMaxs[1] <= last(in);
+            if (debug) prevMaxs[1] <= last(in);
          end
          else begin
             vInCnt[0] <= vInCnt[0] + 1;
             vInQ[0].deq;
-            prevMaxs[0] <= last(in);
+            if (debug) prevMaxs[0] <= last(in);
          end
          
-         Vector#(2, Vector#(vSz, iType)) inVec = vec(inVec0, inVec1);
-         for (Integer i = 0; i < 2; i = i + 1) begin
-            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(i);
-            dynamicAssert(isSorted(inVec[i], descending), msg+" is not sorted internally");
-            dynamicAssert(isSorted(vec(prevMaxs[i], head(inVec[i])), descending), msg+" is not sorted externally");
+         if (debug) begin
+            Vector#(2, Vector#(vSz, iType)) inVec = vec(inVec0, inVec1);
+            for (Integer i = 0; i < 2; i = i + 1) begin
+               String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(i);
+               dynamicAssert(isSorted(inVec[i], descending), msg+" is not sorted internally");
+               dynamicAssert(isSorted(vec(prevMaxs[i], head(inVec[i])), descending), msg+" is not sorted externally");
+            end
          end
 
       end
       else if ( vInCnt[0] < vLenQ[0].first ) begin
          in <- toGet(vInQ[0]).get;
          vInCnt[0] <= vInCnt[0] + 1;
-         prevMaxs[0] <= last(in);
-         String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(0);
-         dynamicAssert(isSorted(in, descending), msg+" is not sorted internally");
-         dynamicAssert(isSorted(vec(prevMaxs[0], head(in)), descending), msg+" is not sorted externally");
+         if (debug) begin
+            prevMaxs[0] <= last(in);
+            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(0);
+            dynamicAssert(isSorted(in, descending), msg+" is not sorted internally");
+            dynamicAssert(isSorted(vec(prevMaxs[0], head(in)), descending), msg+" is not sorted externally");
+         end
       end
       else if (  vInCnt[1] < vLenQ[1].first ) begin
          in <- toGet(vInQ[1]).get;
          vInCnt[1] <= vInCnt[1] + 1;
-         prevMaxs[1] <= last(in);
-         String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(1);
-         dynamicAssert(isSorted(in, descending), msg+" is not sorted internally");
-         dynamicAssert(isSorted(vec(prevMaxs[1], head(in)), descending), msg+" is not sorted externally");
+         if (debug) begin
+            prevMaxs[1] <= last(in);
+            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(1);
+            dynamicAssert(isSorted(in, descending), msg+" is not sorted internally");
+            dynamicAssert(isSorted(vec(prevMaxs[1], head(in)), descending), msg+" is not sorted externally");
+         end
       end
       else begin
          writeVReg(vInCnt, replicate(0));
