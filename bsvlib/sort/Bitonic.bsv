@@ -24,6 +24,7 @@ import Vector::*;
 import BuildVector::*;
 import Pipe::*;
 import FIFOF::*;
+import SpecialFIFOs::*;
 import Connectable::*;
 
 interface StreamNode#(numeric type n, type itype);
@@ -115,15 +116,34 @@ instance RecursiveBitonic#(n, itype)
       );
    
    function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool descending);
-      let halves = splitHalf(in);
    
-      let bot_bitonic_seq = zipWith(descending?min:max, halves[1], halves[0]);
-      let top_bitonic_seq = zipWith(descending?max:min, halves[1], halves[0]);
-         
-      let bot_sorted_seq = sort_bitonic(bot_bitonic_seq, descending);
-      let top_sorted_seq = sort_bitonic(top_bitonic_seq, descending);
+      Vector#(TAdd#(TLog#(n),1), Vector#(n, itype)) sortData = ?;
+      sortData[0] = in;
+      
+      for (Integer i = 0; i < valueOf(TLog#(n)); i = i + 1 )begin
+         Integer stride = valueOf(n)/(2**(i+1));
+         for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
+            for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
+               Integer idx = (j*valueOf(n)/(2**i))+k;
+               let {a, b} = cas_tpl(tuple2(sortData[i][idx],sortData[i][idx+stride]), descending);
+               sortData[i+1][idx] = a;
+               sortData[i+1][idx+stride] = b;
+            end
+         end
+      end 
    
-      return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
+      return last(sortData);
+
+////////////////////////////////////////////////////////////////////////////////
+/// recursive version gives out funny circuit
+////////////////////////////////////////////////////////////////////////////////
+      // let halves = splitHalf(in);
+      // function cas_f(x) = cas(x,descending);
+      // let bitonic_seqV = transpose(map(cas_f, transpose(vec(halves[0], halves[1]))));
+      // let bot_sorted_seq = sort_bitonic(bitonic_seqV[0], descending);
+      // let top_sorted_seq = sort_bitonic(bitonic_seqV[1], descending);
+      // return append(bot_sorted_seq, top_sorted_seq);
+      // return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
    endfunction
    
    function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool descending);
@@ -133,7 +153,8 @@ instance RecursiveBitonic#(n, itype)
       let bot_sorted_seq = sort_bitonic(bitonic_seq_V[0], descending);
       let top_sorted_seq = sort_bitonic(bitonic_seq_V[1], descending);
       
-      return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
+      return append(bot_sorted_seq, top_sorted_seq); //:( a trick for bsc to use Mul#
+      // return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
    endfunction
 
 
@@ -141,20 +162,24 @@ instance RecursiveBitonic#(n, itype)
       let halves = splitHalf(in);
       let sorted_bot = bitonic_sort(halves[0], descending);
       let sorted_top = bitonic_sort(halves[1], descending);
-      return bitonic_merge(concat(vec(sorted_bot, sorted_top)), descending);
+      return bitonic_merge(append(sorted_bot, sorted_top), descending);
+   
+      // return bitonic_merge(concat(vec(sorted_bot, sorted_top)), descending);
    endfunction
    
    module mkSortBitonic#(Bool descending)(StreamNode#(n, itype));
-      Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkFIFOF);
+      Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkPipelineFIFOF);
       Vector#(2, StreamNode#(TDiv#(n,2), itype)) sort_bitonic <- replicateM(mkBitonicSort(descending));
       zipWithM_(mkConnection, map(toPipeOut, inFifos), vec(sort_bitonic[0].inPipe, sort_bitonic[1].inPipe));
       interface PipeIn inPipe;
          method Action enq(Vector#(n, itype) in);
             let halves = splitHalf(in);
-            let bot_bitonic_seq = zipWith(descending?min:max, halves[1], halves[0]);
-            let top_bitonic_seq = zipWith(descending?max:min, halves[1], halves[0]);
-            inFifos[0].enq(bot_bitonic_seq);
-            inFifos[1].enq(top_bitonic_seq);
+   
+            function cas_f(x) = cas(x,descending);
+            let bitonic_seqV = transpose(map(cas_f, transpose(vec(halves[0], halves[1]))));
+   
+            inFifos[0].enq(bitonic_seqV[0]);
+            inFifos[1].enq(bitonic_seqV[1]);
          endmethod
          method Bool notFull = inFifos[0].notFull && inFifos[1].notFull; 
       endinterface
@@ -174,7 +199,7 @@ instance RecursiveBitonic#(n, itype)
 
 
    module mkBitonicMerge#(Bool descending)(StreamNode#(n, itype));
-      Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkFIFOF);
+      Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkPipelineFIFOF);
       Vector#(2, StreamNode#(TDiv#(n,2), itype)) sort_bitonic <- replicateM(mkSortBitonic(descending));
       zipWithM_(mkConnection, map(toPipeOut, inFifos), vec(sort_bitonic[0].inPipe, sort_bitonic[1].inPipe));
       interface PipeIn inPipe;
@@ -185,7 +210,6 @@ instance RecursiveBitonic#(n, itype)
             inFifos[1].enq(bitonic_seq_V[1]);
          endmethod
          method Bool notFull = inFifos[0].notFull && inFifos[1].notFull; 
-         // method Bool notFull = bitonic_sorter[0].inPipe.notFull && bitonic_sorter[1].inPipe.notFull;
       endinterface
       interface PipeOut outPipe;
          method Vector#(n, itype) first;
@@ -252,6 +276,25 @@ function Vector#(2,itype) cas(Vector#(2,itype) in, Bool descending)
    let b = in[0];
    return (pack(a>b)^pack(!descending))==1? vec(b,a): vec(a,b);
 endfunction
+
+function Tuple2#(itype,itype) cas_tpl(Tuple2#(itype,itype) in, Bool descending)
+   provisos(Ord#(itype));
+   let {b, a} = in;
+   // let b = in[0];
+   return (pack(a>b)^pack(!descending))==1? tuple2(b,a): tuple2(a,b);
+endfunction
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// function compare and swap
+////////////////////////////////////////////////////////////////////////////////
+function itype getTop(Vector#(2,itype) in, Bool descending)
+   provisos(Ord#(itype));
+   let a = in[1];
+   let b = in[0];
+   return descending?max(a,b):min(a,b);
+endfunction
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// function:    halfCleaner

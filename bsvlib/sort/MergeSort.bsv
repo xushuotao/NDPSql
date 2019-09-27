@@ -128,6 +128,81 @@ typeclass RecursiveMerger#(type iType,
    module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
 endtypeclass
 
+(* synthesize *)
+module mkStreamingMerge2_32bit_1#(Bool descending)(MergeN#(UInt#(32),8,8,2));
+   let merger <- mkStreamingMerge2(descending);
+   return merger;
+endmodule
+instance RecursiveMerger#(UInt#(32),8,8,2);
+   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,8,2));
+      let merger <- mkStreamingMerge2_32bit_1(descending);
+      return merger;
+   endmodule
+endinstance
+
+(* synthesize *)
+module mkStreamingMerge2_32bit_2#(Bool descending)(MergeN#(UInt#(32),8,16,2));
+   let merger <- mkStreamingMerge2(descending);
+   return merger;
+endmodule
+instance RecursiveMerger#(UInt#(32),8,16,2);
+   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,16,2));
+      let merger <- mkStreamingMerge2_32bit_2(descending);
+      return merger;
+   endmodule
+endinstance
+
+
+(* synthesize *)
+module mkStreamingMerge2_32bit_4#(Bool descending)(MergeN#(UInt#(32),8,32,2));
+   let merger <- mkStreamingMerge2(descending);
+   return merger;
+endmodule
+instance RecursiveMerger#(UInt#(32),8,32,2);
+   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,32,2));
+      let merger <- mkStreamingMerge2_32bit_4(descending);
+      return merger;
+   endmodule
+endinstance
+
+(* synthesize *)
+module mkStreamingMerge2_32bit_8#(Bool descending)(MergeN#(UInt#(32),8,64,2));
+   let merger <- mkStreamingMerge2(descending);
+   return merger;
+endmodule
+instance RecursiveMerger#(UInt#(32),8,64,2);
+   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,64,2));
+      let merger <- mkStreamingMerge2_32bit_8(descending);
+      return merger;
+   endmodule
+endinstance
+
+
+(* synthesize *)
+module mkStreamingMerge2_32bit_16#(Bool descending)(MergeN#(UInt#(32),8,128,2));
+   let merger <- mkStreamingMerge2(descending);
+   return merger;
+endmodule
+instance RecursiveMerger#(UInt#(32),8,128,2);
+   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,128,2));
+      let merger <- mkStreamingMerge2_32bit_16(descending);
+      return merger;
+   endmodule
+endinstance
+
+
+(* synthesize *)
+module mkStreamingMerge2_32bit_32#(Bool descending)(MergeN#(UInt#(32),8,256,2));
+   let merger <- mkStreamingMerge2(descending);
+   return merger;
+endmodule
+instance RecursiveMerger#(UInt#(32),8,256,2);
+   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,256,2));
+      let merger <- mkStreamingMerge2_32bit_32(descending);
+      return merger;
+   endmodule
+endinstance
+
 
 // BASE CASE
 instance RecursiveMerger#(iType,vSz,sortedSz,2) provisos(
@@ -182,7 +257,7 @@ typedef MergeN#(iType, vSz, sortedSz, 2) Merge2#(type iType,
                                                  numeric type vSz,
                                                  numeric type sortedSz); 
 
-
+typedef enum {DRAIN_IN, DRAIN_SORTER, MERGE} Scenario deriving(Bits, Eq, FShow);
 module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provisos (
    Bits#(Vector::Vector#(vSz, iType), a__),
    Add#(1, c__, vSz),
@@ -192,32 +267,53 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
    RecursiveBitonic#(vSz, iType)
    );
    
-   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkPipelineFIFOF);
+   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkFIFOF);
 
-   Reg#(Maybe#(Vector#(vSz, iType))) prevTopBuf <- mkReg(tagged Invalid);
+   Reg#(Bit#(1)) portSel <- mkRegU;
+   // Reg#(Maybe#(Vector#(vSz, iType))) prevTopBuf <- mkReg(tagged Invalid);
+   // Reg#(Vector#(vSz, iType)) prevTop <- mkReg(tagged Invalid);
+   // Vector#(2, StreamNode#(vSz, iType)) sort_bitonic_eng <- replicateM(mkSortBitonic(descending));
+   FIFO#(Vector#(vSz, iType)) sort_bitonic_eng <- mkFIFO;
+  
+   Reg#(Maybe#(iType)) prevTail <- mkReg(tagged Invalid);
    
    Integer initCnt = valueOf(totalbeats);
    
    Vector#(2, Reg#(Bit#(TLog#(TAdd#(totalbeats,1))))) vInCnt <- replicateM(mkReg(fromInteger(initCnt)));
    
-   FIFOF#(Vector#(vSz, iType)) bitonicOutQ <- mkFIFOF;
+   // FIFOF#(Vector#(vSz, iType)) bitonicOutQ <- mkFIFOF;
+   StreamNode#(vSz, iType) sort_bitonic_async <- mkSortBitonic(descending);
    
    function gtZero(cnt)=(cnt > 0);
    function minusOne(x)=x-1;
-   
-   rule mergeTwoInQs (!isValid(prevTopBuf) && all(gtZero, readVReg(vInCnt)));
+   function sorter(x) = sort_bitonic(x, descending);   
+
+   // FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkSizedFIFO(valueOf(TLog#(vSz)) + 1);   
+   FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkFIFO;
+   FIFO#(Vector#(vSz, iType)) rightInQ <- mkFIFO;
+   rule mergeTwoInQs (!isValid(prevTail));//&& all(gtZero, readVReg(vInCnt)));
       function doGet(x) = x.get;
       let inVec <- mapM(doGet, map(toGet, vInQ));
 
       writeVReg(vInCnt, map(minusOne, readVReg(vInCnt)));
          
       let cleaned = halfClean(inVec, descending);
-      bitonicOutQ.enq(cleaned[0]);
-      prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+      // // bitonicOutQ.enq(cleaned[0]);
+      selectedInQ.enq(tuple2(DRAIN_IN, cleaned[0]));
+      rightInQ.enq(cleaned[1]);
+      prevTail <= tagged Valid getTop(vec(last(inVec[0]), last(inVec[1])),descending);
+      // sort_bitonic_eng[1].inPipe.enq(cleaned[1]);
+      // sort_bitonic_eng[1].enq(sorter(cleaned[1]));
+      // prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+      portSel <= ~pack(isSorted(vec(last(inVec[0]), last(inVec[1])), descending));
    endrule
+   
 
-   rule mergeWithBuf (isValid(prevTopBuf));
-      let prevTop = fromMaybe(?, prevTopBuf);
+
+   rule mergeWithBuf (isValid(prevTail));
+      // let prevTop = fromMaybe(?, prevTopBuf);
+      let prevTail_d = fromMaybe(?, prevTail);
+
       
       Vector#(vSz, iType) in = ?;
       
@@ -226,7 +322,7 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
          let inVec0 = vInQ[0].first;
          let inVec1 = vInQ[1].first;
          in = inVec0;
-         if ( isSorted(vec(last(prevTop), head(inVec0)), descending) ) begin
+         if ( portSel == 1 ) begin
             in = inVec1;
             vInCnt[1] <= vInCnt[1] - 1;
             vInQ[1].deq;
@@ -250,19 +346,62 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
       end
       
       if ( noInput) begin
-         prevTopBuf <= tagged Invalid;
-         bitonicOutQ.enq(prevTop);
+         // prevTopBuf <= tagged Invalid;
+         prevTail <= tagged Invalid;
+         // bitonicOutQ.enq(prevTop);
+         selectedInQ.enq(tuple2(DRAIN_SORTER, ?));
       end
       else begin
-         let cleaned = halfClean(vec(prevTop,in), descending);
-         bitonicOutQ.enq(cleaned[0]);
-         prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+         // let cleaned = halfClean(vec(prevTop,in), descending);
+         // bitonicOutQ.enq(cleaned[0]);
+         // prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+         prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), descending);
+         // sort_bitonic_eng.inPipe.enq(cleaned[1]);
+         // prevTop <= sort_bitonic(cleaned[1]);
+         if ( isSorted(vec(prevTail_d, last(in)), descending)) begin
+            portSel <= ~portSel;
+         end
+         selectedInQ.enq(tuple2(MERGE, in));
       end
+      
    endrule
    
-   function sortOut(x) = sort_bitonic(x, descending);
+   Reg#(Vector#(vSz, iType)) feedbackBuf <- mkRegU();
+   
+   rule doOutput;
+      
+      let {scenario, in} <- toGet(selectedInQ).get;
+      // $display(fshow(scenario));
+      Vector#(vSz, iType) prevTop = ?;
+      Vector#(vSz, iType) feedback = ?;
+      Vector#(vSz, iType) out = ?;
+      
+      case (scenario)
+         DRAIN_IN: 
+         begin
+            // bitonicOutQ.enq(in);
+            feedback <- toGet(rightInQ).get();
+            out = in;
+         end
+         DRAIN_SORTER:
+         begin
+            out = feedbackBuf;
+         end
+         MERGE:
+         begin
+            let cleaned = halfClean(vec(feedbackBuf,in), descending);
+            out = cleaned[0];
+            feedback = cleaned[1];
+         end
+      endcase
+      
+      sort_bitonic_async.inPipe.enq(out);
+      feedbackBuf <= sorter(feedback);//sort_bitonic_eng.enq(sorter(feedback));
+   endrule
+   
+
    interface inPipes = map(toPipeIn, vInQ);
-   interface PipeOut outPipe = mapPipe(sortOut, toPipeOut(bitonicOutQ));
+   interface PipeOut outPipe = sort_bitonic_async.outPipe;//mapPipe(sorter, toPipeOut(bitonicOutQ));
 endmodule
 
 

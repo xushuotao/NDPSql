@@ -12,7 +12,18 @@ import BuildVector::*;
 import Assert::*;
 
 Bool descending = True;
-typedef 16 VecSz;
+typedef 8 VecSz;
+
+function Bit#(256) f_bitonic_sort(Bit#(256) in);
+   Vector#(8, Bit#(32)) inV = unpack(in);
+   return pack(bitonic_sort(inV, descending));
+endfunction
+
+function Bit#(256) f_sort_bitonic(Bit#(256) in);
+   Vector#(8, Bit#(32)) inV = unpack(in);
+   return pack(sort_bitonic(inV, descending));
+endfunction
+   
 
 module mkBitonicTest(Empty);
    Reg#(Bit#(32)) testCnt <- mkReg(0);
@@ -193,7 +204,7 @@ module mkStreamingMerge2Test(Empty);
 endmodule
 
 // typedef TDiv#(8192, 8) TotalElms;
-typedef TMul#(8, VecSz) TotalElms;
+typedef TMul#(32, VecSz) TotalElms;
 
 module mkStreamingMergeSortTest(Empty);
    MergeSort#(UInt#(32), VecSz, TotalElms) sorter <- mkStreamingMergeSort(descending);
