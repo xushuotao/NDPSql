@@ -19,8 +19,8 @@ function Bit#(256) f_bitonic_sort(Bit#(256) in);
    return pack(bitonic_sort(inV, descending));
 endfunction
 
-function Bit#(256) f_sort_bitonic(Bit#(256) in);
-   Vector#(8, Bit#(32)) inV = unpack(in);
+function Bit#(32) f_sort_bitonic(Bit#(32) in);
+   Vector#(8, Bit#(4)) inV = unpack(in);
    return pack(sort_bitonic(inV, descending));
 endfunction
    
@@ -179,7 +179,7 @@ module mkStreamingMerge2Test(Empty);
       
       if ( cycle - prevCycle != 1 && !(resultCnt == 0 && outGear == 0)) begin
          $display("FAIL: StreamingMerge2 not streaming");
-         $finish();
+         // $finish();
       end
       
       if ( outGear+vecSz == fromInteger(2*valueOf(SortedSz)) ) begin
@@ -191,6 +191,9 @@ module mkStreamingMerge2Test(Empty);
             $display("result   = ",  fshow(resultV));
             $display("expected = ",  fshow(expected));
             $finish;
+         end
+         else begin
+            $display("TestCnt %d: Passed", resultCnt);
          end
          if ( resultCnt + 1 == fromInteger(testLen) ) begin
             $display("PASSED: StreamingMerge2 ");
@@ -399,13 +402,7 @@ module mkStreamingMerge2VarTest(Empty);
       Vector#(TMul#(SortedSz,2), UInt#(32)) resultV = drop(append(outBuf, merged));
       outBuf <= resultV;
 
-      prevCycle <= cycle;
-      
-      if ( cycle - prevCycle != 1 && !(resultCnt == 0 && outGear == 0)) begin
-         $display("FAIL: StreamingMerge2Var not streaming");
-         $finish();
-      end
-      
+
       if ( outGear == 0 ) begin 
          $display("Merge outStream resultCnt = %d, frameSz = %d", resultCnt, frameSz);
       end
@@ -421,6 +418,13 @@ module mkStreamingMerge2VarTest(Empty);
          $finish();
       end
 
+
+      prevCycle <= cycle;      
+      if ( cycle - prevCycle != 1 && !(resultCnt == 0 && outGear == 0)) begin
+         $display("FAIL: StreamingMerge2Var not streaming");
+         $finish();
+      end
+      
 
       
       if ( outGear+1 == frameSz ) begin
@@ -457,9 +461,9 @@ module mkStreamingMerge2VarTest(Empty);
 endmodule
 
                  
-typedef TDiv#(8192, 4) PageSz;
-typedef 64 NumPages;                 
-typedef 4 FanIn;                 
+typedef TDiv#(1024, 4) PageSz;
+typedef 1024 NumPages;                 
+typedef 32 FanIn;                 
                  
 module mkMergeNFoldBRAMTest(Empty);
    MergeNFold#(UInt#(32), VecSz, PageSz, NumPages, FanIn) merger <- mkMergeNFoldBRAM(descending);
