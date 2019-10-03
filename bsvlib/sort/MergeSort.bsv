@@ -269,31 +269,35 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
    function gtZero(cnt)=(cnt > 0);
    function minusOne(x)=x-1;
    function sorter(x) = sort_bitonic(x, descending);   
+   function doGet(x) = x.get;
 
    // Note: selectedInQ has to be PipelineFIFO to avoid rightOperand to be
    // overwritten by the heads of next sorted sequences
-   FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkPipelineFIFO;//mkSizedFIFO(valueOf(vSz) + 1);
+   FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkSizedFIFO(valueOf(vSz) + 1);
    Reg#(Vector#(vSz, iType)) rightOperand <- mkRegU;
+   Reg#(Vector#(vSz, iType)) firstLowHalf <- mkRegU;
    Reg#(Bool) init <- mkReg(False);
    rule mergeTwoInQs (!isValid(prevTail) && !init);
-      function doGet(x) = x.get;
+
       let inVec <- mapM(doGet, map(toGet, vInQ));
       // decrement both counters by one
       writeVReg(vInCnt, map(minusOne, readVReg(vInCnt)));
       let cleaned = halfClean(inVec, descending);
-      selectedInQ.enq(tuple2(DRAIN_IN, cleaned[0]));
+      
       // rightOperand <= cleaned[1];
       topHalfUnit.enqData(inVec[0], Init);
       rightOperand <= inVec[1];
+      firstLowHalf <= cleaned[0];
       // lowerHalfQ.enq(clean[0]);
       init <= True;
       prevTail <= tagged Valid getTop(vec(last(inVec[0]), last(inVec[1])),descending);
       portSel <= ~pack(isSorted(vec(last(inVec[0]), last(inVec[1])), descending));
    endrule
    
-   rule mergeTwoInQs2 (init);
+   rule mergeTwoInQs2 (init && isValid(prevTail));
       init <= False;
       topHalfUnit.enqData(rightOperand, Normal);
+      selectedInQ.enq(tuple2(DRAIN_IN, firstLowHalf));
    endrule
 
    rule mergeWithBuf (isValid(prevTail) && !init);
@@ -326,46 +330,63 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
          vInCnt[1] <= vInCnt[1] - 1;
       end
       else begin
-         writeVReg(vInCnt, map(fromInteger, replicate(initCnt)));
+
          noInput = True;
+         if ( vInQ[0].notEmpty && vInQ[1].notEmpty ) begin
+            let inVec <- mapM(doGet, map(toGet, vInQ));
+            // decrement both counters by one
+            writeVReg(vInCnt, map(fromInteger, replicate(initCnt-1)));
+            let cleaned = halfClean(inVec, descending);
+            topHalfUnit.enqData(inVec[0], Init);
+            rightOperand <= inVec[1];
+            firstLowHalf <= cleaned[0];
+            init <= True;
+            prevTail <= tagged Valid getTop(vec(last(inVec[0]), last(inVec[1])),descending);
+            portSel <= ~pack(isSorted(vec(last(inVec[0]), last(inVec[1])), descending));
+         end
+         else begin
+            prevTail <= tagged Invalid;
+            writeVReg(vInCnt, map(fromInteger, replicate(initCnt)));
+         end
       end
       
       if ( noInput) begin
-         prevTail <= tagged Invalid;
          selectedInQ.enq(tuple2(DRAIN_SORTER, ?));
       end
       else begin
          prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), descending);
          topHalfUnit.enqData(in, Normal);
          selectedInQ.enq(tuple2(MERGE, in));
+         if ( isSorted(vec(prevTail_d, last(in)), descending)) begin
+            portSel <= ~portSel;
+         end
       end
       
-      if ( isSorted(vec(prevTail_d, last(in)), descending)) begin
-         portSel <= ~portSel;
-      end
    endrule
    
-   Reg#(Vector#(vSz,iType)) prevTop <- mkRegU;
    rule combWithTopHalf;
       let {scenario, in} <- toGet(selectedInQ).get;
+      // $display("combWithTopHalf ",fshow(selectedInQ.first));
       Vector#(vSz, iType) out = ?;
 
       case (scenario)
          DRAIN_IN: 
          begin
-            // feedback = rightOperand;
             out = in;
+            // $display("Drain In  ", fshow(out));
          end
          DRAIN_SORTER:
          begin
-            out = prevTop;
+            let topHalf <- topHalfUnit.getCurrTop;
+            out = topHalf;
+            // $display("Drain Sorter  ", fshow(out));
          end
          MERGE:
          begin
             let topHalf <- topHalfUnit.getCurrTop;
+            // $display("MergeWith topHalf ", fshow(topHalf));
             let cleaned = halfClean(vec(topHalf,in), descending);
             out = cleaned[0];
-            prevTop <= cleaned[1];
          end
       endcase
       sort_bitonic_pipeline.inPipe.enq(out);

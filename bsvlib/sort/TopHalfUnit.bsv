@@ -3,6 +3,7 @@ import Vector::*;
 import FIFO::*;
 import GetPut::*;
 
+Bool debug = False;
 
 typedef enum {Init, Normal} Op deriving (Bits, FShow, Eq);
 
@@ -32,9 +33,12 @@ module mkTopHalfUnit(TopHalfUnit#(vSz, iType)) provisos (
       rule doGenTop;
          let d <- toGet(stageQ[i-1]).get();
          
-         $display("stage = %0d seqid = %0d before", i, seqId[i], fshow(d));
-         $display("stage = %0d seqid = %0d prevTop", i, seqId[i], fshow(readVReg(prevTop[i])));
-         $display("stage = %0d seqid = %0d prevTop tail vs sfted tail ", i, seqId[i], fshow(prevTop[i][d.tailPtr]), " ", fshow(last(d.sftedIn)) );
+         if ( debug ) begin
+            $display("stage = %0d seqid = %0d before", i, seqId[i], fshow(d));
+            $display("stage = %0d seqid = %0d prevTop", i, seqId[i], fshow(readVReg(prevTop[i])));
+            $display("stage = %0d seqid = %0d prevTop tail vs sfted tail ", i, seqId[i], fshow(prevTop[i][d.tailPtr]), " ", fshow(last(d.sftedIn)) );
+         end
+         
          if ( d.op == Normal) begin
             d.currTop[valueOf(vSz)-1-i] = max(prevTop[i][d.tailPtr], last(d.sftedIn));
             
@@ -45,9 +49,11 @@ module mkTopHalfUnit(TopHalfUnit#(vSz, iType)) provisos (
                d.tailPtr = d.tailPtr - 1;
             end
          end
-         
-         $display("stage = %0d seqid = %0d ", i, seqId[i], fshow(d));
-         seqId[i] <= seqId[i] + 1;
+
+         if ( debug ) begin
+            $display("stage = %0d seqid = %0d ", i, seqId[i], fshow(d));
+            seqId[i] <= seqId[i] + 1;
+         end
          
          for (Integer j = 0; j <= i; j = j + 1 ) begin
             Integer idx = valueOf(vSz)-1-j;
@@ -63,8 +69,9 @@ module mkTopHalfUnit(TopHalfUnit#(vSz, iType)) provisos (
                          currTop:in,
                          sftedIn: in,
                          tailPtr:fromInteger(valueOf(vSz)-1)};
-   
-      $display("stage = 0 seqid = %0d before:", seqId[0], fshow(d));
+      
+      if (debug)
+         $display("stage = 0 seqid = %0d before:", seqId[0], fshow(d));
 
       if ( d.op == Normal) begin
          if ( last(prevTop[0])._read < last(in) ) begin
@@ -77,9 +84,11 @@ module mkTopHalfUnit(TopHalfUnit#(vSz, iType)) provisos (
       end
 
       last(prevTop[0])._write(last(d.currTop));
-      $display("stage = 0 seqid = %0d ", seqId[0], fshow(d));
-      seqId[0] <= seqId[0] + 1;
-
+   
+      if (debug ) begin
+         $display("stage = 0 seqid = %0d ", seqId[0], fshow(d));
+         seqId[0] <= seqId[0] + 1;
+      end
    
       stageQ[0].enq(d);
    endmethod

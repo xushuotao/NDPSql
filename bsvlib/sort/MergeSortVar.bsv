@@ -1,5 +1,6 @@
 import Pipe::*;
 import Vector::*;
+import FIFO::*;
 import FIFOF::*;
 import Connectable::*;
 import SpecialFIFOs::*;
@@ -129,6 +130,7 @@ typedef MergeNVar#(iType, vSz, 2) Merge2Var#(type iType,
                                              numeric type vSz); 
 
 
+typedef enum {DRAIN_IN, DRAIN_SORTER, MERGE} Scenario deriving(Bits, Eq, FShow);
 
 module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2Var#(iType, vSz)) provisos (
    Bits#(Vector::Vector#(vSz, iType), a__),
@@ -138,31 +140,42 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
    Bitonic::RecursiveBitonic#(vSz, iType)
    );
    
-   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkFIFOF);
-   Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkFIFOF);
+   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkFIFOF());
+   Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkFIFOF());
    
-   Reg#(Maybe#(Vector#(vSz, iType))) prevTopBuf <- mkReg(tagged Invalid);
+   Reg#(Maybe#(iType)) prevTail <- mkReg(tagged Invalid);
+   Reg#(Bit#(1)) portSel <- mkRegU;
    
    Vector#(2, Reg#(UInt#(32))) vInCnt <- replicateM(mkReg(0));
    
-   FIFOF#(Vector#(vSz, iType)) bitonicOutQ <- mkFIFOF;
-   FIFOF#(UInt#(32)) lenOutQ <- mkFIFOF;
+   FIFOF#(UInt#(32)) lenOutQ <- mkFIFOF;//mkSizedFIFOF(128);//(valueOf(TLog#(vSz))+3));
+   
+   StreamNode#(vSz, iType) sort_bitonic_pipeline <- mkSortBitonic(descending);  
+   // FIFOF#(Vector#(vSz, iType)) bitonicOutQ <- mkFIFOF;
+   
    
    
    function t getFirst(FIFOF#(t) x)=x.first;
    function plusOne(x)=x+1;
+   function sorter(x) = sort_bitonic(x, descending);
+   function Action doDeq(FIFOF#(t) x)=x.deq;
    
-   // if (debug)
-   Vector#(2, Reg#(iType)) prevMaxs <- replicateM(mkReg(descending?minBound:maxBound));
-   rule mergeTwoInQs (!isValid(prevTopBuf) && 
-                      vInCnt[0] < vLenQ[0].first &&
-                      vInCnt[1] < vLenQ[1].first );
+   Vector#(2, Reg#(iType)) prevMaxs = ?;
+   if (debug) prevMaxs <- replicateM(mkReg(descending?minBound:maxBound));
+   
+   
+   FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkPipelineFIFO;
+   Reg#(Vector#(vSz, iType)) rightOperand <- mkRegU;
+   Vector#(2, Reg#(UInt#(32))) vLen <- replicateM(mkRegU);
+   rule mergeTwoInQs (!isValid(prevTail));
       
-
-      if ( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True) ) begin
-         if (debug) $display("(%m) merger %0d_%0d, vLens = ", level, id, fshow(map(getFirst, vLenQ)));
-         lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
-      end
+      // if ( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True) ) begin
+      dynamicAssert( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True), "only activated in the first cycle");
+      if (debug) $display("(%m) merger %0d_%0d, vLens = ", level, id, fshow(map(getFirst, vLenQ)));
+      lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
+      mapM_(doDeq, vLenQ);
+      writeVReg(vLen, map(getFirst, vLenQ));
+      // end
       
       function doGet(x) = x.get;
       let inVec <- mapM(doGet, map(toGet, vInQ));
@@ -180,26 +193,34 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
       writeVReg(vInCnt, map(plusOne, readVReg(vInCnt)));
                
       let cleaned = halfClean(inVec, descending);
-      bitonicOutQ.enq(cleaned[0]);
-      prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+      selectedInQ.enq(tuple2(DRAIN_IN, cleaned[0]));
+      rightOperand <= cleaned[1];
+      
+      // selectedInQ.enq(tuple2(DRAIN_IN, inVec[0]));
+      // rightOperand <= inVec[1];
+      prevTail <= tagged Valid getTop(vec(last(inVec[0]), last(inVec[1])),descending);
+      portSel <= ~pack(isSorted(vec(last(inVec[0]), last(inVec[1])), descending));
+
+      // bitonicOutQ.enq(cleaned[0]);
+      // prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
    endrule
    
-   function Action doDeq(FIFOF#(t) x)=x.deq;
+
    
-   rule mergeWithBuf (isValid(prevTopBuf));
-      let prevTop = fromMaybe(?, prevTopBuf);
+   rule mergeWithBuf (isValid(prevTail));
+      let prevTail_d = fromMaybe(?, prevTail);
       Vector#(vSz, iType) in = ?;
       
       // $display("vInCnts = ",fshow(readVReg(vInCnt)));
       // $display("VLenQ.first = ",fshow(map(getFirst, vLenQ)));
       
       Bool noInput = False;
-      if (vInCnt[0] < vLenQ[0].first && vInCnt[1] < vLenQ[1].first ) begin
+      if (vInCnt[0] < vLen[0] && vInCnt[1] < vLen[1] ) begin
          let inVec0 = vInQ[0].first;
          let inVec1 = vInQ[1].first;
          in = inVec0;
          // $display("head(inVec0) = %d, head(inVec1) = %d, last(prev) = %d", head(inVec0), head(inVec1), last(prevTop));
-         if ( isSorted(vec(last(prevTop), head(inVec0)), descending) ) begin
+         if ( portSel == 1 ) begin
          // if ( isSorted(vec(head(inVec1), last(prevTop)), descending) ) begin
             in = inVec1;
             vInCnt[1] <= vInCnt[1] + 1;
@@ -222,7 +243,7 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
          end
 
       end
-      else if ( vInCnt[0] < vLenQ[0].first ) begin
+      else if ( vInCnt[0] < vLen[0] ) begin
          in <- toGet(vInQ[0]).get;
          vInCnt[0] <= vInCnt[0] + 1;
          if (debug) begin
@@ -232,7 +253,7 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
             dynamicAssert(isSorted(vec(prevMaxs[0], head(in)), descending), msg+" is not sorted externally");
          end
       end
-      else if (  vInCnt[1] < vLenQ[1].first ) begin
+      else if (  vInCnt[1] < vLen[1] ) begin
          in <- toGet(vInQ[1]).get;
          vInCnt[1] <= vInCnt[1] + 1;
          if (debug) begin
@@ -244,26 +265,56 @@ module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2V
       end
       else begin
          writeVReg(vInCnt, replicate(0));
-         mapM_(doDeq, vLenQ);         
          noInput = True;
-         writeVReg(prevMaxs, replicate(descending?minBound:maxBound));
+         if ( debug ) writeVReg(prevMaxs, replicate(descending?minBound:maxBound));
       end
       
       if ( noInput) begin
-         prevTopBuf <= tagged Invalid;
-         bitonicOutQ.enq(prevTop);
+         prevTail <= tagged Invalid;
+         selectedInQ.enq(tuple2(DRAIN_SORTER, ?));
       end
       else begin
-         let cleaned = halfClean(vec(prevTop,in), descending);
-         bitonicOutQ.enq(cleaned[0]);
-         prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+         prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), descending);
+         selectedInQ.enq(tuple2(MERGE, in));
+      end
+      
+      if ( isSorted(vec(prevTail_d, last(in)), descending)) begin
+         portSel <= ~portSel;
       end
    endrule
    
+   Reg#(Vector#(vSz, iType)) feedbackBuf <- mkRegU();
+   rule doOutput;
+      let {scenario, in} <- toGet(selectedInQ).get;
+      // $display(fshow(scenario));
+      Vector#(vSz, iType) feedback = ?;
+      Vector#(vSz, iType) out = ?;
+      case (scenario)
+         DRAIN_IN: 
+         begin
+            feedback = rightOperand;
+            out = in;
+         end
+         DRAIN_SORTER:
+         begin
+            out = feedbackBuf;
+         end
+         MERGE:
+         begin
+            let cleaned = halfClean(vec(feedbackBuf,in), descending);
+            out = cleaned[0];
+            feedback = cleaned[1];
+         end
+      endcase
+      sort_bitonic_pipeline.inPipe.enq(out);
+      // bitonicOutQ.enq(out);
+      feedbackBuf <= sorter(feedback);
+   endrule
    
-   function sortOut(x) = sort_bitonic(x, descending);
+   // function sortOut(x) = sort_bitonic(x, descending);
    interface inStreams = zipWith(toVariableStreamIn, map(toPipeIn,vInQ), map(toPipeIn, vLenQ));
-   interface outStream = toVariableStreamOut(mapPipe(sortOut, toPipeOut(bitonicOutQ)), toPipeOut(lenOutQ));
+   // interface outStream = toVariableStreamOut(mapPipe(sorter, toPipeOut(bitonicOutQ)), toPipeOut(lenOutQ));
+   interface outStream = toVariableStreamOut(sort_bitonic_pipeline.outPipe, toPipeOut(lenOutQ)); 
 endmodule
 
 

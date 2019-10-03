@@ -169,13 +169,13 @@ instance RecursiveBitonic#(n, itype)
    endfunction
    
    module mkSortBitonic#(Bool descending)(StreamNode#(n, itype));
-      Vector#(TLog#(n), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
-
-      for (Integer i = 1; i < valueOf(TLog#(n)); i = i + 1 )begin
+      Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
+      // Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkFIFOF);
+      for (Integer i = 0; i < valueOf(TLog#(n)) ; i = i + 1 )begin
          rule doStage;   
             Integer stride = valueOf(n)/(2**(i+1));
-            Vector#(n, itype) data = dataPipe[i-1].first;
-            dataPipe[i-1].deq;
+            Vector#(n, itype) data = dataPipe[i].first;
+            dataPipe[i].deq;
             for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
                for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
                   Integer idx = (j*valueOf(n)/(2**i))+k;
@@ -184,29 +184,47 @@ instance RecursiveBitonic#(n, itype)
                   data[idx+stride] = b;
                end
             end
-            dataPipe[i].enq(data);
+            dataPipe[i+1].enq(data);
          endrule
       end
 
    
-      interface PipeIn inPipe;
-         method Action enq(Vector#(n, itype) in);
-            Integer stride = valueOf(n)/2;
-            Vector#(n, itype) data = ?;
-            for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
-               let idx = k;
-               let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), descending);
-               data[idx] = a;
-               data[idx+stride] = b;
-            end
-            dataPipe[0].enq(data);
-         endmethod
-         method Bool notFull = dataPipe[0].notEmpty;
-      endinterface
+      interface PipeIn inPipe = toPipeIn(dataPipe[0]);
+         // method Action enq(Vector#(n, itype) in);
+         //    Integer stride = valueOf(n)/2;
+         //    Vector#(n, itype) data = ?;
+         //    for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
+         //       let idx = k;
+         //       let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), descending);
+         //       data[idx] = a;
+         //       data[idx+stride] = b;
+         //    end
+         //    dataPipe[0].enq(data);
+         // endmethod
+         // method Bool notFull = dataPipe[0].notEmpty;
+      // endinterface
       interface PipeOut outPipe = toPipeOut(last(dataPipe));
+      //    method Vector#(n, itype) first;
+      //       // let bot_sorted = sort_bitonic[0].outPipe.first;
+      //       // let top_sorted = sort_bitonic[1].outPipe.first;
+
+      //       Integer stride = 1;
+      //       Vector#(n, itype) data = last(dataPipe).first;
+      //       for ( Integer j = 0; j < valueOf(n)/2; j = j + 1 ) begin
+      //          Integer idx = (j*2);
+      //          let {a, b} = cas_tpl(tuple2(data[idx],data[idx+stride]), descending);
+      //          data[idx] = a;
+      //          data[idx+stride] = b;
+      //       end
+      //       return data;
+      //    endmethod
+      //    method Action deq = last(dataPipe).deq;
+      //    method Bool notEmpty = last(dataPipe).notEmpty;
+      // endinterface
    endmodule
 
    module mkBitonicMerge#(Bool descending)(StreamNode#(n, itype));
+      //Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkFIFOF);
       Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkPipelineFIFOF);
       Vector#(2, StreamNode#(TDiv#(n,2), itype)) sort_bitonic <- replicateM(mkSortBitonic(descending));
       zipWithM_(mkConnection, map(toPipeOut, inFifos), vec(sort_bitonic[0].inPipe, sort_bitonic[1].inPipe));
