@@ -13,17 +13,47 @@ interface TopHalfUnit#(numeric type vSz, type iType);
 endinterface
 
 typedef struct{
-   Op op;
-   Vector#(vSz, iType) currTop;
-   Vector#(vSz, iType) sftedIn;
-   UInt#(TLog#(vSz)) tailPtr;
-   } StageDataT#(numeric type vSz, type iType) deriving (Bits,Eq,FShow);
+               Op op;
+               Vector#(vSz, iType) currTop;
+               Vector#(vSz, iType) sftedIn;
+               UInt#(TLog#(vSz)) tailPtr;
+               } StageDataT#(numeric type vSz, type iType) deriving (Bits,Eq,FShow);
 
-module mkTopHalfUnit(TopHalfUnit#(vSz, iType)) provisos (
+typeclass TopHalfUnitInstance#(numeric type vSz, type iType);
+   module mkTopHalfUnit(TopHalfUnit#(vSz, iType));
+endtypeclass
+
+(* synthesize *)
+module mkTopHalfUnit_8_uint32_synth(TopHalfUnit#(8, UInt#(32)));
+   let tophalfunit <- mkTopHalfUnitImpl;
+   return tophalfunit;
+endmodule
+
+instance TopHalfUnitInstance#(8, UInt#(32));
+   module mkTopHalfUnit(TopHalfUnit#(8, UInt#(32)));
+      let m_<- mkTopHalfUnit_8_uint32_synth;
+      return m_;
+   endmodule
+endinstance
+
+
+instance TopHalfUnitInstance#(vSz, iType) provisos (
    Bits#(Vector::Vector#(vSz, iType), a__),
    Add#(1, b__, vSz),
    Ord#(iType),
    FShow#(iType));
+   module mkTopHalfUnit(TopHalfUnit#(vSz, iType));
+      let m_<- mkTopHalfUnitImpl;
+      return m_;
+   endmodule
+endinstance
+
+module mkTopHalfUnitImpl(TopHalfUnit#(vSz, iType)) provisos(
+   Bits#(Vector::Vector#(vSz, iType), a__),
+   Add#(1, b__, vSz),
+   Ord#(iType),
+   FShow#(iType));
+   
    Vector#(vSz, Vector#(vSz, Reg#(iType))) prevTop <- replicateM(replicateM(mkRegU));
    Vector#(vSz, FIFO#(StageDataT#(vSz, iType))) stageQ <- replicateM(mkFIFO);
    

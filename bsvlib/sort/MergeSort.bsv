@@ -194,7 +194,8 @@ instance RecursiveMerger#(iType,vSz,sortedSz,2) provisos(
    Add#(1, b__, vSz),
    Bits#(iType, c__),
    Mul#(vSz, c__, d__),
-   FShow#(iType)
+   FShow#(iType),
+   TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
    );
    module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,2));
       Merge2#(iType,vSz,sortedSz) merger <- mkStreamingMerge2(descending);
@@ -214,7 +215,8 @@ instance RecursiveMerger#(iType,vSz,sortedSz,n) provisos (
    Mul#(vSz, d__, e__),
    MergeSort::RecursiveMerger#(iType, vSz, TMul#(sortedSz, 2), TDiv#(n, 2)),
    Mul#(TDiv#(n, 2), 2, n),
-   FShow#(iType)
+   FShow#(iType),
+   TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
 );
    module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
       Vector#(TDiv#(n,2), Merge2#(iType, vSz, sortedSz)) mergers <- replicateM(mkStreamingMerge2(descending));
@@ -249,7 +251,8 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
    Add#(vSz, e__, sortedSz),
    Ord#(iType),
    RecursiveBitonic#(vSz, iType),
-   FShow#(iType)
+   FShow#(iType),
+   TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
    );
    
    // Note: mkFIFOF is used to cut combintational path between mergers
