@@ -105,12 +105,12 @@ module mkBitonicPipelinedTest(Empty);
 endmodule
 
 
-typedef 32 SortedSz;
+typedef 64 SortedSz;
 
 module mkStreamingMerge2Test(Empty);
    Merge2#(UInt#(32), VecSz, SortedSz) merger <- mkStreamingMerge2(descending);
 
-   Integer testLen = 10;
+   Integer testLen = 100;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));
    
    Reg#(Bit#(32)) cycle <- mkReg(0);

@@ -169,8 +169,8 @@ instance RecursiveBitonic#(n, itype)
    endfunction
    
    module mkSortBitonic#(Bool descending)(StreamNode#(n, itype));
-      Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
-      // Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkFIFOF);
+      //Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
+      Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkFIFOF);
       for (Integer i = 0; i < valueOf(TLog#(n)) ; i = i + 1 )begin
          rule doStage;   
             Integer stride = valueOf(n)/(2**(i+1));
