@@ -25,6 +25,6 @@ all: $(targets)
 clean:
 	rm -rf build_dir $(targets) *.so *.o *.sched ConnectalProjectConfig.bsv
 
-.PHONY: $(TARGETS)
+.PHONY: $(targets)
 .DEFAULT_GOAL := all
 

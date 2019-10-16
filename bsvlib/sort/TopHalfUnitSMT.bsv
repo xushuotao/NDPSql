@@ -18,7 +18,7 @@ endinterface
 
 
 typeclass TopHalfUnitSMTInstance#(numeric type numTags, numeric type vSz, type iType);
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(numTags, vSz, iType));
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType));
 endtypeclass
 
 instance TopHalfUnitSMTInstance#(numTags, vSz, iType) provisos (
@@ -28,8 +28,8 @@ instance TopHalfUnitSMTInstance#(numTags, vSz, iType) provisos (
    Ord#(iType),
    Bounded#(iType),
    FShow#(iType));
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(numTags, vSz, iType));
-      let m_<- mkTopHalfUnitSMTImpl;
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType));
+      let m_<- mkTopHalfUnitSMTImpl(ascending);
       return m_;
    endmodule
 endinstance
@@ -48,14 +48,14 @@ typeclass TopHalfStageInstance#(numeric type numTags,
                                 numeric type vSz,
                                 numeric type vSzMax,
                                 type iType);
-   module mkTopHalfStage(TopHalfStage#(numTags, vSz, vSzMax, iType));
+   module mkTopHalfStage#(Bool ascending)(TopHalfStage#(numTags, vSz, vSzMax, iType));
 endtypeclass
 
 instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
    Bits#(Vector::Vector#(1, iType), a__),
    Add#(1, b__, vSzMax),
    Ord#(iType));
-   module mkTopHalfStage(TopHalfStage#(numTags, 1, vSzMax, iType));
+   module mkTopHalfStage#(Bool ascending)(TopHalfStage#(numTags, 1, vSzMax, iType));
    
       RegFile#(UInt#(TLog#(numTags)),Vector#(1,iType)) currTopCtxt <- mkRegFileFull;
    
@@ -77,8 +77,8 @@ instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
          let currTop = currTopCtxt.sub(tag);
          if ( valid ) begin
             if ( op == Normal ) begin
-               iType tailItem = max(currTop[0], last(in));
-               if ( currTop[0] < last(in) ) begin
+               iType tailItem = getTop(vec(currTop[0], last(in)), ascending);
+               if ( isSorted(vec(currTop[0],last(in)), ascending) ) begin
                   nextIn <= rotateBy(in, 1);
                   nextTailPtr <= 1;
                end
@@ -112,8 +112,8 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
    TopHalfUnitSMT::TopHalfStageInstance#(numTags, TSub#(vSz, 1), vSzMax, iType)
 
    );
-   module mkTopHalfStage(TopHalfStage#(numTags, vSz, vSzMax, iType));
-      TopHalfStage#(numTags, TSub#(vSz,1), vSzMax, iType) prevStage <- mkTopHalfStage;
+   module mkTopHalfStage#(Bool ascending)(TopHalfStage#(numTags, vSz, vSzMax, iType));
+      TopHalfStage#(numTags, TSub#(vSz,1), vSzMax, iType) prevStage <- mkTopHalfStage(ascending);
       RegFile#(UInt#(TLog#(numTags)), Vector#(vSz, iType)) currTopCtxt <- mkRegFileFull;
    
       Reg#(Bool) nextValid <- mkReg(False);
@@ -129,8 +129,8 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
          
          let currTop = currTopCtxt.sub(tag);
          if ( op == Normal ) begin
-            iType tailItem = max(currTop[tailPtr], last(in));
-            if ( currTop[tailPtr] < last(in) ) begin
+            iType tailItem = getTop(vec(currTop[tailPtr], last(in)), ascending);
+            if ( isSorted(vec(currTop[tailPtr],last(in)), ascending)) begin
                nextIn <= rotateBy(in, 1);
                nextTailPtr <= zeroExtend(tailPtr) + 1;
             end
@@ -165,7 +165,7 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
 endinstance
 
 
-module mkTopHalfUnitSMTImpl(TopHalfUnitSMT#(numTags, vSz, iType)) provisos(
+module mkTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType)) provisos(
    Alias#(UInt#(TLog#(numTags)), tagT),
    Bits#(Vector::Vector#(vSz, iType), a__),
    Add#(1, b__, vSz),
@@ -177,7 +177,7 @@ module mkTopHalfUnitSMTImpl(TopHalfUnitSMT#(numTags, vSz, iType)) provisos(
    Reg#(UInt#(TLog#(TAdd#(vSz,2)))) credit[2] <- mkCReg(2, fromInteger(valueOf(vSz)+1));   
    FIFOF#(Tuple2#(Vector#(vSz, iType), tagT)) resultQ <- mkUGSizedFIFOF(valueOf(vSz)+1);
    
-   TopHalfStage#(numTags, vSz, vSz, iType) topHalfUnitPipeline <- mkTopHalfStage;
+   TopHalfStage#(numTags, vSz, vSz, iType) topHalfUnitPipeline <- mkTopHalfStage(ascending);
    
    RWire#(Tuple3#(Vector#(vSz, iType), Op, tagT)) inWire <- mkRWire;
    
@@ -217,61 +217,61 @@ endmodule
 /// Synthesis Boundaries
 ////////////////////////////////////////////////////////////////////////////////
 (* synthesize *)
-module mkTopHalfUnitSMT_16_uint32_synth(TopHalfUnitSMT#(16, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl;
+module mkTopHalfUnitSMT_16_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
+   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
 instance TopHalfUnitSMTInstance#(16, 8, UInt#(32));
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(16, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_16_uint32_synth;
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
+      let m_ <- mkTopHalfUnitSMT_16_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
 
 (* synthesize *)
-module mkTopHalfUnitSMT_8_uint32_synth(TopHalfUnitSMT#(8, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl;
+module mkTopHalfUnitSMT_8_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
+   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
 instance TopHalfUnitSMTInstance#(8, 8, UInt#(32));
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(8, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_8_uint32_synth;
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
+      let m_ <- mkTopHalfUnitSMT_8_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
 
 (* synthesize *)
-module mkTopHalfUnitSMT_4_uint32_synth(TopHalfUnitSMT#(4, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl;
+module mkTopHalfUnitSMT_4_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
+   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
 instance TopHalfUnitSMTInstance#(4, 8, UInt#(32));
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(4, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_4_uint32_synth;
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
+      let m_ <- mkTopHalfUnitSMT_4_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
 
 (* synthesize *)
-module mkTopHalfUnitSMT_2_uint32_synth(TopHalfUnitSMT#(2, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl;
+module mkTopHalfUnitSMT_2_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
+   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
 instance TopHalfUnitSMTInstance#(2, 8, UInt#(32));
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(2, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_2_uint32_synth;
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
+      let m_ <- mkTopHalfUnitSMT_2_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
 
 (* synthesize *)
-module mkTopHalfUnitSMT_1_uint32_synth(TopHalfUnitSMT#(1, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl;
+module mkTopHalfUnitSMT_1_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
+   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
 instance TopHalfUnitSMTInstance#(1, 8, UInt#(32));
-   module mkTopHalfUnitSMT(TopHalfUnitSMT#(1, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_1_uint32_synth;
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
+      let m_ <- mkTopHalfUnitSMT_1_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance

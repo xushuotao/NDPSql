@@ -38,11 +38,11 @@ typeclass RecursiveBitonic#(numeric type n, type itype);
 /// Description: this function sorts a input vector of bitonic sequence 
 ///              using partial bitonic sorting network
 /// Arguments:   in         ==> vector of a bitonic sequence
-///              descending ==> sorting order is descending order
+///              ascending ==> sorting order is ascending order
 ///                             i.e (out[i+1] > out[i]), and vice versa
-/// Return:      vector of sorted input sequence in descending or ascending order
+/// Return:      vector of sorted input sequence in ascending or descending order
 ////////////////////////////////////////////////////////////////////////////////
-   function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool descending);
+   function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool ascending);
    
 ////////////////////////////////////////////////////////////////////////////////
 /// function:    bitonic_merge
@@ -50,56 +50,56 @@ typeclass RecursiveBitonic#(numeric type n, type itype);
 ///              using bitonic sorting network
 /// Arguments:   in         ==> vector of two sorted sequences
 ///                             in[n-1:n/2] and in[n/2-1:0]
-///              descending ==> sorting order is descending order
+///              ascending ==> sorting order is ascending order
 ///                             i.e (out[i+1] > out[i]), and vice versa
-/// Return:      vector of sorted input sequence in descending or ascending order
+/// Return:      vector of sorted input sequence in ascending or descending order
 ////////////////////////////////////////////////////////////////////////////////
-   function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool descending);
+   function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool ascending);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// function:    bitonic sort
 /// Description: this function sort in input vector using bitonic sorting network
 /// Arguments:   in         ==> unsorted vector
-///              descending ==> sorting order is descending order
+///              ascending ==> sorting order is ascending order
 ///                             i.e (out[i+1] > out[i]), and vice versa
-/// Return:      vector of sorted input sequence in descending or ascending order
+/// Return:      vector of sorted input sequence in ascending or descending order
 ////////////////////////////////////////////////////////////////////////////////
-   function Vector#(n, itype) bitonic_sort(Vector#(n, itype) in, Bool descending);
+   function Vector#(n, itype) bitonic_sort(Vector#(n, itype) in, Bool ascending);
    
-   module mkBitonicSort#(Bool descending)(StreamNode#(n, itype));
-   module mkSortBitonic#(Bool descending)(StreamNode#(n, itype));
-   module mkBitonicMerge#(Bool descending)(StreamNode#(n, itype));
+   module mkBitonicSort#(Bool ascending)(StreamNode#(n, itype));
+   module mkSortBitonic#(Bool ascending)(StreamNode#(n, itype));
+   module mkBitonicMerge#(Bool ascending)(StreamNode#(n, itype));
 endtypeclass
 
 // base cases
 instance RecursiveBitonic#(1, itype) provisos(Ord#(itype));
-   function Vector#(1, itype) sort_bitonic(Vector#(1, itype) in, Bool descending) = in;
-   function Vector#(1, itype) bitonic_merge(Vector#(1, itype) in, Bool descending) = in;   
-   function Vector#(1, itype) bitonic_sort(Vector#(1, itype) in, Bool descending) = in;   
+   function Vector#(1, itype) sort_bitonic(Vector#(1, itype) in, Bool ascending) = in;
+   function Vector#(1, itype) bitonic_merge(Vector#(1, itype) in, Bool ascending) = in;   
+   function Vector#(1, itype) bitonic_sort(Vector#(1, itype) in, Bool ascending) = in;   
 endinstance
 
 // base cases
 instance RecursiveBitonic#(2, itype) provisos(Ord#(itype), Bits#(Vector::Vector#(2, itype), a__));
-   function Vector#(2, itype) sort_bitonic(Vector#(2, itype) in, Bool descending) = cas(in, descending);
-   function Vector#(2, itype) bitonic_merge(Vector#(2, itype) in, Bool descending) = cas(in, descending);   
-   function Vector#(2, itype) bitonic_sort(Vector#(2, itype) in, Bool descending) = cas(in, descending);
-   module mkSortBitonic#(Bool descending)(StreamNode#(2, itype));
+   function Vector#(2, itype) sort_bitonic(Vector#(2, itype) in, Bool ascending) = cas(in, ascending);
+   function Vector#(2, itype) bitonic_merge(Vector#(2, itype) in, Bool ascending) = cas(in, ascending);   
+   function Vector#(2, itype) bitonic_sort(Vector#(2, itype) in, Bool ascending) = cas(in, ascending);
+   module mkSortBitonic#(Bool ascending)(StreamNode#(2, itype));
       FIFOF#(Vector#(2, itype)) fifo <- mkFIFOF;
-      function f(x) = cas(x, descending);
+      function f(x) = cas(x, ascending);
       interface PipeIn inPipe = mapPipeIn(f, toPipeIn(fifo));
       interface PipeOut outPipe = toPipeOut(fifo);
    endmodule
 
-   module mkBitonicMerge#(Bool descending)(StreamNode#(2, itype));
+   module mkBitonicMerge#(Bool ascending)(StreamNode#(2, itype));
       FIFOF#(Vector#(2, itype)) fifo <- mkFIFOF;
-      function f(x) = cas(x, descending);
+      function f(x) = cas(x, ascending);
       interface PipeIn inPipe = mapPipeIn(f, toPipeIn(fifo));
       interface PipeOut outPipe = toPipeOut(fifo);
    endmodule
       
-   module mkBitonicSort#(Bool descending)(StreamNode#(2, itype));
+   module mkBitonicSort#(Bool ascending)(StreamNode#(2, itype));
       FIFOF#(Vector#(2, itype)) fifo <- mkFIFOF;
-      function f(x) = cas(x, descending);
+      function f(x) = cas(x, ascending);
       interface PipeIn inPipe = mapPipeIn(f, toPipeIn(fifo));
       interface PipeOut outPipe = toPipeOut(fifo);
    endmodule
@@ -116,7 +116,7 @@ instance RecursiveBitonic#(n, itype)
             Add#(1, c__, TLog#(n))
       );
    
-   function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool descending);
+   function Vector#(n, itype) sort_bitonic(Vector#(n, itype) in, Bool ascending);
    
       Vector#(TAdd#(TLog#(n),1), Vector#(n, itype)) sortData = ?;
       sortData[0] = in;
@@ -126,7 +126,7 @@ instance RecursiveBitonic#(n, itype)
          for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
             for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
                Integer idx = (j*valueOf(n)/(2**i))+k;
-               let {a, b} = cas_tpl(tuple2(sortData[i][idx],sortData[i][idx+stride]), descending);
+               let {a, b} = cas_tpl(tuple2(sortData[i][idx],sortData[i][idx+stride]), ascending);
                sortData[i+1][idx] = a;
                sortData[i+1][idx+stride] = b;
             end
@@ -139,36 +139,36 @@ instance RecursiveBitonic#(n, itype)
 /// recursive version gives out funny circuit
 ////////////////////////////////////////////////////////////////////////////////
       // let halves = splitHalf(in);
-      // function cas_f(x) = cas(x,descending);
+      // function cas_f(x) = cas(x,ascending);
       // let bitonic_seqV = transpose(map(cas_f, transpose(vec(halves[0], halves[1]))));
-      // let bot_sorted_seq = sort_bitonic(bitonic_seqV[0], descending);
-      // let top_sorted_seq = sort_bitonic(bitonic_seqV[1], descending);
+      // let bot_sorted_seq = sort_bitonic(bitonic_seqV[0], ascending);
+      // let top_sorted_seq = sort_bitonic(bitonic_seqV[1], ascending);
       // return append(bot_sorted_seq, top_sorted_seq);
       // return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
    endfunction
    
-   function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool descending);
+   function Vector#(n, itype) bitonic_merge(Vector#(n, itype) in, Bool ascending);
       let sorted_halves = splitHalf(in);
-      let bitonic_seq_V = halfClean(sorted_halves, descending);
+      let bitonic_seq_V = halfClean(sorted_halves, ascending);
    
-      let bot_sorted_seq = sort_bitonic(bitonic_seq_V[0], descending);
-      let top_sorted_seq = sort_bitonic(bitonic_seq_V[1], descending);
+      let bot_sorted_seq = sort_bitonic(bitonic_seq_V[0], ascending);
+      let top_sorted_seq = sort_bitonic(bitonic_seq_V[1], ascending);
       
       return append(bot_sorted_seq, top_sorted_seq); //:( a trick for bsc to use Mul#
       // return concat(vec(bot_sorted_seq, top_sorted_seq)); //:( a trick for bsc to use Mul#
    endfunction
 
 
-   function Vector#(n, itype) bitonic_sort(Vector#(n, itype) in, Bool descending);
+   function Vector#(n, itype) bitonic_sort(Vector#(n, itype) in, Bool ascending);
       let halves = splitHalf(in);
-      let sorted_bot = bitonic_sort(halves[0], descending);
-      let sorted_top = bitonic_sort(halves[1], descending);
-      return bitonic_merge(append(sorted_bot, sorted_top), descending);
+      let sorted_bot = bitonic_sort(halves[0], ascending);
+      let sorted_top = bitonic_sort(halves[1], ascending);
+      return bitonic_merge(append(sorted_bot, sorted_top), ascending);
    
-      // return bitonic_merge(concat(vec(sorted_bot, sorted_top)), descending);
+      // return bitonic_merge(concat(vec(sorted_bot, sorted_top)), ascending);
    endfunction
    
-   module mkSortBitonic#(Bool descending)(StreamNode#(n, itype));
+   module mkSortBitonic#(Bool ascending)(StreamNode#(n, itype));
       //Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
       Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkFIFOF);
       for (Integer i = 0; i < valueOf(TLog#(n)) ; i = i + 1 )begin
@@ -179,7 +179,7 @@ instance RecursiveBitonic#(n, itype)
             for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
                for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
                   Integer idx = (j*valueOf(n)/(2**i))+k;
-                  let {a, b} = cas_tpl(tuple2(data[idx],data[idx+stride]), descending);
+                  let {a, b} = cas_tpl(tuple2(data[idx],data[idx+stride]), ascending);
                   data[idx] = a;
                   data[idx+stride] = b;
                end
@@ -195,7 +195,7 @@ instance RecursiveBitonic#(n, itype)
          //    Vector#(n, itype) data = ?;
          //    for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
          //       let idx = k;
-         //       let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), descending);
+         //       let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), ascending);
          //       data[idx] = a;
          //       data[idx+stride] = b;
          //    end
@@ -212,7 +212,7 @@ instance RecursiveBitonic#(n, itype)
       //       Vector#(n, itype) data = last(dataPipe).first;
       //       for ( Integer j = 0; j < valueOf(n)/2; j = j + 1 ) begin
       //          Integer idx = (j*2);
-      //          let {a, b} = cas_tpl(tuple2(data[idx],data[idx+stride]), descending);
+      //          let {a, b} = cas_tpl(tuple2(data[idx],data[idx+stride]), ascending);
       //          data[idx] = a;
       //          data[idx+stride] = b;
       //       end
@@ -223,15 +223,15 @@ instance RecursiveBitonic#(n, itype)
       // endinterface
    endmodule
 
-   module mkBitonicMerge#(Bool descending)(StreamNode#(n, itype));
+   module mkBitonicMerge#(Bool ascending)(StreamNode#(n, itype));
       //Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkFIFOF);
       Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkPipelineFIFOF);
-      Vector#(2, StreamNode#(TDiv#(n,2), itype)) sort_bitonic <- replicateM(mkSortBitonic(descending));
+      Vector#(2, StreamNode#(TDiv#(n,2), itype)) sort_bitonic <- replicateM(mkSortBitonic(ascending));
       zipWithM_(mkConnection, map(toPipeOut, inFifos), vec(sort_bitonic[0].inPipe, sort_bitonic[1].inPipe));
       interface PipeIn inPipe;
          method Action enq(Vector#(n, itype) in);
             let sorted_halves = splitHalf(in);
-            let bitonic_seq_V = halfClean(sorted_halves, descending);
+            let bitonic_seq_V = halfClean(sorted_halves, ascending);
             inFifos[0].enq(bitonic_seq_V[0]);
             inFifos[1].enq(bitonic_seq_V[1]);
          endmethod
@@ -251,9 +251,9 @@ instance RecursiveBitonic#(n, itype)
       endinterface
    endmodule
       
-   module mkBitonicSort#(Bool descending)(StreamNode#(n, itype));
-      Vector#(2, StreamNode#(TDiv#(n,2), itype)) bitonic_sorter <- replicateM(mkBitonicSort(descending));
-      StreamNode#(n, itype) bitonic_merger <- mkBitonicMerge(descending);
+   module mkBitonicSort#(Bool ascending)(StreamNode#(n, itype));
+      Vector#(2, StreamNode#(TDiv#(n,2), itype)) bitonic_sorter <- replicateM(mkBitonicSort(ascending));
+      StreamNode#(n, itype) bitonic_merger <- mkBitonicMerge(ascending);
       rule doMerger;
          let bot_sorted = bitonic_sorter[0].outPipe.first;
          let top_sorted = bitonic_sorter[1].outPipe.first;
@@ -279,11 +279,11 @@ endinstance
 ////////////////////////////////////////////////////////////////////////////////
 
 
-function Bool isSorted(Vector#(n, itype) in, Bool descending)
+function Bool isSorted(Vector#(n, itype) in, Bool ascending)
    provisos(Ord#(itype));
    Bool unSorted = False;
    for (Integer i = 1; i < valueOf(n); i = i + 1) begin
-      if ( descending ) begin
+      if ( ascending ) begin
          unSorted = in[i-1] > in[i] || unSorted;
       end
       else begin
@@ -296,29 +296,29 @@ endfunction
 ////////////////////////////////////////////////////////////////////////////////
 /// function compare and swap
 ////////////////////////////////////////////////////////////////////////////////
-function Vector#(2,itype) cas(Vector#(2,itype) in, Bool descending)
+function Vector#(2,itype) cas(Vector#(2,itype) in, Bool ascending)
    provisos(Ord#(itype));
    let a = in[1];
    let b = in[0];
-   return (pack(a>b)^pack(!descending))==1? vec(b,a): vec(a,b);
+   return (pack(a>b)^pack(!ascending))==1? vec(b,a): vec(a,b);
 endfunction
 
-function Tuple2#(itype,itype) cas_tpl(Tuple2#(itype,itype) in, Bool descending)
+function Tuple2#(itype,itype) cas_tpl(Tuple2#(itype,itype) in, Bool ascending)
    provisos(Ord#(itype));
    let {b, a} = in;
    // let b = in[0];
-   return (pack(a>b)^pack(!descending))==1? tuple2(b,a): tuple2(a,b);
+   return (pack(a>b)^pack(!ascending))==1? tuple2(b,a): tuple2(a,b);
 endfunction
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// function compare and swap
 ////////////////////////////////////////////////////////////////////////////////
-function itype getTop(Vector#(2,itype) in, Bool descending)
+function itype getTop(Vector#(2,itype) in, Bool ascending)
    provisos(Ord#(itype));
    let a = in[1];
    let b = in[0];
-   return descending?max(a,b):min(a,b);
+   return ascending?max(a,b):min(a,b);
 endfunction
 
 
@@ -328,16 +328,16 @@ endfunction
 ///              bitonic vectors, in which top vector values are bigger than
 ///              the bottom
 /// Arguments:   in         ==> two sorted vectors {top, bot}
-///              descending ==> sorting order is descending order
+///              ascending ==> sorting order is ascending order
 ///                             i.e (out[i+1] > out[i]), and vice versa
 /// Return:      two non-overlapping bitonic sequences where 
 ///              any(out[0]) <(>) any(out[1])
 ////////////////////////////////////////////////////////////////////////////////
-function Vector#(2, Vector#(vcnt, itype)) halfClean(Vector#(2, Vector#(vcnt, itype)) in, Bool descending) 
+function Vector#(2, Vector#(vcnt, itype)) halfClean(Vector#(2, Vector#(vcnt, itype)) in, Bool ascending) 
    provisos(Ord#(itype));
    let top_rev = reverse(in[1]);
-   let bot_ret = zipWith(descending?min:max, top_rev, in[0]);
-   let top_ret = zipWith(descending?max:min, top_rev, in[0]);
+   let bot_ret = zipWith(ascending?min:max, top_rev, in[0]);
+   let top_ret = zipWith(ascending?max:min, top_rev, in[0]);
    return vec(bot_ret, reverse(top_ret));
 endfunction
 

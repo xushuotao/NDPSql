@@ -2,6 +2,7 @@ import Pipe::*;
 import Vector::*;
 import FIFO::*;
 import FIFOF::*;
+import SpecialFIFOs::*;
 import Connectable::*;
 import SpecialFIFOs::*;
 import BuildVector::*;
@@ -9,6 +10,7 @@ import GetPut::*;
 import Assert::*;
 
 import Bitonic::*;
+import TopHalfUnit::*;
 
 Bool debug = False;
 
@@ -76,7 +78,7 @@ typeclass RecursiveMergerVar#(type iType,
 ///              merge them  into a single sorted out-stream of sum(l_i) elements 
 ///              with a binary merge-tree
 ////////////////////////////////////////////////////////////////////////////////
-   module mkStreamingMergeNVar#(Bool descending, Integer level, Integer id)(MergeNVar#(iType,vSz,n));
+   module mkStreamingMergeNVar#(Bool ascending, Integer level, Integer id)(MergeNVar#(iType,vSz,n));
 endtypeclass
 
 
@@ -86,10 +88,11 @@ instance RecursiveMergerVar#(iType,vSz,2) provisos(
    Bounded#(iType),
    Add#(1, b__, vSz),
    Bits#(iType, c__),
-   Mul#(vSz, c__, d__)
+   Mul#(vSz, c__, d__),
+   TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
    );
-   module mkStreamingMergeNVar#(Bool descending,  Integer level, Integer id)(MergeNVar#(iType,vSz,2));
-      let merger <- mkStreamingMerge2Var(descending, level, id);
+   module mkStreamingMergeNVar#(Bool ascending,  Integer level, Integer id)(MergeNVar#(iType,vSz,2));
+      let merger <- mkStreamingMerge2Var(ascending, level, id);
       return merger;
    endmodule
 endinstance
@@ -105,15 +108,16 @@ instance RecursiveMergerVar#(iType,vSz,n) provisos (
    Bits#(iType, d__),
    Mul#(vSz, d__, e__),
    MergeSortVar::RecursiveMergerVar#(iType, vSz, TDiv#(n, 2)),
-   Mul#(TDiv#(n, 2), 2, n)
+   Mul#(TDiv#(n, 2), 2, n),
+   TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
 );
-   module mkStreamingMergeNVar#(Bool descending, Integer level, Integer id)(MergeNVar#(iType,vSz,n));
-      Vector#(TDiv#(n,2), Merge2Var#(iType, vSz)) mergers <- zipWith3M(mkStreamingMerge2Var, replicate(descending), replicate(level), genVector());
+   module mkStreamingMergeNVar#(Bool ascending, Integer level, Integer id)(MergeNVar#(iType,vSz,n));
+      Vector#(TDiv#(n,2), Merge2Var#(iType, vSz)) mergers <- zipWith3M(mkStreamingMerge2Var, replicate(ascending), replicate(level), genVector());
    
       function VariableStreamOut#(vSz, iType) getPipeOut(Merge2Var#(iType, vSz) ifc) = ifc.outStream;
       function getPipeIn(ifc) = ifc.inStreams;
    
-      MergeNVar#(iType, vSz, TDiv#(n,2)) mergeN_2 <- mkStreamingMergeNVar(descending, level+1, 0);
+      MergeNVar#(iType, vSz, TDiv#(n,2)) mergeN_2 <- mkStreamingMergeNVar(ascending, level+1, 0);
 
       zipWithM_(mkConnection, map(getPipeOut,mergers), mergeN_2.inStreams);
    
@@ -132,186 +136,168 @@ typedef MergeNVar#(iType, vSz, 2) Merge2Var#(type iType,
 
 typedef enum {DRAIN_IN, DRAIN_SORTER, MERGE} Scenario deriving(Bits, Eq, FShow);
 
-module mkStreamingMerge2Var#(Bool descending, Integer level, Integer id)(Merge2Var#(iType, vSz)) provisos (
+module mkStreamingMerge2Var#(Bool ascending, Integer level, Integer id)(Merge2Var#(iType, vSz)) provisos (
    Bits#(Vector::Vector#(vSz, iType), a__),
    Add#(1, c__, vSz),
    Ord#(iType),
    Bounded#(iType),
-   Bitonic::RecursiveBitonic#(vSz, iType)
+   Bitonic::RecursiveBitonic#(vSz, iType),
+   TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
    );
    
-   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkFIFOF());
-   Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkFIFOF());
+   //Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkSizedFIFOF(128));
+   //Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkSizedFIFOF(128));
+   Vector#(2, FIFOF#(Vector#(vSz, iType))) vInQ <- replicateM(mkFIFOF);
+   Vector#(2, FIFOF#(UInt#(32))) vLenQ <- replicateM(mkFIFOF);
+
    
    Reg#(Maybe#(iType)) prevTail <- mkReg(tagged Invalid);
    Reg#(Bit#(1)) portSel <- mkRegU;
    
    Vector#(2, Reg#(UInt#(32))) vInCnt <- replicateM(mkReg(0));
    
-   FIFOF#(UInt#(32)) lenOutQ <- mkFIFOF;//mkSizedFIFOF(128);//(valueOf(TLog#(vSz))+3));
+   //FIFOF#(UInt#(32)) lenOutQ <- mkFIFOF;//mkSizedFIFOF(128);//(valueOf(TLog#(vSz))+3));
+   FIFOF#(UInt#(32)) lenOutQ <- mkSizedFIFOF(valueOf(vSz)+2);
    
-   StreamNode#(vSz, iType) sort_bitonic_pipeline <- mkSortBitonic(descending);  
+   StreamNode#(vSz, iType) sort_bitonic_pipeline <- mkSortBitonic(ascending);  
    // FIFOF#(Vector#(vSz, iType)) bitonicOutQ <- mkFIFOF;
    
    
    
    function t getFirst(FIFOF#(t) x)=x.first;
    function plusOne(x)=x+1;
-   function sorter(x) = sort_bitonic(x, descending);
+   function sorter(x) = sort_bitonic(x, ascending);
    function Action doDeq(FIFOF#(t) x)=x.deq;
    
    Vector#(2, Reg#(iType)) prevMaxs = ?;
-   if (debug) prevMaxs <- replicateM(mkReg(descending?minBound:maxBound));
+   if (debug) prevMaxs <- replicateM(mkReg(ascending?minBound:maxBound));
    
+   TopHalfUnit#(vSz, iType) topHalfUnit <- mkTopHalfUnit;
+   FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkSizedFIFO(valueOf(vSz)+2);
    
-   FIFO#(Tuple2#(Scenario, Vector#(vSz, iType))) selectedInQ <- mkPipelineFIFO;
-   Reg#(Vector#(vSz, iType)) rightOperand <- mkRegU;
-   Vector#(2, Reg#(UInt#(32))) vLen <- replicateM(mkRegU);
-   rule mergeTwoInQs (!isValid(prevTail));
-      
-      // if ( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True) ) begin
-      dynamicAssert( zipWith(\== ,readVReg(vInCnt), replicate(0)) == replicate(True), "only activated in the first cycle");
-      if (debug) $display("(%m) merger %0d_%0d, vLens = ", level, id, fshow(map(getFirst, vLenQ)));
-      lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
-      mapM_(doDeq, vLenQ);
-      writeVReg(vLen, map(getFirst, vLenQ));
-      // end
-      
-      function doGet(x) = x.get;
-      let inVec <- mapM(doGet, map(toGet, vInQ));
-
-      if (debug) begin
-         writeVReg(prevMaxs, map(last, inVec));
-         for (Integer i = 0; i < 2; i = i + 1) begin
-            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(i);
-            dynamicAssert(isSorted(inVec[i], descending), msg+" is not sorted internally");
-            dynamicAssert(isSorted(vec(prevMaxs[i], head(inVec[i])), descending), msg+" is not sorted externally");
-         end
+   rule mergeTwoInQs (!isValid(prevTail) );
+      if ( vInQ[0].notEmpty) begin
+         let v <- toGet(vInQ[0]).get;
+         topHalfUnit.enqData(v, Init);         
+         portSel <= 1;
+         prevTail <= tagged Valid last(v);
+         vInCnt[0] <= vInCnt[0] + 1;
       end
-      
-
-      writeVReg(vInCnt, map(plusOne, readVReg(vInCnt)));
-               
-      let cleaned = halfClean(inVec, descending);
-      selectedInQ.enq(tuple2(DRAIN_IN, cleaned[0]));
-      rightOperand <= cleaned[1];
-      
-      // selectedInQ.enq(tuple2(DRAIN_IN, inVec[0]));
-      // rightOperand <= inVec[1];
-      prevTail <= tagged Valid getTop(vec(last(inVec[0]), last(inVec[1])),descending);
-      portSel <= ~pack(isSorted(vec(last(inVec[0]), last(inVec[1])), descending));
-
-      // bitonicOutQ.enq(cleaned[0]);
-      // prevTopBuf <= tagged Valid sort_bitonic(cleaned[1], descending);
+      else begin
+         let v <- toGet(vInQ[1]).get;
+         topHalfUnit.enqData(v, Init);
+         portSel <= 0;
+         prevTail <= tagged Valid last(v);
+         vInCnt[1] <= vInCnt[1] + 1;
+      end
    endrule
    
+   Reg#(Bool) lenOutSent <- mkReg(False);
 
-   
-   rule mergeWithBuf (isValid(prevTail));
+   rule mergeWithBuf (isValid(prevTail) );
+
       let prevTail_d = fromMaybe(?, prevTail);
+      
       Vector#(vSz, iType) in = ?;
       
-      // $display("vInCnts = ",fshow(readVReg(vInCnt)));
-      // $display("VLenQ.first = ",fshow(map(getFirst, vLenQ)));
-      
       Bool noInput = False;
-      if (vInCnt[0] < vLen[0] && vInCnt[1] < vLen[1] ) begin
-         let inVec0 = vInQ[0].first;
-         let inVec1 = vInQ[1].first;
-         in = inVec0;
-         // $display("head(inVec0) = %d, head(inVec1) = %d, last(prev) = %d", head(inVec0), head(inVec1), last(prevTop));
-         if ( portSel == 1 ) begin
-         // if ( isSorted(vec(head(inVec1), last(prevTop)), descending) ) begin
-            in = inVec1;
-            vInCnt[1] <= vInCnt[1] + 1;
-            vInQ[1].deq;
-            if (debug) prevMaxs[1] <= last(in);
-         end
-         else begin
-            vInCnt[0] <= vInCnt[0] + 1;
-            vInQ[0].deq;
-            if (debug) prevMaxs[0] <= last(in);
+      Maybe#(Bit#(1)) nextPortSel = tagged Invalid;
+      if ( fold(\|| , zipWith(\< , readVReg(vInCnt), map(getFirst, vLenQ))) )  begin
+         
+         if ( !lenOutSent ) begin
+            lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
+            lenOutSent <= True;
          end
          
-         if (debug) begin
-            Vector#(2, Vector#(vSz, iType)) inVec = vec(inVec0, inVec1);
-            for (Integer i = 0; i < 2; i = i + 1) begin
-               String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(i);
-               dynamicAssert(isSorted(inVec[i], descending), msg+" is not sorted internally");
-               dynamicAssert(isSorted(vec(prevMaxs[i], head(inVec[i])), descending), msg+" is not sorted externally");
-            end
+         if ( portSel == 1 ) begin
+            let inVec1 = vInQ[1].first;
+            vInQ[1].deq;
+            in = inVec1;
+            vInCnt[1] <= vInCnt[1] + 1;
+            if ( vInCnt[1] + 1 == vLenQ[1].first ) nextPortSel = tagged Valid 0;
+            else if (vInCnt[0] == vLenQ[0].first ) nextPortSel = tagged Valid 1;
          end
-
-      end
-      else if ( vInCnt[0] < vLen[0] ) begin
-         in <- toGet(vInQ[0]).get;
-         vInCnt[0] <= vInCnt[0] + 1;
-         if (debug) begin
-            prevMaxs[0] <= last(in);
-            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(0);
-            dynamicAssert(isSorted(in, descending), msg+" is not sorted internally");
-            dynamicAssert(isSorted(vec(prevMaxs[0], head(in)), descending), msg+" is not sorted externally");
-         end
-      end
-      else if (  vInCnt[1] < vLen[1] ) begin
-         in <- toGet(vInQ[1]).get;
-         vInCnt[1] <= vInCnt[1] + 1;
-         if (debug) begin
-            prevMaxs[1] <= last(in);
-            String msg="merger "+integerToString(level)+"_"+integerToString(id)+", stream_"+integerToString(1);
-            dynamicAssert(isSorted(in, descending), msg+" is not sorted internally");
-            dynamicAssert(isSorted(vec(prevMaxs[1], head(in)), descending), msg+" is not sorted externally");
+         else begin
+            let inVec0 = vInQ[0].first;
+            in = inVec0;
+            vInQ[0].deq;
+            vInCnt[0] <= vInCnt[0] + 1;
+            if ( vInCnt[0] + 1 == vLenQ[0].first ) nextPortSel = tagged Valid 1;
+            else if (vInCnt[1] == vLenQ[1].first ) nextPortSel = tagged Valid 0;
          end
       end
       else begin
-         writeVReg(vInCnt, replicate(0));
+         mapM_(doDeq, vLenQ);
+         if ( !lenOutSent ) begin
+            lenOutQ.enq(fold(\+ , map(getFirst, vLenQ)));
+         end
+
+         lenOutSent <= False;         
+         
          noInput = True;
-         if ( debug ) writeVReg(prevMaxs, replicate(descending?minBound:maxBound));
+         if ( vInQ[0].notEmpty) begin
+            let v <- toGet(vInQ[0]).get;
+            topHalfUnit.enqData(v, Init);
+            prevTail <= tagged Valid last(v);
+            vInCnt[0] <= 1;
+            vInCnt[1] <= 0;
+            portSel <= 1;
+         end
+         else if ( vInQ[1].notEmpty) begin
+            let v <- toGet(vInQ[1]).get;
+            topHalfUnit.enqData(v, Init);
+            prevTail <= tagged Valid last(v);
+            vInCnt[0] <= 0;
+            vInCnt[1] <= 1;
+            portSel <= 0;
+         end
+         else begin
+            prevTail <= tagged Invalid;
+            writeVReg(vInCnt, replicate(0));
+         end
       end
       
       if ( noInput) begin
-         prevTail <= tagged Invalid;
          selectedInQ.enq(tuple2(DRAIN_SORTER, ?));
       end
       else begin
-         prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), descending);
+         prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), ascending);
+         topHalfUnit.enqData(in, Normal);
          selectedInQ.enq(tuple2(MERGE, in));
+         if ( nextPortSel matches tagged Valid .sel ) begin
+            portSel <= sel;
+         end
+         else if ( isSorted(vec(prevTail_d, last(in)), ascending) ) begin
+            portSel <= ~portSel;
+         end
       end
       
-      if ( isSorted(vec(prevTail_d, last(in)), descending)) begin
-         portSel <= ~portSel;
-      end
    endrule
    
-   Reg#(Vector#(vSz, iType)) feedbackBuf <- mkRegU();
-   rule doOutput;
+   rule combWithTopHalf;
       let {scenario, in} <- toGet(selectedInQ).get;
-      // $display(fshow(scenario));
-      Vector#(vSz, iType) feedback = ?;
+      // $display("combWithTopHalf ",fshow(selectedInQ.first));
       Vector#(vSz, iType) out = ?;
+
       case (scenario)
-         DRAIN_IN: 
-         begin
-            feedback = rightOperand;
-            out = in;
-         end
          DRAIN_SORTER:
          begin
-            out = feedbackBuf;
+            let topHalf <- topHalfUnit.getCurrTop;
+            out = topHalf;
+            // $display("Drain Sorter  ", fshow(out));
          end
          MERGE:
          begin
-            let cleaned = halfClean(vec(feedbackBuf,in), descending);
+            let topHalf <- topHalfUnit.getCurrTop;
+            // $display("MergeWith topHalf ", fshow(topHalf));
+            let cleaned = halfClean(vec(topHalf,in), ascending);
             out = cleaned[0];
-            feedback = cleaned[1];
          end
       endcase
       sort_bitonic_pipeline.inPipe.enq(out);
-      // bitonicOutQ.enq(out);
-      feedbackBuf <= sorter(feedback);
    endrule
-   
-   // function sortOut(x) = sort_bitonic(x, descending);
+
+   // function sortOut(x) = sort_bitonic(x, ascending);
    interface inStreams = zipWith(toVariableStreamIn, map(toPipeIn,vInQ), map(toPipeIn, vLenQ));
    // interface outStream = toVariableStreamOut(mapPipe(sorter, toPipeOut(bitonicOutQ)), toPipeOut(lenOutQ));
    interface outStream = toVariableStreamOut(sort_bitonic_pipeline.outPipe, toPipeOut(lenOutQ)); 

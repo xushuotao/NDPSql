@@ -60,7 +60,7 @@ interface MultiMergeNFold#(numeric type way,
 endinterface
 
 
-module mkMergeNFoldBRAM#(Bool descending)(MergeNFold#(iType, vSz, sortedSz, n, fanIn)) provisos(
+module mkMergeNFoldBRAM#(Bool ascending)(MergeNFold#(iType, vSz, sortedSz, n, fanIn)) provisos(
    Bits#(Vector::Vector#(vSz, iType), a__),
    Div#(sortedSz, vSz, blockLines),
    NumEq#(blockLines, TExp#(TLog#(blockLines))), // blockLines is power of two
@@ -74,18 +74,22 @@ module mkMergeNFoldBRAM#(Bool descending)(MergeNFold#(iType, vSz, sortedSz, n, f
    Add#(fanIn, b__, TMul#(TDiv#(fanIn, 2), 2)),
    Add#(1, f__, TMul#(TDiv#(fanIn, 2), 2)),
    Add#(1, g__, fanIn),
-   Pipe::FunnelPipesPipelined#(1, fanIn, Bit#(TAdd#(TLog#(TDiv#(totalLines,blockLines)), 1)), 1)
+   Pipe::FunnelPipesPipelined#(1, fanIn, Bit#(TAdd#(TLog#(TDiv#(totalLines,blockLines)), 1)), 1),
+   Pipe::FunnelPipesPipelined#(1, fanIn, Tuple2#(MemoryIfc::MemoryRequest#(Bit#(aw), Vector::Vector#(vSz, iType)), 
+                                                 Bit#(TLog#(fanIn))), 1)
    );
    BRAM_Configure cfg = defaultValue;
    Integer totalLns = valueOf(totalLines);
    cfg.memorySize = totalLns + totalLns/valueOf(fanIn);
+   // cfg.latency = 2;
+   // cfg.outFIFODepth = 4;
    BRAM2Port#(Bit#(aw), Vector#(vSz, iType)) bram <- mkBRAM2Server(cfg);
    Vector#(2, MemoryServer#(Bit#(aw), Vector#(vSz, iType))) mems <- mapM(mkMemServer, vec(bram.portA, bram.portB));
-   let merger <- mkMergeNFold(descending, mems);
+   let merger <- mkMergeNFold(ascending, mems);
    return merger;
 endmodule
 
-module mkMultiMergeNFoldBRAM#(Bool descending)(MultiMergeNFold#(way, iType, vSz, sortedSz, n, fanIn)) provisos(
+module mkMultiMergeNFoldBRAM#(Bool ascending)(MultiMergeNFold#(way, iType, vSz, sortedSz, n, fanIn)) provisos(
    Bits#(Vector::Vector#(vSz, iType), a__),
    Div#(sortedSz, vSz, blockLines),
    NumEq#(blockLines, TExp#(TLog#(blockLines))), // blockLines is power of two
@@ -99,7 +103,9 @@ module mkMultiMergeNFoldBRAM#(Bool descending)(MultiMergeNFold#(way, iType, vSz,
    Add#(fanIn, b__, TMul#(TDiv#(fanIn, 2), 2)),
    Add#(1, f__, TMul#(TDiv#(fanIn, 2), 2)),
    Add#(1, g__, fanIn),
-   Pipe::FunnelPipesPipelined#(1, fanIn, Bit#(TAdd#(TLog#(TDiv#(totalLines,blockLines)), 1)), 1)
+   Pipe::FunnelPipesPipelined#(1, fanIn, Bit#(TAdd#(TLog#(TDiv#(totalLines,blockLines)), 1)), 1),
+   Pipe::FunnelPipesPipelined#(1, fanIn, Tuple2#(MemoryIfc::MemoryRequest#(Bit#(aw), Vector::Vector#(vSz, iType)), 
+                                                 Bit#(TLog#(fanIn))), 1)
    );
    
    function Vector#(2, Server#(BRAMRequest#(addrT, dataT), dataT)) toVec(BRAM2Port#(addrT, dataT) bram);
@@ -112,7 +118,7 @@ module mkMultiMergeNFoldBRAM#(Bool descending)(MultiMergeNFold#(way, iType, vSz,
    Vector#(way, BRAM2Port#(Bit#(aw), Vector#(vSz, iType))) bram <- replicateM(mkBRAM2Server(cfg));
    Vector#(way, Vector#(2, MemoryServer#(Bit#(aw), Vector#(vSz, iType)))) mems = ?;//<- mapM(mkMemServer, toVec(bram[i]));
    for (Integer i = 0; i < valueOf(way); i = i + 1) mems[i] <- mapM(mkMemServer, toVec(bram[i]));
-   Vector#(way, MergeNFold#(iType, vSz, sortedSz, n, fanIn)) merger <- zipWithM(mkMergeNFold, replicate(descending), mems);
+   Vector#(way, MergeNFold#(iType, vSz, sortedSz, n, fanIn)) merger <- zipWithM(mkMergeNFold, replicate(ascending), mems);
    
    Reg#(Bit#(TLog#(TMul#(TDiv#(sortedSz,vSz), n)))) beatCnt_in <- mkReg(0);
    Reg#(Bit#(TLog#(way))) waySel_in <- mkReg(0);
@@ -142,6 +148,7 @@ module mkMultiMergeNFoldBRAM#(Bool descending)(MultiMergeNFold#(way, iType, vSz,
    interface PipeOut outPipe;
       method Vector#(vSz, iType) first = merger[waySel_out].outPipe.first;
       method Action deq;
+         merger[waySel_out].outPipe.deq;
          if ( beatCnt_out == fromInteger(valueOf(TMul#(TDiv#(sortedSz,vSz),n))-1) )begin
             beatCnt_out <= 0;
             if ( waySel_out == fromInteger(valueOf(way)-1)) begin
@@ -161,7 +168,7 @@ endmodule
 
 
 
-module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#(vSz, iType))) mems) (MergeNFold#(iType, vSz, sortedSz, n, fanIn)) provisos(
+module mkMergeNFold#(Bool ascending, Vector#(2, MemoryServer#(Bit#(aw), Vector#(vSz, iType))) mems) (MergeNFold#(iType, vSz, sortedSz, n, fanIn)) provisos(
    Bits#(Vector::Vector#(vSz, iType), a__),
    Div#(sortedSz, vSz, blockLines),
    NumEq#(blockLines, TExp#(TLog#(blockLines))), // blockLines is power of two
@@ -179,7 +186,9 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
    Add#(fanIn, b__, TMul#(TDiv#(fanIn, 2), 2)),
    Add#(1, e__, TMul#(TDiv#(fanIn, 2), 2)),
    Add#(1, f__, fanIn),
-   Pipe::FunnelPipesPipelined#(1, fanIn, Bit#(TAdd#(TLog#(totalBlocks), 1)),1)
+   Pipe::FunnelPipesPipelined#(1, fanIn, Bit#(TAdd#(TLog#(totalBlocks), 1)),1),
+   Pipe::FunnelPipesPipelined#(1, fanIn, Tuple2#(MemoryIfc::MemoryRequest#(Bit#(aw), Vector::Vector#(vSz, iType)), 
+                                                 Bit#(TLog#(fanIn))), 1)
    );
    
    Reg#(blkIdT) blkId_init <- mkReg(0);
@@ -193,9 +202,10 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
          init <= True;
    endrule
    
-   Vector#(fanIn, FIFO#(Tuple2#(Maybe#(blkBurstT),blkIdT))) sortedBlockQs <- replicateM(mkSizedFIFO(valueOf(totalBlocks)));
+   //Vector#(fanIn, FIFO#(Tuple2#(Maybe#(blkBurstT),blkIdT))) sortedBlockQs <- replicateM(mkSizedFIFO(valueOf(totalBlocks)));
+   Vector#(fanIn, FIFO#(Tuple2#(Maybe#(blkBurstT),blkIdT))) sortedBlockQs <- replicateM(mkSizedBRAMFIFO(valueOf(totalBlocks)));
    
-   MergeNVar#(iType, vSz, fanIn) merger <- mkStreamingMergeNVar(descending, 0, 0);
+   MergeNVar#(iType, vSz, fanIn) merger <- mkStreamingMergeNVar(ascending, 0, 0);
    
    
    FIFOF#(Vector#(vSz, iType)) inQ <- mkFIFOF;
@@ -217,7 +227,7 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
    Vector#(fanIn, Reg#(blkLineT)) vLineCntRd <- replicateM(mkReg(0));
    FIFO#(Bit#(TLog#(fanIn))) destFanQ <- mkSizedFIFO(3);
    Integer bufSz = 3+valueOf(TLog#(vSz));
-   Vector#(fanIn, FIFOF#(Vector#(vSz, iType))) dataInBufs <- replicateM(mkSizedFIFOF(bufSz));
+   Vector#(fanIn, FIFOF#(Vector#(vSz, iType))) dataInBufs <- replicateM(mkSizedFIFOF(bufSz+1));
    OneToNRouter#(fanIn,Vector#(vSz, iType)) dataInRouter <- mkOneToNRouterPipelined;
    zipWithM_(mkConnection, takeOutPorts(dataInRouter), map(toPipeIn, dataInBufs));
    Vector#(fanIn, Array#(Reg#(Bit#(8)))) elemCnts <- replicateM(mkCReg(2, 0));
@@ -226,12 +236,10 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
    FunnelPipe#(1, fanIn, blkIdT, 1) blockReturnFunnel <- mkFunnelPipesPipelined(map(toPipeOut, blockReturnQs));
    mkConnection(blockReturnFunnel[0], toPipeIn(freeBlockQ));
    
-   FIFO#(MemoryRequest#(Bit#(aw), Vector#(vSz, iType))) memRdReqQ <- mkFIFO;
-   
-   rule memRdIssue;
-      let req <- toGet(memRdReqQ).get();
-      mems[1].request.put(req);
-   endrule
+   //FIFO#(MemoryRequest#(Bit#(aw), Vector#(vSz, iType))) memRdReqQ <- mkFIFO;
+
+   Vector#(fanIn, FIFOF#(Tuple2#(MemoryRequest#(Bit#(aw), Vector#(vSz, iType)),Bit#(TLog#(fanIn))))) memRdReqQs <- replicateM(mkFIFOF);
+   FunnelPipe#(1,fanIn,Tuple2#(MemoryRequest#(Bit#(aw),Vector#(vSz, iType)),Bit#(TLog#(fanIn))),1) memRdReqFunnel <- mkFunnelPipesPipelined(map(toPipeOut, memRdReqQs));
    
    for (Integer fanSelRd = 0; fanSelRd < valueOf(fanIn); fanSelRd = fanSelRd + 1) begin
       rule doMemReq if ( elemCnts[fanSelRd][1] < fromInteger(bufSz) );
@@ -241,8 +249,7 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
             merger.inStreams[fanSelRd].lenChannel.enq(unpack(zeroExtend(burst) << fromInteger(lgBlkLines)));
             // if (debug) $display("doMemReq, vLineCnt[%d] = %d, baseBlk = %d, blkBurst = ", fanSelRd, vLineCntRd[fanSelRd], baseBlk, fshow(blkBurst));      
          end
-         memRdReqQ.enq(MemoryRequest{addr: toAddr(baseBlk,vLineCntRd[fanSelRd]), datain: ?, write: False});
-         destFanQ.enq(fromInteger(fanSelRd));
+         memRdReqQs[fanSelRd].enq(tuple2(MemoryRequest{addr: toAddr(baseBlk,vLineCntRd[fanSelRd]), datain: ?, write: False},fromInteger(fanSelRd)));
          vLineCntRd[fanSelRd] <= vLineCntRd[fanSelRd] + 1;
          if ( vLineCntRd[fanSelRd] == 0 ) begin
             if (debug) $display("doMemReq, vLineCnt[%d] = %d, baseBlk = %d, blkBurst = ", fanSelRd, vLineCntRd[fanSelRd], baseBlk, fshow(blkBurst));
@@ -254,7 +261,8 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
          end
       endrule
       
-      rule doMergeInStream;// if ( elemCnts[fanSelRd][0] > 0 );
+      
+      rule doMergeInStream;//if ( elemCnts[fanSelRd][0] > 0 );
          let d <- toGet(dataInBufs[fanSelRd]).get();
          // let d = dataInRouter.outPorts[fanSelRd].first;
          // dataInRouter.outPorts[fanSelRd].deq;
@@ -262,6 +270,15 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
          merger.inStreams[fanSelRd].dataChannel.enq(d);
       endrule
    end
+      
+   rule memRdIssue;
+      let {req, fanSel} = memRdReqFunnel[0].first;
+      memRdReqFunnel[0].deq;
+      mems[1].request.put(req);
+      destFanQ.enq(fanSel);
+   endrule
+
+
    
    rule doMemResp;
       let destFan <- toGet(destFanQ).get;
@@ -309,7 +326,7 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
    
    (* descending_urgency="doDeqInPipe, doMergeRespData_feedback" *)
       
-   rule doDeqInPipe if (init && inflightblks[0] < fromInteger(valueOf(n)));// && !burstLock[1]);
+   rule doDeqInPipe if (init && inflightblks[1] < fromInteger(valueOf(n)));// && !burstLock[1]);
       let d <- toGet(inQ).get;
       let blkId = currBlkId;
       if (lineCnt == 0 ) begin
@@ -321,7 +338,7 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
       if ( lineCnt == maxBound ) begin
          sortedBlockQs[fanSel].enq(tuple2(tagged Valid 1, blkId));
          fanSel <= fanSel + 1;
-         inflightblks[0] <= inflightblks[0] + 1;
+         inflightblks[1] <= inflightblks[1] + 1;
       end
       
       lineCnt <= lineCnt + 1;
@@ -351,7 +368,6 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
       lineCnt_mergeResp <= lineCnt_mergeResp + 1;
 
       mems[0].request.put(MemoryRequest{addr: toAddr(blkId, lineCnt_mergeResp), datain: d, write: True});
-
    endrule
    
    rule doMergeRespData_output (!isValid(tpl_1(reservedBlkQ.first)));
@@ -361,9 +377,9 @@ module mkMergeNFold#(Bool descending, Vector#(2, MemoryServer#(Bit#(aw), Vector#
       merger.outStream.dataChannel.deq;
       if ( lineCnt_mergeResp == maxBound ) begin
          reservedBlkQ.deq;
-         inflightblks[1] <= inflightblks[1] - 1;
+         inflightblks[0] <= inflightblks[0] - 1;
       end
-      dynamicAssert(inflightblks[1]>0, "inflightblks should not go below 0");
+      dynamicAssert(inflightblks[0]>0, "inflightblks should not go below 0");
       outQ.enq(d);
    endrule
 
