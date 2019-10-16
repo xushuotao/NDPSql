@@ -50,7 +50,7 @@ endinterface
 ///              which is streaming @ vSz elements per beat and sort them into a
 ///              sorted out-stream using merge-sort algorithm
 ////////////////////////////////////////////////////////////////////////////////
-module mkStreamingMergeSort#(Bool descending)(MergeSort#(iType, vSz, totalSz)) provisos(
+module mkStreamingMergeSort#(Bool ascending)(MergeSort#(iType, vSz, totalSz)) provisos(
    Div#(totalSz, vSz, n),
    MergeSort::RecursiveMerger#(iType, vSz, vSz, n),
    Bitonic::RecursiveBitonic#(vSz, iType),
@@ -61,9 +61,9 @@ module mkStreamingMergeSort#(Bool descending)(MergeSort#(iType, vSz, totalSz)) p
    );
    
    function Vector#(n, PipeIn#(Vector#(vSz, iType))) takeInPipes(MergeN#(iType, vSz, vSz, n) merger) = merger.inPipes;
-   function f_sort(d) = bitonic_sort(d, descending);
+   function f_sort(d) = bitonic_sort(d, ascending);
 
-   MergeN#(iType, vSz, vSz, n) mergerTree <- mkStreamingMergeN(descending);         
+   MergeN#(iType, vSz, vSz, n) mergerTree <- mkStreamingMergeN(ascending);         
 
    OneToNRouter#(n, Vector#(vSz, iType)) distributor  = ?;
    if ( valueOf(n) > 16 ) begin
@@ -71,7 +71,7 @@ module mkStreamingMergeSort#(Bool descending)(MergeSort#(iType, vSz, totalSz)) p
       zipWithM_(mkConnection, takeOutPorts(distributor), takeInPipes(mergerTree));
    end
    
-   StreamNode#(vSz, iType) sorter <- mkBitonicSort(descending);
+   StreamNode#(vSz, iType) sorter <- mkBitonicSort(ascending);
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
    rule doEnqMergeTree;
       let d = sorter.outPipe.first;
@@ -107,80 +107,80 @@ typeclass RecursiveMerger#(type iType,
 ///              a single sorted out-stream of N*sortedSz elements with a binary
 ///              merge-tree
 ////////////////////////////////////////////////////////////////////////////////
-   module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(iType,vSz,sortedSz,n));
 endtypeclass
 
 (* synthesize *)
-module mkStreamingMerge2_32bit_1#(Bool descending)(MergeN#(UInt#(32),8,8,2));
-   let merger <- mkStreamingMerge2(descending);
+module mkStreamingMerge2_32bit_1#(Bool ascending)(MergeN#(UInt#(32),8,8,2));
+   let merger <- mkStreamingMerge2(ascending);
    return merger;
 endmodule
 instance RecursiveMerger#(UInt#(32),8,8,2);
-   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,8,2));
-      let merger <- mkStreamingMerge2_32bit_1(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(UInt#(32),8,8,2));
+      let merger <- mkStreamingMerge2_32bit_1(ascending);
       return merger;
    endmodule
 endinstance
 
 (* synthesize *)
-module mkStreamingMerge2_32bit_2#(Bool descending)(MergeN#(UInt#(32),8,16,2));
-   let merger <- mkStreamingMerge2(descending);
+module mkStreamingMerge2_32bit_2#(Bool ascending)(MergeN#(UInt#(32),8,16,2));
+   let merger <- mkStreamingMerge2(ascending);
    return merger;
 endmodule
 instance RecursiveMerger#(UInt#(32),8,16,2);
-   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,16,2));
-      let merger <- mkStreamingMerge2_32bit_2(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(UInt#(32),8,16,2));
+      let merger <- mkStreamingMerge2_32bit_2(ascending);
       return merger;
    endmodule
 endinstance
 
 
 (* synthesize *)
-module mkStreamingMerge2_32bit_4#(Bool descending)(MergeN#(UInt#(32),8,32,2));
-   let merger <- mkStreamingMerge2(descending);
+module mkStreamingMerge2_32bit_4#(Bool ascending)(MergeN#(UInt#(32),8,32,2));
+   let merger <- mkStreamingMerge2(ascending);
    return merger;
 endmodule
 instance RecursiveMerger#(UInt#(32),8,32,2);
-   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,32,2));
-      let merger <- mkStreamingMerge2_32bit_4(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(UInt#(32),8,32,2));
+      let merger <- mkStreamingMerge2_32bit_4(ascending);
       return merger;
    endmodule
 endinstance
 
 (* synthesize *)
-module mkStreamingMerge2_32bit_8#(Bool descending)(MergeN#(UInt#(32),8,64,2));
-   let merger <- mkStreamingMerge2(descending);
+module mkStreamingMerge2_32bit_8#(Bool ascending)(MergeN#(UInt#(32),8,64,2));
+   let merger <- mkStreamingMerge2(ascending);
    return merger;
 endmodule
 instance RecursiveMerger#(UInt#(32),8,64,2);
-   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,64,2));
-      let merger <- mkStreamingMerge2_32bit_8(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(UInt#(32),8,64,2));
+      let merger <- mkStreamingMerge2_32bit_8(ascending);
       return merger;
    endmodule
 endinstance
 
 
 (* synthesize *)
-module mkStreamingMerge2_32bit_16#(Bool descending)(MergeN#(UInt#(32),8,128,2));
-   let merger <- mkStreamingMerge2(descending);
+module mkStreamingMerge2_32bit_16#(Bool ascending)(MergeN#(UInt#(32),8,128,2));
+   let merger <- mkStreamingMerge2(ascending);
    return merger;
 endmodule
 instance RecursiveMerger#(UInt#(32),8,128,2);
-   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,128,2));
-      let merger <- mkStreamingMerge2_32bit_16(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(UInt#(32),8,128,2));
+      let merger <- mkStreamingMerge2_32bit_16(ascending);
       return merger;
    endmodule
 endinstance
 
 
 (* synthesize *)
-module mkStreamingMerge2_32bit_32#(Bool descending)(MergeN#(UInt#(32),8,256,2));
-   let merger <- mkStreamingMerge2(descending);
+module mkStreamingMerge2_32bit_32#(Bool ascending)(MergeN#(UInt#(32),8,256,2));
+   let merger <- mkStreamingMerge2(ascending);
    return merger;
 endmodule
 instance RecursiveMerger#(UInt#(32),8,256,2);
-   module mkStreamingMergeN#(Bool descending)(MergeN#(UInt#(32),8,256,2));
-      let merger <- mkStreamingMerge2_32bit_32(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(UInt#(32),8,256,2));
+      let merger <- mkStreamingMerge2_32bit_32(ascending);
       return merger;
    endmodule
 endinstance
@@ -197,8 +197,8 @@ instance RecursiveMerger#(iType,vSz,sortedSz,2) provisos(
    FShow#(iType),
    TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
    );
-   module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,2));
-      Merge2#(iType,vSz,sortedSz) merger <- mkStreamingMerge2(descending);
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(iType,vSz,sortedSz,2));
+      Merge2#(iType,vSz,sortedSz) merger <- mkStreamingMerge2(ascending);
       return merger;
    endmodule
 endinstance
@@ -218,13 +218,13 @@ instance RecursiveMerger#(iType,vSz,sortedSz,n) provisos (
    FShow#(iType),
    TopHalfUnit::TopHalfUnitInstance#(vSz, iType)
 );
-   module mkStreamingMergeN#(Bool descending)(MergeN#(iType,vSz,sortedSz,n));
-      Vector#(TDiv#(n,2), Merge2#(iType, vSz, sortedSz)) mergers <- replicateM(mkStreamingMerge2(descending));
+   module mkStreamingMergeN#(Bool ascending)(MergeN#(iType,vSz,sortedSz,n));
+      Vector#(TDiv#(n,2), Merge2#(iType, vSz, sortedSz)) mergers <- replicateM(mkStreamingMerge2(ascending));
    
       function PipeOut#(Vector#(vSz,iType)) getPipeOut(Merge2#(iType, vSz, sortedSz) ifc) = ifc.outPipe;
       function getPipeIn(ifc) = ifc.inPipes;
    
-      MergeN#(iType, vSz, TMul#(sortedSz,2), TDiv#(n,2)) mergeN_2 <- mkStreamingMergeN(descending);
+      MergeN#(iType, vSz, TMul#(sortedSz,2), TDiv#(n,2)) mergeN_2 <- mkStreamingMergeN(ascending);
 
       zipWithM_(mkConnection, map(getPipeOut,mergers), mergeN_2.inPipes);
    
@@ -244,7 +244,7 @@ typedef MergeN#(iType, vSz, sortedSz, 2) Merge2#(type iType,
                                                  numeric type sortedSz); 
 
 typedef enum {DRAIN_IN, DRAIN_SORTER, MERGE} Scenario deriving(Bits, Eq, FShow);
-module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provisos (
+module mkStreamingMerge2#(Bool ascending)(Merge2#(iType, vSz, sortedSz)) provisos (
    Bits#(Vector::Vector#(vSz, iType), a__),
    Add#(1, c__, vSz),
    Div#(sortedSz, vSz, totalbeats),
@@ -266,12 +266,12 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
    
    Vector#(2, Reg#(Bit#(TLog#(TAdd#(totalbeats,1))))) vInCnt <- replicateM(mkReg(fromInteger(initCnt)));
    
-   StreamNode#(vSz, iType) sort_bitonic_pipeline <- mkSortBitonic(descending);
+   StreamNode#(vSz, iType) sort_bitonic_pipeline <- mkSortBitonic(ascending);
    TopHalfUnit#(vSz, iType) topHalfUnit <- mkTopHalfUnit;
    
    function gtZero(cnt)=(cnt > 0);
    function minusOne(x)=x-1;
-   function sorter(x) = sort_bitonic(x, descending);   
+   function sorter(x) = sort_bitonic(x, ascending);   
    function doGet(x) = x.get;
 
    // Note: selectedInQ has to be PipelineFIFO to avoid rightOperand to be
@@ -349,13 +349,13 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
          selectedInQ.enq(tuple2(DRAIN_SORTER, ?));
       end
       else begin
-         prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), descending);
+         prevTail <= tagged Valid getTop(vec(prevTail_d, last(in)), ascending);
          topHalfUnit.enqData(in, Normal);
          selectedInQ.enq(tuple2(MERGE, in));
          if ( nextPortSel matches tagged Valid .sel ) begin
             portSel <= sel;
          end
-         else if ( isSorted(vec(prevTail_d, last(in)), descending) ) begin
+         else if ( isSorted(vec(prevTail_d, last(in)), ascending) ) begin
             portSel <= ~portSel;
          end
       end
@@ -378,7 +378,7 @@ module mkStreamingMerge2#(Bool descending)(Merge2#(iType, vSz, sortedSz)) provis
          begin
             let topHalf <- topHalfUnit.getCurrTop;
             // $display("MergeWith topHalf ", fshow(topHalf));
-            let cleaned = halfClean(vec(topHalf,in), descending);
+            let cleaned = halfClean(vec(topHalf,in), ascending);
             out = cleaned[0];
          end
       endcase
