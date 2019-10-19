@@ -126,7 +126,7 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
    Vector#(numTags, Array#(Reg#(Bit#( TLog#(TAdd#(tagBufSz,1)) ) )) ) credit <- replicateM(mkCReg(2, fromInteger(valueOf(tagBufSz))));
    Vector#(numTags, FIFOF#(SortedPacket#(vSz, iType))) buffer <- replicateM(mkSizedBRAMFIFOF(valueOf(tagBufSz)));
    // FIFOF#(Tuple5#(Vector#(vSz, iType), Bool, Bool, Bool, tagT)) selectedInQ <- mkUGSizedFIFOF(valueOf(vSz));
-   DelayPipe#(vSz, Tuple5#(Vector#(vSz, iType), Bool, Bool, Bool, tagT)) selectedInQ <- mkDelayPipe;
+   DelayPipe#(vSz, Tuple4#(Vector#(vSz, iType), Bool, Bool, Bool)) selectedInQ <- mkDelayPipe;
    
    String tab = "";
    for ( Integer l = 0; l < level; l = l + 1 ) tab = tab + "\t";
@@ -184,7 +184,7 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
          
          if (debug) $display("(%t) %s[%0d-%0d]In:: isFirst = %d, firstOut = %d, lastPacket = %d, portSel = %d", $time, tab, level, i, isFirst, !isFirst&&packet.first, lastPacket, portSel[i]);
          topHalfUnit.enqData(packet.d, isFirst?Init:Normal, fromInteger(i));
-         selectedInQ.enq(tuple5(packet.d, isFirst, !isFirst&&packet.first, lastPacket, fromInteger(i)));
+         selectedInQ.enq(tuple4(packet.d, isFirst, !isFirst&&packet.first, lastPacket));//, fromInteger(i)));
       endrule
    end
    
@@ -201,7 +201,7 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
    (* fire_when_enabled *)//, no_implicit_conditions *)
    rule doPreHalfClean if ( selectedInQ.notEmpty );
       let {currTop, tag} = topHalfUnit.currTop.first;      
-      let {in, firstPacket, firstOut, lastPacket, tagIn} = selectedInQ.first;
+      let {in, firstPacket, firstOut, lastPacket} = selectedInQ.first;
       selectedInQ.deq;
       topHalfUnit.currTop.deq;
       
