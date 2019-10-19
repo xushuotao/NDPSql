@@ -68,6 +68,7 @@ typeclass RecursiveBitonic#(numeric type n, type itype);
    
    module mkBitonicSort#(Bool ascending)(StreamNode#(n, itype));
    module mkSortBitonic#(Bool ascending)(StreamNode#(n, itype));
+   module mkUGSortBitonic#(Bool ascending)(StreamNode#(n, itype));
    module mkBitonicMerge#(Bool ascending)(StreamNode#(n, itype));
 endtypeclass
 
@@ -89,6 +90,14 @@ instance RecursiveBitonic#(2, itype) provisos(Ord#(itype), Bits#(Vector::Vector#
       interface PipeIn inPipe = mapPipeIn(f, toPipeIn(fifo));
       interface PipeOut outPipe = toPipeOut(fifo);
    endmodule
+   
+   module mkUGSortBitonic#(Bool ascending)(StreamNode#(2, itype));
+      FIFOF#(Vector#(2, itype)) fifo <- mkUGFIFOF1;
+      function f(x) = cas(x, ascending);
+      interface PipeIn inPipe = mapPipeIn(f, toPipeIn(fifo));
+      interface PipeOut outPipe = toPipeOut(fifo);
+   endmodule
+
 
    module mkBitonicMerge#(Bool ascending)(StreamNode#(2, itype));
       FIFOF#(Vector#(2, itype)) fifo <- mkFIFOF;
@@ -222,7 +231,65 @@ instance RecursiveBitonic#(n, itype)
       //    method Bool notEmpty = last(dataPipe).notEmpty;
       // endinterface
    endmodule
+   
+   
 
+module mkUGSortBitonic#(Bool ascending)(StreamNode#(n, itype));
+   Vector#(TLog#(n), Reg#(Vector#(n, itype))) stageData <- replicateM(mkRegU);
+   Vector#(TLog#(n), Reg#(Bool)) valid <- replicateM(mkReg(False));
+   // Vector#(TLog#(n), FIFOF#(Vector#(n, itype))) stageData <- replicateM(mkUGFIFOF);
+   for (Integer i = 1; i < valueOf(TLog#(n)); i = i + 1 )begin
+      (* fire_when_enabled, no_implicit_conditions *)
+      rule doStage;//if (stageData[i-1].notEmpty);
+         Integer stride = valueOf(n)/(2**(i+1));
+         Vector#(n, itype) data = stageData[i-1];
+
+         for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
+            for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
+               Integer idx = (j*valueOf(n)/(2**i))+k;
+               let {a, b} = cas_tpl(tuple2(data[idx],data[idx+stride]), ascending);
+               data[idx] = a;
+               data[idx+stride] = b;
+            end
+         end
+         stageData[i]._write(data);
+         
+         valid[i] <= valid[i-1];
+      endrule
+   end
+   
+   RWire#(Vector#(n, itype)) inWire <- mkRWire;
+   
+   rule doFirstStage;
+      let in = fromMaybe(?, inWire.wget());
+      Integer stride = valueOf(n)/2;
+      Vector#(n, itype) data = ?;
+      for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
+         let idx = k;
+         let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), ascending);
+         data[idx] = a;
+         data[idx+stride] = b;
+      end
+      stageData[0]._write(data);
+      
+      valid[0] <= isValid(inWire.wget());
+   endrule
+
+   
+   interface PipeIn inPipe;
+      method Action enq(Vector#(n, itype) in);
+         inWire.wset(in);
+      endmethod
+      method Bool notFull = True;
+   endinterface
+   interface PipeOut outPipe;
+      method Bool notEmpty = last(valid)._read();
+      method Vector#(n, itype) first = last(stageData)._read();
+      method Action deq=noAction;
+   endinterface
+endmodule
+
+   
    module mkBitonicMerge#(Bool ascending)(StreamNode#(n, itype));
       //Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkFIFOF);
       Vector#(2, FIFOF#(Vector#(TDiv#(n,2), itype))) inFifos <- replicateM(mkPipelineFIFOF);
@@ -347,4 +414,5 @@ function Vector#(2, Vector#(TDiv#(cnt,2), itype)) splitHalf(Vector#(cnt, itype) 
    Vector#(TDiv#(cnt,2), itype) top = drop(in);
    return vec(bot,top);
 endfunction
+
 

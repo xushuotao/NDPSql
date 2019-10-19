@@ -10,6 +10,8 @@ bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ 
 
 targets := Bitonic BitonicPipelined StreamingMerge2 StreamingMergeSort StreamingMerge2Var MergeNFoldBRAM
 
+targets_smt := MergeSMT2 StreamingMergeSortSMT
+
 src = $(wildcard *.bsv) $(wildcard *.cpp)
 
 $(targets): $(src)
@@ -18,13 +20,18 @@ $(targets): $(src)
 	bsc $(bscflags) -sim -u -g mk$@Test TestSort.bsv
 	bsc $(bscflags) -sim -u -e mk$@Test -o $@ bdpi_sort.cpp
 
+$(targets_smt): $(src)
+	touch ConnectalProjectConfig.bsv
+	mkdir -p build_dir/$@
+	bsc $(bscflags) -sim -u -g mk$@Test TestSortSMT.bsv
+	bsc $(bscflags) -sim -u -e mk$@Test -o $@ bdpi_sort.cpp
 
-all: $(targets)
 
+all: $(targets) $(targets_smt)
 
 clean:
-	rm -rf build_dir $(targets) *.so *.o *.sched ConnectalProjectConfig.bsv
+	rm -rf build_dir $(targets) $(targets_smt) *.so *.o *.sched ConnectalProjectConfig.bsv
 
-.PHONY: $(targets)
+.PHONY: $(targets) $(targets_smt)
 .DEFAULT_GOAL := all
 

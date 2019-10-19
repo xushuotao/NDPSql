@@ -6,6 +6,7 @@ import GetPut::*;
 import SpecialFIFOs::*;
 import RegFile::*;
 import BuildVector::*;
+import Pipe::*;
 
 Bool debug = False;
 
@@ -13,12 +14,14 @@ typedef enum {Init, Normal} Op deriving (Bits, FShow, Eq);
 
 interface TopHalfUnitSMT#(numeric type numTags, numeric type vSz, type iType);
    method Action enqData(Vector#(vSz, iType) in, Op op, UInt#(TLog#(numTags)) tag);
-   method ActionValue#(Tuple2#(Vector#(vSz, iType), UInt#(TLog#(numTags)))) getCurrTop;
+   
+   interface PipeOut#(Tuple2#(Vector#(vSz, iType), UInt#(TLog#(numTags)))) currTop;
 endinterface
 
 
 typeclass TopHalfUnitSMTInstance#(numeric type numTags, numeric type vSz, type iType);
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType));
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType));
 endtypeclass
 
 instance TopHalfUnitSMTInstance#(numTags, vSz, iType) provisos (
@@ -30,6 +33,10 @@ instance TopHalfUnitSMTInstance#(numTags, vSz, iType) provisos (
    FShow#(iType));
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType));
       let m_<- mkTopHalfUnitSMTImpl(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType));
+      let m_<- mkUGTopHalfUnitSMTImpl(ascending);
       return m_;
    endmodule
 endinstance
@@ -54,6 +61,7 @@ endtypeclass
 instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
    Bits#(Vector::Vector#(1, iType), a__),
    Add#(1, b__, vSzMax),
+   FShow#(iType),
    Ord#(iType));
    module mkTopHalfStage#(Bool ascending)(TopHalfStage#(numTags, 1, vSzMax, iType));
    
@@ -125,26 +133,28 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
       (* fire_when_enabled, no_implicit_conditions*)
       rule doStage;
          let {tag, in, tailPtr, op, valid} = prevStage.nextReq;
-         let prevTop = prevStage.read(tag);
          
-         let currTop = currTopCtxt.sub(tag);
-         if ( op == Normal ) begin
-            iType tailItem = getTop(vec(currTop[tailPtr], last(in)), ascending);
-            if ( isSorted(vec(currTop[tailPtr],last(in)), ascending)) begin
-               nextIn <= rotateBy(in, 1);
-               nextTailPtr <= zeroExtend(tailPtr) + 1;
+         if ( valid ) begin
+            let prevTop = prevStage.read(tag);
+         
+            let currTop = currTopCtxt.sub(tag);
+            if ( op == Normal ) begin
+               iType tailItem = getTop(vec(currTop[tailPtr], last(in)), ascending);
+               if ( isSorted(vec(currTop[tailPtr],last(in)), ascending)) begin
+                  nextIn <= rotateBy(in, 1);
+                  nextTailPtr <= zeroExtend(tailPtr) + 1;
+               end
+               else begin
+                  nextIn <= in;
+                  nextTailPtr <= zeroExtend(tailPtr);
+               end
+               currTopCtxt.upd(tag, cons(tailItem, prevTop));
             end
             else begin
+               currTopCtxt.upd(tag, drop(in));
                nextIn <= in;
-               nextTailPtr <= zeroExtend(tailPtr);
             end
-            currTopCtxt.upd(tag, cons(tailItem, prevTop));
          end
-         else begin
-            currTopCtxt.upd(tag, drop(in));
-            nextIn <= in;
-         end
-         
          nextTag <= tag;
          nextOp <= op;
          nextValid <= valid;
@@ -205,13 +215,66 @@ module mkTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType
       inWire.wset(tuple3(in, op, tag));
    endmethod
    
-   method ActionValue#(Tuple2#(Vector#(vSz, iType), tagT)) getCurrTop if ( resultQ.notEmpty);
-      credit[0] <= credit[0] + 1;
-      let v <- toGet(resultQ).get;
-      return v;
-   endmethod
-   
+   // method ActionValue#(Tuple2#(Vector#(vSz, iType), tagT)) getCurrTop if ( resultQ.notEmpty);
+   //    credit[0] <= credit[0] + 1;
+   //    let v <- toGet(resultQ).get;
+   //    return v;
+   // endmethod
+   interface PipeOut currTop;
+      method Bool notEmpty = resultQ.notEmpty;
+      method Action deq if ( resultQ.notEmpty);
+         resultQ.deq;
+         credit[0] <= credit[0] + 1;
+      endmethod
+      method Tuple2#(Vector#(vSz, iType), tagT) first = resultQ.first;
+   endinterface 
 endmodule
+
+module mkUGTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType)) provisos(
+   Alias#(UInt#(TLog#(numTags)), tagT),
+   Bits#(Vector::Vector#(vSz, iType), a__),
+   Add#(1, b__, vSz),
+   Ord#(iType),
+   Bounded#(iType),
+   FShow#(iType),
+   TopHalfUnitSMT::TopHalfStageInstance#(numTags, vSz, vSz, iType));
+
+   Reg#(UInt#(TLog#(TAdd#(vSz,2)))) credit[2] <- mkCReg(2, fromInteger(valueOf(vSz)+1));   
+   FIFOF#(Tuple2#(Vector#(vSz, iType), tagT)) resultQ <- mkUGSizedFIFOF(valueOf(vSz)+1);
+   
+   TopHalfStage#(numTags, vSz, vSz, iType) topHalfUnitPipeline <- mkTopHalfStage(ascending);
+   
+   RWire#(Tuple3#(Vector#(vSz, iType), Op, tagT)) inWire <- mkRWire;
+   
+   (* fire_when_enabled, no_implicit_conditions*)
+   rule firstStage;
+      if ( inWire.wget matches tagged Valid {.in, .op, .tag} ) begin
+         topHalfUnitPipeline.currReq(tag, in, ?, op, True);
+      end
+      else begin
+         topHalfUnitPipeline.currReq(?, ?, ?, ?, False);
+      end
+   endrule
+   
+   method Action enqData(Vector#(vSz, iType) in, Op op, tagT tag);
+      inWire.wset(tuple3(in, op, tag));
+   endmethod
+   interface PipeOut currTop;
+      method Bool notEmpty;
+         let {tag, in, tail, op, valid} = topHalfUnitPipeline.nextReq;
+         return valid;
+      endmethod
+      method Action deq;
+         noAction;
+      endmethod
+      method Tuple2#(Vector#(vSz, iType), tagT) first;
+         let {tag, in, tail, op, valid} = topHalfUnitPipeline.nextReq;
+         let d = topHalfUnitPipeline.read(tag);
+         return tuple2(d, tag);
+      endmethod
+   endinterface 
+endmodule
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Synthesis Boundaries
@@ -221,9 +284,18 @@ module mkTopHalfUnitSMT_16_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(16, 8, 
    let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
+(* synthesize *)
+module mkUGTopHalfUnitSMT_16_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
+   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
 instance TopHalfUnitSMTInstance#(16, 8, UInt#(32));
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
       let m_ <- mkTopHalfUnitSMT_16_uint32_synth(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
+      let m_ <- mkUGTopHalfUnitSMT_16_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
@@ -233,9 +305,18 @@ module mkTopHalfUnitSMT_8_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(8, 8, UI
    let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
+(* synthesize *)
+module mkUGTopHalfUnitSMT_8_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
+   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
 instance TopHalfUnitSMTInstance#(8, 8, UInt#(32));
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
       let m_ <- mkTopHalfUnitSMT_8_uint32_synth(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
+      let m_ <- mkUGTopHalfUnitSMT_8_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
@@ -245,9 +326,18 @@ module mkTopHalfUnitSMT_4_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(4, 8, UI
    let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
+(* synthesize *)
+module mkUGTopHalfUnitSMT_4_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
+   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
 instance TopHalfUnitSMTInstance#(4, 8, UInt#(32));
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
       let m_ <- mkTopHalfUnitSMT_4_uint32_synth(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
+      let m_ <- mkUGTopHalfUnitSMT_4_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
@@ -257,9 +347,18 @@ module mkTopHalfUnitSMT_2_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(2, 8, UI
    let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
+(* synthesize *)
+module mkUGTopHalfUnitSMT_2_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
+   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
 instance TopHalfUnitSMTInstance#(2, 8, UInt#(32));
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
       let m_ <- mkTopHalfUnitSMT_2_uint32_synth(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
+      let m_ <- mkUGTopHalfUnitSMT_2_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
@@ -269,9 +368,18 @@ module mkTopHalfUnitSMT_1_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(1, 8, UI
    let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
    return tophalfunit;
 endmodule
+(* synthesize *)
+module mkUGTopHalfUnitSMT_1_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
+   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
 instance TopHalfUnitSMTInstance#(1, 8, UInt#(32));
    module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
       let m_ <- mkTopHalfUnitSMT_1_uint32_synth(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
+      let m_ <- mkUGTopHalfUnitSMT_1_uint32_synth(ascending);
       return m_;
    endmodule
 endinstance
