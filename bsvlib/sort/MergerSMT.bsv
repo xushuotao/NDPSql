@@ -111,7 +111,7 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
    // NumAlias#(TExp#(TLog#(tagBufSz)), tagBufSz) // tagBufSz is power of 2
    );
    
-   Vector#(numTags, Vector#(2, FIFOF#(SortedPacket#(vSz, iType)))) inQs <- replicateM(replicateM(mkPipelineFIFOF));
+   Vector#(numTags, Vector#(2, FIFOF#(SortedPacket#(vSz, iType)))) inQs <- replicateM(replicateM(mkFIFOF));
    
    Vector#(numTags, Vector#(2, Reg#(Bool))) firstReg <- replicateM(replicateM(mkReg(False)));
    Vector#(numTags, Vector#(2, Reg#(Bool))) lastReg <- replicateM(replicateM(mkReg(False)));

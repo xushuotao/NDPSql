@@ -10,7 +10,7 @@ bscflags=-aggressive-conditions -show-schedule -check-assert -bdir build_dir/$@ 
 
 targets := Bitonic BitonicPipelined StreamingMerge2 StreamingMergeSort StreamingMerge2Var MergeNFoldBRAM
 
-targets_smt := MergeSMT2 StreamingMergeSortSMT
+targets_smt := MergeSMT2 StreamingMergeSortSMT MergeNFoldSMTBRAM
 
 src = $(wildcard *.bsv) $(wildcard *.cpp)
 

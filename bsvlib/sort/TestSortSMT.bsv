@@ -472,8 +472,8 @@ typedef TDiv#(1024, 4) PageSz;
 typedef 1024 NumPages;                 
 typedef 32 FanIn;                 
                  
-module mkMergeNFoldBRAMTest(Empty);
-   MergeNFold#(UInt#(32), VecSz, PageSz, NumPages, FanIn) merger <- mkMergeNFoldBRAM(ascending);
+module mkMergeNFoldSMTBRAMTest(Empty);
+   MergeNFoldSMT#(UInt#(32), VecSz, PageSz, NumPages, FanIn) merger <- mkMergeNFoldBRAM(ascending);
 
    Integer testLen = 100;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));
@@ -564,7 +564,7 @@ module mkMergeNFoldBRAMTest(Empty);
       prevCycle <= cycle;
       
       if ( cycle - prevCycle != 1 && !(outBeat == 0)) begin
-         $display("FAIL: StreamingMerge2Var not streaming for a specific merge");
+         $display("FAIL: MergeNFoldSMTBRAM not streaming for a specific merge");
          // $finish();
       end
       
@@ -591,7 +591,7 @@ module mkMergeNFoldBRAMTest(Empty);
          prevMax <= ascending?minBound:maxBound;
          
          if ( expected !=  result) begin
-            $display("FAILED: StreamingMerge2Var result sum not as expected");
+            $display("FAILED: MergeNFoldSMTBRAM result sum not as expected");
             $display("result   = %d",  result);
             $display("expected = %d", expected);
             $finish;
@@ -600,7 +600,7 @@ module mkMergeNFoldBRAMTest(Empty);
             $display("TestPassed for testCnt = %d",resultCnt);
          end
          if ( resultCnt + 1 == fromInteger(testLen) ) begin
-            $display("PASSED: StreamingMerge2Var ");
+            $display("PASSED: MergeNFoldSMTBRAM ");
             $display("Throughput cycles for beat = (%d/%d) %d, log_fanIn_N = %d", cycle, sortedBeats*fromInteger(valueOf(NumPages)*testLen), cycle/(sortedBeats*fromInteger(valueOf(NumPages)*testLen)), log2(valueOf(NumPages))/log2(valueOf(FanIn)));
             $finish;
          end
