@@ -45,7 +45,8 @@ interface TopHalfStage#(numeric type numTags,
                         numeric type vSz,
                         numeric type vSzMax,
                         type iType);
-   method Vector#(TDiv#(vSz,1), iType) read(UInt#(TLog#(numTags)) tag);
+   method Vector#(TDiv#(vSz,1), iType) read;
+   //method Vector#(TDiv#(vSz,1), iType) read(UInt#(TLog#(numTags)) tag);
    method Tuple5#(UInt#(TLog#(numTags)), Vector#(vSzMax, iType), UInt#(TLog#(TAdd#(vSz, 1))), Op, Bool) nextReq;
    method Action currReq(UInt#(TLog#(numTags)) tag, Vector#(vSzMax, iType) in, UInt#(TLog#(vSz)) tailPtr, Op op, Bool valid);
 endinterface
@@ -66,6 +67,7 @@ instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
    module mkTopHalfStage#(Bool ascending)(TopHalfStage#(numTags, 1, vSzMax, iType));
    
       RegFile#(UInt#(TLog#(numTags)),Vector#(1,iType)) currTopCtxt <- mkRegFileFull;
+      Reg#(Vector#(1,iType)) readReg <- mkRegU;
    
       Reg#(Bool) nextValid <- mkReg(False);
       Reg#(Op) nextOp <- mkRegU;
@@ -73,8 +75,8 @@ instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
       Reg#(Vector#(vSzMax, iType)) nextIn <- mkRegU;
       Reg#(UInt#(TLog#(numTags))) nextTag <- mkRegU;
    
-      method Vector#(1, iType) read(UInt#(TLog#(numTags)) tag);
-         return currTopCtxt.sub(tag);
+      method Vector#(1, iType) read;//(UInt#(TLog#(numTags)) tag);
+         return readReg._read;//currTopCtxt.sub(0);
       endmethod
    
       method Tuple5#(UInt#(TLog#(numTags)), Vector#(vSzMax, iType), UInt#(1), Op, Bool) nextReq;
@@ -95,10 +97,12 @@ instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
                   nextTailPtr <= 0;
                end
                currTopCtxt.upd(tag, vec(tailItem));
+               readReg <= vec(tailItem);
             end
             else begin
                currTopCtxt.upd(tag, drop(in));
                nextIn <= in;
+               readReg <= drop(in);
             end
          end
          
@@ -123,7 +127,8 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
    module mkTopHalfStage#(Bool ascending)(TopHalfStage#(numTags, vSz, vSzMax, iType));
       TopHalfStage#(numTags, TSub#(vSz,1), vSzMax, iType) prevStage <- mkTopHalfStage(ascending);
       RegFile#(UInt#(TLog#(numTags)), Vector#(vSz, iType)) currTopCtxt <- mkRegFileFull;
-   
+      Reg#(Vector#(vSz, iType)) readReg <- mkRegU;
+         
       Reg#(Bool) nextValid <- mkReg(False);
       Reg#(Op) nextOp <- mkRegU;
       Reg#(UInt#(TLog#(TAdd#(vSz,1)))) nextTailPtr <- mkRegU;
@@ -135,7 +140,7 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
          let {tag, in, tailPtr, op, valid} = prevStage.nextReq;
          
          if ( valid ) begin
-            let prevTop = prevStage.read(tag);
+            let prevTop = prevStage.read;//(tag);
          
             let currTop = currTopCtxt.sub(tag);
             if ( op == Normal ) begin
@@ -149,10 +154,12 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
                   nextTailPtr <= zeroExtend(tailPtr);
                end
                currTopCtxt.upd(tag, cons(tailItem, prevTop));
+               readReg <= cons(tailItem, prevTop);
             end
             else begin
                currTopCtxt.upd(tag, drop(in));
                nextIn <= in;
+               readReg <= drop(in);
             end
          end
          nextTag <= tag;
@@ -160,8 +167,9 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
          nextValid <= valid;
       endrule
    
-      method Vector#(vSz, iType) read(UInt#(TLog#(numTags)) tag);
-         return currTopCtxt.sub(tag);
+      method Vector#(vSz, iType) read;//(UInt#(TLog#(numTags)) tag);
+         return readReg._read;
+         // return currTopCtxt.sub(tag);
       endmethod
    
       method Tuple5#(UInt#(TLog#(numTags)), Vector#(vSzMax, iType), UInt#(TLog#(TAdd#(vSz, 1))), Op, Bool) nextReq;
@@ -206,7 +214,7 @@ module mkTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iType
    rule doGetResult;
       let {tag, in, tail, op, valid} = topHalfUnitPipeline.nextReq;
       if ( valid ) begin
-         let d = topHalfUnitPipeline.read(tag);
+         let d = topHalfUnitPipeline.read;//(tag);
          resultQ.enq(tuple2(d, tag));
       end
    endrule
@@ -239,7 +247,6 @@ module mkUGTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iTy
    FShow#(iType),
    TopHalfUnitSMT::TopHalfStageInstance#(numTags, vSz, vSz, iType));
 
-   Reg#(UInt#(TLog#(TAdd#(vSz,2)))) credit[2] <- mkCReg(2, fromInteger(valueOf(vSz)+1));   
    FIFOF#(Tuple2#(Vector#(vSz, iType), tagT)) resultQ <- mkUGSizedFIFOF(valueOf(vSz)+1);
    
    TopHalfStage#(numTags, vSz, vSz, iType) topHalfUnitPipeline <- mkTopHalfStage(ascending);
@@ -269,7 +276,7 @@ module mkUGTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iTy
       endmethod
       method Tuple2#(Vector#(vSz, iType), tagT) first;
          let {tag, in, tail, op, valid} = topHalfUnitPipeline.nextReq;
-         let d = topHalfUnitPipeline.read(tag);
+         let d = topHalfUnitPipeline.read;//(tag);
          return tuple2(d, tag);
       endmethod
    endinterface 
