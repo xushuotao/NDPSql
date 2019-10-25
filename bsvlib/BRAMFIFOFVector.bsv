@@ -1,6 +1,11 @@
 import RWBramCore::*;
 import Vector::*;
 import Pipe::*;
+import FIFO::*;
+import FIFOF::*;
+import SpecialFIFOs::*;
+import GetPut::*;
+import ClientServer::*;
 
 Bool debug = False;
 
@@ -68,3 +73,50 @@ module mkUGBRAMFIFOFVector(BRAMFIFOFVector#(vlog, fifodepth, fifotype))
 
    interface outPipes = genWith(genPipeOut);   
 endmodule
+
+interface BRAMFIFOFAsyncVector#(numeric type vlog, numeric type fifodepth, type fifotype);
+   method Action enq(fifotype data, UInt#(vlog) idx);
+   interface Vector#(TExp#(vlog), PipeOut#(void)) rdReady;
+   interface Server#(UInt#(vlog), fifotype) rdServer;
+endinterface
+
+module mkUGBRAMFIFOFAsyncVector(BRAMFIFOFAsyncVector#(vlog, fifodepth, fifotype))
+   provisos (
+      NumAlias#(TExp#(vlog), vSz),
+      Log#(fifodepth, dlog),
+      NumAlias#(TExp#(TLog#(fifodepth)), fifodepth), // fifodepth is power of 2
+      Bits#(fifotype, fifotypesz)
+      );
+   Vector#(vSz, Reg#(UInt#(dlog))) enqPtr <- replicateM(mkReg(0)); 
+   Vector#(vSz, Reg#(UInt#(dlog))) deqPtr <- replicateM(mkReg(0)); 
+   RWBramCore#(UInt#(TAdd#(vlog, dlog)), fifotype) buffer <- mkRWBramCore;
+   
+   Vector#(vSz, FIFOF#(void)) validQs <- replicateM(mkSizedFIFOF(valueOf(fifodepth)));
+   
+   function UInt#(TAdd#(vlog, dlog)) toAddr(UInt#(vlog) idx, UInt#(dlog) ptr) = unpack({pack(idx), pack(ptr)});
+
+   method Action enq(fifotype data, UInt#(vlog) tag);
+      validQs[tag].enq(?);
+      enqPtr[tag] <= enqPtr[tag] + 1;
+      buffer.wrReq(toAddr(tag, enqPtr[tag]), data);
+   endmethod
+
+   interface rdReady = map(toPipeOut, validQs);
+   
+   interface Server rdServer;
+      interface Put request;
+         method Action put(UInt#(vlog) tag);
+            deqPtr[tag] <= deqPtr[tag] + 1;
+            buffer.rdReq(toAddr(tag, deqPtr[tag]));
+         endmethod
+      endinterface
+      interface Get response;
+         method ActionValue#(fifotype) get if ( buffer.rdRespValid);
+            buffer.deqRdResp;
+            return buffer.rdResp;
+         endmethod
+      endinterface
+   endinterface
+endmodule
+
+

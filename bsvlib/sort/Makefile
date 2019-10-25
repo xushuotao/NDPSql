@@ -12,6 +12,8 @@ targets := Bitonic BitonicPipelined StreamingMerge2 StreamingMergeSort Streaming
 
 targets_smt := MergeSMT2 StreamingMergeSortSMT MergeNFoldSMTBRAM
 
+targets_sched := MergeSMT2Sched StreamingMergeSortSMTSched MergeNFoldSMTBRAMSched
+
 src = $(wildcard *.bsv) $(wildcard *.cpp)
 
 $(targets): $(src)
@@ -26,12 +28,18 @@ $(targets_smt): $(src)
 	bsc $(bscflags) -sim -u -g mk$@Test TestSortSMT.bsv
 	bsc $(bscflags) -sim -u -e mk$@Test -o $@ bdpi_sort.cpp
 
+$(targets_sched): $(src)
+	touch ConnectalProjectConfig.bsv
+	mkdir -p build_dir/$@
+	bsc $(bscflags) -sim -u -g mk$@Test TestSortSMTSched.bsv
+	bsc $(bscflags) -sim -u -e mk$@Test -o $@ bdpi_sort.cpp
 
-all: $(targets) $(targets_smt)
+
+all: $(targets) $(targets_smt) $(targets_sched)
 
 clean:
-	rm -rf build_dir $(targets) $(targets_smt) *.so *.o *.sched ConnectalProjectConfig.bsv
+	rm -rf build_dir $(targets) $(targets_smt) $(targets_sched) *.so *.o *.sched ConnectalProjectConfig.bsv
 
-.PHONY: $(targets) $(targets_smt)
+.PHONY: $(targets) $(targets_smt) $(targets_sched)
 .DEFAULT_GOAL := all
 

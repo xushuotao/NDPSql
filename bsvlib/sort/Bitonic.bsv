@@ -179,13 +179,13 @@ instance RecursiveBitonic#(n, itype)
    
    module mkSortBitonic#(Bool ascending)(StreamNode#(n, itype));
       // Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
-      // Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkFIFOF);
-       Vector#(TLog#(n), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
-      for (Integer i = 1; i < valueOf(TLog#(n)) ; i = i + 1 )begin
+      Vector#(TAdd#(TLog#(n),1), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkFIFOF);
+       // Vector#(TLog#(n), FIFOF#(Vector#(n, itype))) dataPipe <- replicateM(mkPipelineFIFOF);
+      for (Integer i = 0; i < valueOf(TLog#(n)) ; i = i + 1 )begin
          rule doStage;   
             Integer stride = valueOf(n)/(2**(i+1));
-            Vector#(n, itype) data = dataPipe[i-1].first;
-            dataPipe[i-1].deq;
+            Vector#(n, itype) data = dataPipe[i].first;
+            dataPipe[i].deq;
             for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
                for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
                   Integer idx = (j*valueOf(n)/(2**i))+k;
@@ -194,26 +194,26 @@ instance RecursiveBitonic#(n, itype)
                   data[idx+stride] = b;
                end
             end
-            dataPipe[i].enq(data);
+            dataPipe[i+1].enq(data);
          endrule
       end
 
    
-      // interface PipeIn inPipe = toPipeIn(dataPipe[0]);
-      interface PipeIn inPipe;
-         method Action enq(Vector#(n, itype) in);
-            Integer stride = valueOf(n)/2;
-            Vector#(n, itype) data = ?;
-            for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
-               let idx = k;
-               let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), ascending);
-               data[idx] = a;
-               data[idx+stride] = b;
-            end
-            dataPipe[0].enq(data);
-         endmethod
-         method Bool notFull = dataPipe[0].notEmpty;
-      endinterface
+      interface PipeIn inPipe = toPipeIn(dataPipe[0]);
+      // interface PipeIn inPipe;
+      //    method Action enq(Vector#(n, itype) in);
+      //       Integer stride = valueOf(n)/2;
+      //       Vector#(n, itype) data = ?;
+      //       for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
+      //          let idx = k;
+      //          let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), ascending);
+      //          data[idx] = a;
+      //          data[idx+stride] = b;
+      //       end
+      //       dataPipe[0].enq(data);
+      //    endmethod
+      //    method Bool notFull = dataPipe[0].notEmpty;
+      // endinterface
       interface PipeOut outPipe = toPipeOut(last(dataPipe));
       //    method Vector#(n, itype) first;
       //       // let bot_sorted = sort_bitonic[0].outPipe.first;
