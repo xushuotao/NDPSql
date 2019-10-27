@@ -3,9 +3,11 @@ import Bitonic::*;
 // import MergeSortVar::*;
 // import MergeSortFold::*;
 import SorterTypes::*;
+import MergerScheduler::*;
 import MergerSMTSched::*;
 import MergeSortSMTSched::*;
 import ClientServer::*;
+import DelayPipe::*;
 
 
 import Vector::*;
@@ -126,7 +128,7 @@ module mkMergeSMT2SchedTest(Empty);
    
    Vector#(2, FIFO#(Vector#(SortedSz, UInt#(32)))) inputQs <- replicateM(mkFIFO);
    
-   Vector#(2, FIFO#(SortedPacket#(VecSz, UInt#(32)))) delayQs <- replicateM(mkFIFO); 
+   Vector#(2, FIFO#(SortedPacket#(VecSz, UInt#(32)))) delayQs <- replicateM(mkSizedFIFO(3)); 
    
    FIFO#(UInt#(1)) selQ <- mkFIFO;
    
@@ -139,7 +141,7 @@ module mkMergeSMT2SchedTest(Empty);
       Reg#(Vector#(SortedSz, UInt#(32))) inBuf <- mkRegU;
       
 
-      rule doGenInput if ( testCnt < fromInteger(testLen) && merger.in.ready[0][i].notEmpty);
+      rule doGenInput if ( testCnt < fromInteger(testLen) );//&& merger.in.ready[0][i].notEmpty);
          if ( gear+vecSz == fromInteger(valueOf(SortedSz)) ) begin
             gear <= 0;
             testCnt <= testCnt + 1;
@@ -161,26 +163,24 @@ module mkMergeSMT2SchedTest(Empty);
          end
 
          inBuf <= shiftOutFrom0(?, in, valueOf(VecSz));
-         merger.in.ready[0][i].deq;
+         // merger.in.ready[0][i].deq;
+         Vector#(VecSz, UInt#(32)) indata = take(in);
+         merger.in.scheduleReq[0][i].enq(SchedReq{topItem:last(indata),last:gear+vecSz == fromInteger(valueOf(SortedSz))});
          delayQs[i].enq(SortedPacket{first: gear==0, 
                                      last: gear+vecSz == fromInteger(valueOf(SortedSz)),
-                                     d: take(in)});
-         selQ.enq(fromInteger(i));
+                                     d: indata});
+         // selQ.enq(fromInteger(i));
       endrule
-      
+            
    end
    
-   rule feedData;
-      let tag <- toGet(selQ).get;
-      if ( tag == 0) begin
-         let packet <- toGet(delayQs[0]).get;
-         merger.in.inputResp(?, packet);
-      end
-      else begin
-         let packet <- toGet(delayQs[1]).get;
-         merger.in.inputResp(?, packet);
-      end
+   rule issueReq if ( merger.in.scheduleResp[0].notEmpty);
+      merger.in.scheduleResp[0].deq;
+      let port = merger.in.scheduleResp[0].first;
+      let d <- toGet(delayQs[port]).get;
+      merger.in.dataChannel.enq(TaggedSortedPacket{tag:?, packet:d});
    endrule
+      
 
    
    FIFO#(Vector#(TMul#(2,SortedSz), UInt#(32))) expectedQ <- mkFIFO;
@@ -197,22 +197,28 @@ module mkMergeSMT2SchedTest(Empty);
    Reg#(Bit#(32)) resultCnt <- mkReg(0);
    
    FIFO#(void) resultPull <- mkFIFO;
+
+   DelayPipe#(2, void) delayReq <- mkDelayPipe;   
+   rule doReceivScheReq;
+      let d = merger.out.scheduleReq[0].first;
+      merger.out.scheduleReq[0].deq;
+      delayReq.enq(?);
+   endrule
    
-   rule doPullResult;
-      let v <- merger.out.ready[0].deq;
-      merger.out.server.request.put(0);
+   rule pullResult if ( delayReq.notEmpty);
+      merger.out.server.request.put(?);
    endrule
    
    rule doResult;
       let merged <- merger.out.server.response.get;
       // let merged = merger.outPipe.first;
-      Vector#(TMul#(SortedSz,2), UInt#(32)) resultV = drop(append(outBuf, merged.d));
+      Vector#(TMul#(SortedSz,2), UInt#(32)) resultV = drop(append(outBuf, merged.packet.d));
       outBuf <= resultV;
       $display("(@%t)Merged Sequence = ", $time, fshow(merged));
       prevCycle <= cycle;
       
-      if ( merged.first) dynamicAssert(outGear == 0, "first flag not produced correctly");
-      if (merged.last) dynamicAssert(outGear+vecSz == fromInteger(2*valueOf(SortedSz)), "last flag not produced correctly");
+      if ( merged.packet.first) dynamicAssert(outGear == 0, "first flag not produced correctly");
+      if (merged.packet.last) dynamicAssert(outGear+vecSz == fromInteger(2*valueOf(SortedSz)), "last flag not produced correctly");
       
       if ( cycle - prevCycle != 1 && !(resultCnt == 0 && outGear == 0)) begin
          $display("FAIL: StreamingMerge2 not streaming");
@@ -246,6 +252,7 @@ endmodule
 
 // typedef TDiv#(8192, 8) TotalElms;
 typedef TMul#(32, VecSz) TotalElms;
+// typedef TMul#(8, VecSz) TotalElms;
 
 module mkStreamingMergeSortSMTSchedTest(Empty);
    MergeSortSMTSched#(UInt#(32), VecSz, TotalElms) sorter <- mkStreamingMergeSortSMTSched(ascending);
@@ -267,27 +274,34 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
       cycle <= cycle + 1;
    endrule
    
+   FIFO#(UInt#(128)) sumQ <- mkSizedFIFO(128);
+   Reg#(UInt#(128)) sumReg <- mkReg(0);
+   
    rule genInput if ( testCntIn < fromInteger(testLen) );
-      if ( inCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin              
-         inCnt <= 0;
-         testCntIn <= testCntIn + 1;
-      end
-      else begin
-         inCnt <= inCnt + fromInteger(vecSz);
-      end
-      
       Vector#(VecSz, UInt#(32)) inV;
       for (Integer i = 0; i < valueOf(VecSz); i = i + 1) begin
          let v <- rand32();
          inV[i] = unpack(v);
       end
       sorter.inPipe.enq(inV);
+      
+      if ( inCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin              
+         inCnt <= 0;
+         testCntIn <= testCntIn + 1;
+         sumReg <= 0;
+         sumQ.enq(sumReg + fold(\+ , map(extend, inV)));
+      end
+      else begin
+         inCnt <= inCnt + fromInteger(vecSz);
+         sumReg <= sumReg + fold(\+ , map(extend, inV));
+      end
+      
    endrule
    
    Reg#(UInt#(32)) prevMax <- mkReg(ascending?minBound:maxBound);
    
    Reg#(Bit#(32)) outCnt <- mkReg(0);
-   
+   Reg#(UInt#(128)) sumRegOut <- mkReg(0);   
    rule getOutput;
       let d = sorter.outPipe.first;
       sorter.outPipe.deq;
@@ -310,12 +324,21 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
          outCnt <= 0;
          prevMax <= ascending?minBound:maxBound;
          testCntOut <= testCntOut + 1;
+         
+         if ( sumRegOut + fold(\+ , map(extend, d)) != sumQ.first) begin
+            $display("FAILED: StreamingMergeSort result sum not matched");
+            $finish();
+         end
+         sumQ.deq;
+         sumRegOut <= 0;
+         $display("TestCnt[%d] Passed", testCntOut);
          if ( testCntOut + 1 == fromInteger(testLen) ) begin
             $display("PASSED: StreamingMergeSort");
             $finish();
          end
       end
       else begin
+         sumRegOut <= sumRegOut + fold(\+ , map(extend, d));
          outCnt <= outCnt + fromInteger(vecSz);
          prevMax <= last(d);
       end

@@ -11,6 +11,11 @@ import BuildVector::*;
 import RWBramCore::*;
 import Assert::*;
 import DelayPipe::*;
+import OneToNRouter::*;
+import NToOneRouter::*;
+import BRAMFIFOFVector::*;
+
+import Cntrs::*;
 
 Bool debug = False;
 
@@ -41,9 +46,13 @@ typeclass RecursiveMergerSMT#(type iType,
    module mkMergeNSMT#(Bool ascending, Integer level)(MergeNSMT#(iType,vSz,n));
 endtypeclass
 
-typedef TAdd#(4, TAdd#(vSz, TLog#(vSz))) BufSize#(numeric type vSz);
+// typedef TAdd#(10, TAdd#(vSz, TLog#(vSz))) BufSize#(numeric type vSz);
+typedef TExp#(TLog#(TAdd#(6, TAdd#(vSz, TLog#(vSz))))) BufSize#(numeric type vSz);
+
 
 instance RecursiveMergerSMT#(iType, vSz, 2) provisos(
+   NumAlias#(TExp#(TLog#(BufSize#(vSz))), BufSize#(vSz)),
+
    TopHalfUnitSMT::TopHalfUnitSMTInstance#(1, vSz, iType),
    Add#(1, a__, vSz),
    Bits#(Tuple3#(Vector::Vector#(vSz, iType), Bool, Bool), b__),
@@ -63,6 +72,12 @@ endinstance
 
 
 instance RecursiveMergerSMT#(iType, vSz, n) provisos(
+   NumAlias#(TExp#(TLog#(BufSize#(vSz))), BufSize#(vSz)),
+
+   // Add#(1, e__, TDiv#(n, 2)),
+   // Add#(1, f__, TMul#(TDiv#(TDiv#(n, 2), 2), 2)),
+   // Add#(TDiv#(n, 2), g__, TMul#(TDiv#(TDiv#(n, 2), 2), 2)),
+
    Mul#(TDiv#(n, 2), 2, n),
    MergerSMT::RecursiveMergerSMT#(iType, vSz, TDiv#(n, 2)),
    TopHalfUnitSMT::TopHalfUnitSMTInstance#(TDiv#(n, 2), vSz, iType),
@@ -98,6 +113,11 @@ endinterface
 
 
 module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz, vSz, iType)) provisos(
+   // NumAlias#(TExp#(TLog#(BufSize#(vSz))), BufSize#(vSz)),
+   NumAlias#(TExp#(TLog#(tagBufSz)), tagBufSz),
+   // Add#(numTags, e__, TMul#(TDiv#(numTags, 2), 2)),
+   // Add#(1, f__, TMul#(TDiv#(numTags, 2), 2)),
+   // Add#(1, g__, numTags),
    Alias#(UInt#(TLog#(numTags)), tagT),
    Add#(1, a__, vSz),
    Bits#(Tuple3#(Vector::Vector#(vSz, iType), Bool, Bool), b__),
@@ -117,14 +137,18 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
    Vector#(numTags, Vector#(2, Reg#(Bool))) lastReg <- replicateM(replicateM(mkReg(False)));
 
    
+   NToOneRouter#(numTags, Tuple4#(Vector#(vSz, iType), Bool, Bool, Bool)) nToOne <- mkUGNToOneRouter;
    TopHalfUnitSMT#(numTags, vSz,iType) topHalfUnit <- mkUGTopHalfUnitSMT(ascending);
    
    StreamNode#(vSz, iType) sorter <- mkUGSortBitonic(ascending);
    
    Vector#(numTags, Reg#(Bit#(1))) portSel <- replicateM(mkReg(0));
    Vector#(numTags, Reg#(iType)) prevTail <- replicateM(mkRegU);
-   Vector#(numTags, Array#(Reg#(Bit#( TLog#(TAdd#(tagBufSz,1)) ) )) ) credit <- replicateM(mkCReg(2, fromInteger(valueOf(tagBufSz))));
-   Vector#(numTags, FIFOF#(SortedPacket#(vSz, iType))) buffer <- replicateM(mkSizedBRAMFIFOF(valueOf(tagBufSz)));
+   //Vector#(numTags, Array#(Reg#(Bit#( TLog#(TAdd#(tagBufSz,1)) ) )) ) credit <- replicateM(mkCReg(2, fromInteger(valueOf(tagBufSz))));
+
+   Vector#(numTags, Count#(UInt#(TLog#(TAdd#(tagBufSz,1))))) credit <- replicateM(mkCount(fromInteger(valueOf(tagBufSz))));
+   // Vector#(numTags, FIFOF#(SortedPacket#(vSz, iType))) buffer <- replicateM(mkSizedBRAMFIFOF(valueOf(tagBufSz)));
+   BRAMFIFOFVector#(TLog#(numTags), tagBufSz, SortedPacket#(vSz, iType)) buffer <- mkUGBRAMFIFOFVector;
    // FIFOF#(Tuple5#(Vector#(vSz, iType), Bool, Bool, Bool, tagT)) selectedInQ <- mkUGSizedFIFOF(valueOf(vSz));
    DelayPipe#(vSz, Tuple4#(Vector#(vSz, iType), Bool, Bool, Bool)) selectedInQ <- mkDelayPipe;
    
@@ -135,8 +159,8 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
       Vector#(2, Reg#(Bool)) done <- replicateM(mkReg(False));
       Reg#(Bool) isFirst <- mkReg(True);
       
-      rule doDeqInQ if (credit[i][0] > 0);
-         credit[i][0] <= credit[i][0] - 1;
+      rule doDeqInQ if (credit[i] > 0);
+         credit[i].decr(1);
          SortedPacket#(vSz, iType) packet = ?;
          Bool lastPacket = False;
          if ( portSel[i] == 0) begin
@@ -183,22 +207,34 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
          prevTail[i] <= isFirst? last(packet.d) : getTop(vec(prevTail[i], last(packet.d)), ascending);
          
          if (debug) $display("(%t) %s[%0d-%0d]In:: isFirst = %d, firstOut = %d, lastPacket = %d, portSel = %d", $time, tab, level, i, isFirst, !isFirst&&packet.first, lastPacket, portSel[i]);
-         topHalfUnit.enqData(packet.d, isFirst?Init:Normal, fromInteger(i));
-         selectedInQ.enq(tuple4(packet.d, isFirst, !isFirst&&packet.first, lastPacket));//, fromInteger(i)));
+         
+         nToOne.inPorts[i].enq(tuple4(packet.d, isFirst, !isFirst&&packet.first, lastPacket));
+         // topHalfUnit.enqData(packet.d, isFirst?Init:Normal, fromInteger(i));
+         // selectedInQ.enq(tuple4(packet.d, isFirst, !isFirst&&packet.first, lastPacket));//, fromInteger(i)));
       endrule
    end
    
-   // FIFOF#(Tuple3#(tagT, Bool, Bool)) outTagQ <- mkUGSizedFIFOF(valueOf(TLog#(vSz))+1);
-   DelayPipe#(TLog#(vSz), Tuple3#(tagT, Bool, Bool)) outTagQ <- mkDelayPipe;
+   rule doIssue if ( nToOne.outPort.notEmpty);
+      let {tag, d} = nToOne.outPort.first;
+      nToOne.outPort.deq;
+      let {data, firstPacket, firstOutput, lastPacket} = d;
+
+
+      topHalfUnit.enqData(data, firstPacket?Init:Normal, unpack(tag));
+      selectedInQ.enq(d);//, fromInteger(i)));
+   endrule
    
-   RWBramCore#(tagT, Vector#(vSz, iType)) prevTopCtxt <- mkRWBramCore;
+   // FIFOF#(Tuple3#(tagT, Bool, Bool)) outTagQ <- mkUGSizedFIFOF(valueOf(TLog#(vSz))+1);
+   DelayPipe#(TAdd#(TLog#(vSz),1), Tuple3#(tagT, Bool, Bool)) outTagQ <- mkDelayPipe;
+   
+   RWBramCore#(tagT, Vector#(vSz, iType)) prevTopCtxt <- mkUGRWBramCore;
    
    Vector#(numTags, Reg#(Bool)) needDrain <- replicateM(mkReg(False));
    
    // tag, in, drop, drain
    Reg#(Tuple5#(tagT, Vector#(vSz,iType), Bool, Bool, Bool)) halfCleanTask <- mkRegU;
    
-   (* fire_when_enabled *)//, no_implicit_conditions *)
+   (* fire_when_enabled,  no_implicit_conditions *)
    rule doPreHalfClean if ( selectedInQ.notEmpty );
       let {currTop, tag} = topHalfUnit.currTop.first;      
       let {in, firstPacket, firstOut, lastPacket} = selectedInQ.first;
@@ -234,14 +270,16 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
    endrule
    
    // rule doPrevHalfCleanDrain ( nextDrainTag.notEmpty && !(topHalfUnit.currTop.notEmpty && selectedInQ.notEmpty) ); //& nextDrain matches tagged Valid .tag);
-   (* fire_when_enabled *)
+   (* fire_when_enabled, no_implicit_conditions *)
    rule doPrevHalfCleanDrain ( !selectedInQ.notEmpty &&& findElem(True, readVReg(needDrain)) matches tagged Valid .tag  ); //& nextDrain matches tagged Valid .tag);
       needDrain[tag] <= False;
       prevTopCtxt.rdReq(tag);
       halfCleanTask <= tuple5(tag, ?, False, True, False);
    endrule
+   
+   DelayPipe#(1, Vector#(vSz,iType)) sorterDelayBy1 <- mkDelayPipe;
       
-   (* fire_when_enabled *)
+   (* fire_when_enabled, no_implicit_conditions *)
    rule doHalfClean if ( prevTopCtxt.rdRespValid ) ;
       let {tag, in, dropIn, drain, firstOut} = halfCleanTask;
       
@@ -252,14 +290,24 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
          // noAction;
       end
       else if ( drain )begin
-         sorter.inPipe.enq(prevTop);
+         // sorter.inPipe.enq(prevTop);
+         sorterDelayBy1.enq(prevTop);
          outTagQ.enq(tuple3(tag,False,True));
       end
       else begin
-         sorter.inPipe.enq(halfClean(vec(in, prevTop), ascending)[0]);
+         // sorter.inPipe.enq(halfClean(vec(in, prevTop), ascending)[0]);
+         sorterDelayBy1.enq(halfClean(vec(in, prevTop), ascending)[0]);
          outTagQ.enq(tuple3(tag,firstOut,False));
       end
    endrule
+   
+   (* fire_when_enabled , no_implicit_conditions *)
+   rule doSortIssue if(sorterDelayBy1.notEmpty);
+      let v = sorterDelayBy1.first;
+      sorter.inPipe.enq(v);
+   endrule
+   
+   // OneToNRouter#(numTags, SortedPacket#(vSz, iType)) distributor <- mkOneToNRouterBRAM;
    
    Vector#(numTags, Reg#(Maybe#(iType))) prevMax <- replicateM(mkReg(tagged Invalid));
    (* fire_when_enabled *)//, no_implicit_conditions *)
@@ -271,25 +319,41 @@ module mkMergerSMT#(Bool ascending, Integer level)(MergerSMT#(numTags, tagBufSz,
       sorter.outPipe.deq;
       if (debug) $display("(%t) %s[%0d-%0d]Out:: first = %d, last = %d, (prevMax, currHead) = ", $time, tab, level, tag, first, last, fshow(prevMax[tag]), " ", fshow(d[0]));
       dynamicAssert(isSorted(d, ascending), "beat should be sorted internally");
-      prevMax[tag] <= last ? tagged Invalid : tagged Valid d[valueOf(vSz)-1];
-      if ( prevMax[tag] matches tagged Valid .v) begin
-         dynamicAssert(isSorted(vec(v, d[0]), ascending), "beats should be sorted externally");         
+      if ( debug ) begin
+         prevMax[tag] <= last ? tagged Invalid : tagged Valid d[valueOf(vSz)-1];
+         if ( prevMax[tag] matches tagged Valid .v) begin
+            dynamicAssert(isSorted(vec(v, d[0]), ascending), "beats should be sorted externally");         
+         end
       end
-      buffer[tag].enq(SortedPacket{d: d, first: first, last: last});
+      // distributor.inPort.enq(tuple2(pack(tag),SortedPacket{d: d, first: first, last: last}));
+      //buffer[tag].enq(SortedPacket{d: d, first: first, last: last});
+      buffer.enq(SortedPacket{d: d, first: first, last: last}, tag);
    endrule
+   
+   // for (Integer i= 0; i < valueOf(numTags); i = i + 1 ) begin
+   //    (* fire_when_enabled *)
+   //    rule doIssueToBuffer if (distributor.outPorts[i].notEmpty);
+   //       let v = distributor.outPorts[i].first;
+   //       distributor.outPorts[i].deq;
+   //       buffer[i].enq(v); 
+   //    endrule
+   // end
    
    
    function PipeOut#(SortedPacket#(vSz, iType)) genPipeOut(Integer tag);
       return (interface PipeOut;
                  method SortedPacket#(vSz, iType) first;
-                    return buffer[tag].first;
+                    //return buffer[tag].first;
+                    return buffer.outPipes[tag].first;
                  endmethod
                  method Action deq;
-                    buffer[tag].deq;
-                    credit[tag][1] <= credit[tag][1] + 1;
+                    // buffer[tag].deq;
+                    buffer.outPipes[tag].deq;
+                    credit[tag].incr(1);
                  endmethod
                  method Bool notEmpty;
-                    return buffer[tag].notEmpty;
+                    //return buffer[tag].notEmpty;
+                    return buffer.outPipes[tag].notEmpty;
                  endmethod
               endinterface);
    endfunction

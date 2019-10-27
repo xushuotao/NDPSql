@@ -5,6 +5,7 @@ import Vector::*;
 import FIFOF::*;
 import SpecialFIFOs::*;
 import BuildVector::*;
+import GetPut::*;
 
 Bool debug = False;
 
@@ -20,14 +21,97 @@ function Bit#(1) getNextSel(Bit#(1) currPortSel, Bool first_all, Bool last_self,
 endfunction
 
 
+typedef struct {
+   iType topItem;
+   Bool last;
+   } SchedReq#(type iType) deriving (FShow, Bits, Eq);
+
 interface MergerSched#(numeric type numCredits, type iType);
+   interface Vector#(2, PipeIn#(SchedReq#(iType))) schedReq;
+   // interface Vector#(2, PipeOut#(void)) schedResp;
+   interface PipeOut#(Bit#(1)) schedResp;   
+   method Action incrCredit;
+endinterface
+
+
+
+module mkMergerScheduler#(Bool ascending, Integer level, Integer tag)(MergerSched#(numCredits, iType)) provisos(Bits#(iType, iSz), Ord#(iType));
+   String tab = "";
+   for ( Integer l = 0; l < level; l = l + 1 ) tab = tab + "\t";
+
+   Reg#(Bit#(1)) portSel <- mkReg(0);
+   Reg#(Bool) isFirst <- mkReg(True);
+   Vector#(2, Reg#(Bool)) done <- replicateM(mkReg(False));
+   Reg#(iType) prevTail <- mkRegU;
+   
+   Vector#(2, FIFOF#(SchedReq#(iType))) inQ <- replicateM(mkBypassFIFOF);
+   
+   // Vector#(2, FIFOF#(void)) canGoQ <- replicateM(mkFIFOF);
+   FIFOF#(Bit#(1)) canGoQ <- mkFIFOF;
+   
+   Count#(UInt#(TLog#(TAdd#(numCredits,1)))) credit <- mkCount(fromInteger(valueOf(numCredits)));
+   
+   rule doSchedule if (credit >0);
+      credit.decr(1);
+      let req = ?;
+      
+      let selectedPort = portSel;
+      
+      if ( portSel == 0 || (isFirst && inQ[0].notEmpty) ) begin
+         req <- toGet(inQ[0]).get; 
+         selectedPort = 0;
+      end
+      else begin
+         req <- toGet(inQ[1]).get;
+         selectedPort = 1;
+      end
+      
+      
+      let vecTail = req.topItem;
+      let last = req.last;
+         
+      Bool lastPacket = False;      
+      if ( last) begin
+         if ( done[~portSel] ) begin
+            done[0] <= False;
+            done[1] <= False;
+            isFirst <= True;
+            lastPacket = True;
+         end
+         else begin
+            done[portSel] <= True;
+            isFirst <= False;
+         end
+      end
+      else begin
+         isFirst <= False;
+      end
+
+      Bit#(1) nextSel = getNextSel(selectedPort, isFirst, last, done[~portSel], isSorted(vec(prevTail, vecTail), ascending));
+      if (debug) $display("(%t) %s[%0d-%0d]::scheduler update, portSel = %d, last = %d, nextSel = %d", $time, tab, level, tag, portSel, last, nextSel);
+      portSel <= nextSel;
+      canGoQ.enq(selectedPort);
+      prevTail <= isFirst? vecTail : getTop(vec(prevTail, vecTail), ascending);
+         
+   endrule
+
+   interface schedReq = map(toPipeIn, inQ);
+   interface schedResp = toPipeOut(canGoQ);
+   
+   method Action incrCredit;
+      credit.incr(1);
+   endmethod
+endmodule
+
+
+interface MergerSchedComb#(numeric type numCredits, type iType);
    interface Vector#(2, PipeOut#(void)) nextReq;
    method Action update(iType vecTail, Bool last);
    method Action incrCredit;
 endinterface
 
 
-module mkMergerScheduler#(Bool ascending)(MergerSched#(numCredits, iType)) provisos(Bits#(iType, iSz), Ord#(iType));
+module mkMergerSchedulerComb#(Bool ascending)(MergerSchedComb#(numCredits, iType)) provisos(Bits#(iType, iSz), Ord#(iType));
    Vector#(2, FIFOF#(void)) bypassQ <- replicateM(mkBypassFIFOF);
    Reg#(Bit#(1)) portSel <- mkReg(0);
    Reg#(Bool) isFirst <- mkReg(True);

@@ -38,6 +38,10 @@ import BRAM::*;
 import RWBramCore::*;
 import SorterTypes::*;
 import OneToNRouter::*;
+import MergerScheduler::*;
+
+import BRAMFIFOFVector::*;
+import DelayPipe::*;
 
 import Assert::*;
 
@@ -85,10 +89,16 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    Bitonic::RecursiveBitonic#(vSz, iType),
    Bits#(Vector::Vector#(vSz, iType), a__),
    Mul#(TDiv#(n,2), 2, n),
-   Add#(TLog#(TDiv#(n, 2)), b__, TLog#(n))
+   Add#(TLog#(TDiv#(n, 2)), b__, TLog#(n)),
+   Add#(1, c__, n),
 //   Add#(1, b__, n),
 //   Add#(1, c__, TMul#(TDiv#(n, 2), 2)),
 //   Add#(n, d__, TMul#(TDiv#(n, 2), 2))
+   // NumAlias#(TMul#(n,2), bufSz)
+   // Add#(d__, 1, TLog#(TMul#(TExp#(TLog#(n)), 2))),
+   Add#(f__, 2, TLog#(TMul#(TExp#(TLog#(n)), 4))),
+   Add#(1, e__, vSz),
+   Add#(1, d__, TDiv#(n, 2))
    );
 
    function f_sort(d) = bitonic_sort(d, ascending);
@@ -98,19 +108,29 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    StreamNode#(vSz, iType) sorter <- mkBitonicSort(ascending);
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
    
-   FIFO#(UInt#(TLog#(n))) nextSpot <- mkSizedFIFO(valueOf(n)+1);
+   FIFO#(UInt#(TLog#(n))) nextSpot <- mkSizedFIFO(valueOf(n)*4);
    
    Reg#(UInt#(TLog#(n))) spotCnt <- mkReg(0);
    Reg#(Bool) init <- mkReg(False);
+   Reg#(Bit#(32)) iterCnt <- mkReg(0);
    rule doInit if( !init);
-      spotCnt <= spotCnt + 1;
+
       nextSpot.enq(spotCnt);
-      if ( spotCnt == fromInteger(valueOf(n)-1)) init <= True;
+      if ( spotCnt == fromInteger(valueOf(n)-1)) begin
+         spotCnt <= 0;
+         iterCnt <= iterCnt + 1;
+         if ( iterCnt == 3) init <= True;
+      end
+      else begin
+         spotCnt <= spotCnt + 1;
+      end
+
    endrule
    
-   Vector#(n, FIFOF#(void)) ready <- replicateM(mkFIFOF);
+   // Vector#(bufSz, FIFOF#(void)) ready <- replicateM(mkFIFOF);
    
-   RWBramCore#(UInt#(TLog#(n)), SortedPacket#(vSz, iType)) buffer <- mkRWBramCore;
+   // RWBramCore#(UInt#(TLog#(bufSz)), SortedPacket#(vSz, iType)) buffer <- mkRWBramCore;
+   BRAMVector#(TLog#(n), 4, SortedPacket#(vSz, iType)) buffer <- mkUGBRAMVector;
    
    rule doEnqMerger if(init);
       let d = sorter.outPipe.first;
@@ -118,50 +138,105 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
       let packet = SortedPacket{d:d, first:True, last:True};
       let slot = nextSpot.first;
       nextSpot.deq;
-      ready[slot].enq(?);
-      buffer.wrReq(slot, packet);
+      // ready[slot].enq(?);
+      merger.in.scheduleReq[pack(slot)>>1][pack(slot)[0]].enq(SchedReq{topItem:last(d), last: True});
+      buffer.enq(packet, slot);
    endrule
+   
    
    FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkFIFO;
    
    rule issueRd if (init);
-      function Bool fready(FIFOF#(t) x) = x.notEmpty;
+      // function Bool fready(FIFOF#(t) x) = x.notEmpty;
       function Bool pready(PipeOut#(t) x) = x.notEmpty;
-      function vpready(x) = map(pready, x);
+      // function vpready(x) = map(pready, x);
       
-      Vector#(n, Bool) senderReady = map(fready, ready);
-      Vector#(n, Bool) receiverReady = concat(map(vpready, merger.in.ready));
+      // Vector#(n, Bool) senderReady = map(fready, ready);
+      Vector#(TDiv#(n,2), Bool) receiverReady = map(pready, merger.in.scheduleResp);
       
-      Vector#(n, Bool) allReady = zipWith(\&& , senderReady, receiverReady);
+      // Vector#(n, Bool) allReady = zipWith(\&& , senderReady, receiverReady);
       
-      let port = findElem(True, allReady);
+      Vector#(TDiv#(n,2), Tuple2#(Bool, Bit#(TLog#(TDiv#(n,2))))) indexArray = zipWith(tuple2, receiverReady, genWith(fromInteger));
       
-      if ( port matches tagged Valid .tag) begin
-         buffer.rdReq(tag);
-         ready[tag].deq;
-         merger.in.ready[pack(tag)>>1][pack(tag)[0]].deq;
-         nextSpot.enq(tag);
-         issuedTag.enq(unpack(truncateLSB(pack(tag))));
+      let port = fold(elemFind, indexArray);
+      
+      // let port = findElem(True, allReady);
+      
+      if ( port matches {True, .tag} ) begin
+         let portsel = merger.in.scheduleResp[tag].first;
+         merger.in.scheduleResp[tag].deq;
+         // $display("tag = %d, port = %d", tag, portsel);
+         buffer.rdServer.request.put(unpack({tag,portsel}));
+         nextSpot.enq(unpack({tag,portsel}));
+         issuedTag.enq(unpack(tag));
       end
-   endrule
-   
+   endrule   
    
    rule doRdResp;
-      let packet = buffer.rdResp;
-      buffer.deqRdResp;
+      let packet <- buffer.rdServer.response.get;
       let tag <- toGet(issuedTag).get;
-      merger.in.inputResp(tag, packet);
+      merger.in.dataChannel.enq(TaggedSortedPacket{tag:tag, packet:packet});
    endrule
    
+
+
+   
+      
+   // rule issueRd if (init);
+   //    function Bool fready(FIFOF#(t) x) = x.notEmpty;
+   //    function Bool pready(PipeOut#(t) x) = x.notEmpty;
+   //    function vpready(x) = map(pready, x);
+      
+   //    Vector#(n, Bool) senderReady = map(fready, ready);
+   //    Vector#(n, Bool) receiverReady = concat(map(vpready, merger.in.ready));
+      
+   //    Vector#(n, Bool) allReady = zipWith(\&& , senderReady, receiverReady);
+      
+   //    Vector#(n, Tuple2#(Bool, Bit#(TLog#(n)))) indexArray = zipWith(tuple2, allReady, genWith(fromInteger));
+      
+   //    let port = fold(elemFind, indexArray);
+
+      
+   //    // let port = findElem(True, allReady);
+      
+   //    if ( port matches {True, .tag} ) begin
+   //       buffer.rdReq(unpack(tag));
+   //       ready[tag].deq;
+   //       merger.in.ready[tag>>1][tag[0]].deq;
+   //       nextSpot.enq(unpack(tag));
+   //       issuedTag.enq(unpack(truncateLSB(tag)));
+   //    end
+   // endrule
+   
+   
+   // rule doRdResp;
+   //    let packet = buffer.rdResp;
+   //    buffer.deqRdResp;
+   //    let tag <- toGet(issuedTag).get;
+   //    merger.in.inputResp(tag, packet);
+   // endrule
+   
    FIFOF#(Vector#(vSz, iType)) outQ <- mkFIFOF;
-   rule pullResp;
-      merger.out.ready[0].deq;
+      
+   DelayPipe#(1, void) delayReq <- mkDelayPipe;   
+   rule doReceivScheReq;
+      let d = merger.out.scheduleReq[0].first;
+      merger.out.scheduleReq[0].deq;
+      delayReq.enq(?);
+   endrule
+   
+   rule pullResult if ( delayReq.notEmpty);
       merger.out.server.request.put(?);
    endrule
+
+   // rule pullResp;
+   //    merger.out.ready[0].deq;
+   //    merger.out.server.request.put(?);
+   // endrule
    
    rule getResp;
       let packet <- merger.out.server.response.get;
-      outQ.enq(packet.d);
+      outQ.enq(packet.packet.d);
    endrule
    
       

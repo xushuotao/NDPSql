@@ -8,6 +8,8 @@ import RWBramCore::*;
 import Assert::*;
 import BuildVector::*;
 
+Bool debug = False;
+
 interface MergerCore#(numeric type numTags, numeric type vSz, type iType);
    method Action enq(Vector#(vSz, iType) d, UInt#(TLog#(numTags)) tag, Bool firstAll, Bool first2, Bool lastPacket);
    interface PipeOut#(Tuple2#(SortedPacket#(vSz, iType), UInt#(TLog#(numTags)))) outPipe;
@@ -103,6 +105,7 @@ module mkUGMergeCore#(Bool ascending, Integer level)(MergerCore#(numTags, vSz, i
    endrule
 
    method Action enq(Vector#(vSz, iType) d, UInt#(TLog#(numTags)) tag, Bool firstAll, Bool first2, Bool lastPacket);
+      if (debug) $display("(%t) %s[%0d-%0d] MergerCore:: firstAll = %d, first2 = %d, lastPacket = %d", $time, tab, level, tag, firstAll, first2, lastPacket); 
       topHalfUnit.enqData(d, firstAll?Init:Normal, tag);
       selectedInQ.enq(tuple4(d, firstAll, first2, lastPacket));
    endmethod

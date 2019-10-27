@@ -89,9 +89,9 @@ module mkUGBRAMFIFOFAsyncVector(BRAMFIFOFAsyncVector#(vlog, fifodepth, fifotype)
       );
    Vector#(vSz, Reg#(UInt#(dlog))) enqPtr <- replicateM(mkReg(0)); 
    Vector#(vSz, Reg#(UInt#(dlog))) deqPtr <- replicateM(mkReg(0)); 
-   RWBramCore#(UInt#(TAdd#(vlog, dlog)), fifotype) buffer <- mkRWBramCore;
+   RWBramCore#(UInt#(TAdd#(vlog, dlog)), fifotype) buffer <- mkUGRWBramCore;
    
-   Vector#(vSz, FIFOF#(void)) validQs <- replicateM(mkSizedFIFOF(valueOf(fifodepth)));
+   Vector#(vSz, FIFOF#(void)) validQs <- replicateM(mkUGSizedFIFOF(valueOf(fifodepth)));
    
    function UInt#(TAdd#(vlog, dlog)) toAddr(UInt#(vlog) idx, UInt#(dlog) ptr) = unpack({pack(idx), pack(ptr)});
 
@@ -112,6 +112,66 @@ module mkUGBRAMFIFOFAsyncVector(BRAMFIFOFAsyncVector#(vlog, fifodepth, fifotype)
       endinterface
       interface Get response;
          method ActionValue#(fifotype) get if ( buffer.rdRespValid);
+            buffer.deqRdResp;
+            return buffer.rdResp;
+         endmethod
+      endinterface
+   endinterface
+endmodule
+
+
+interface BRAMVector#(numeric type vlog, numeric type fifodepth, type fifotype);
+   method Action enq(fifotype data, UInt#(vlog) idx);
+   interface Server#(UInt#(vlog), fifotype) rdServer;
+endinterface
+
+module mkUGBRAMVector(BRAMVector#(vlog, fifodepth, fifotype))
+   provisos (
+      NumAlias#(TExp#(vlog), vSz),
+      Log#(fifodepth, dlog),
+      // NumAlias#(TExp#(TLog#(fifodepth)), fifodepth), // fifodepth is power of 2
+      Bits#(fifotype, fifotypesz),
+      Add#(a__, dlog, TLog#(TMul#(TExp#(vlog), fifodepth)))
+      );
+   Vector#(vSz, Reg#(UInt#(dlog))) enqPtr <- replicateM(mkReg(0)); 
+   Vector#(vSz, Reg#(UInt#(dlog))) deqPtr <- replicateM(mkReg(0)); 
+   RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
+   
+   Integer depth = valueOf(fifodepth);
+   
+   Vector#(vSz, Integer) offsets = zipWith(\* , genVector(), replicate(depth));
+   
+   function UInt#(TLog#(TMul#(vSz, fifodepth))) toAddr(UInt#(vlog) idx, UInt#(dlog) ptr) = fromInteger(offsets[idx])+extend(ptr);
+   
+   Vector#(vSz, FIFOF#(void)) validQs <- replicateM(mkSizedFIFOF(valueOf(fifodepth)));
+
+   method Action enq(fifotype data, UInt#(vlog) tag);
+      if ( enqPtr[tag] == fromInteger(depth-1)) begin
+         enqPtr[tag] <= 0;
+      end
+      else begin
+         enqPtr[tag] <= enqPtr[tag] + 1;
+      end
+      // validQs[tag].enq(?);
+      buffer.wrReq(toAddr(tag, enqPtr[tag]), data);
+   endmethod
+
+   
+   interface Server rdServer;
+      interface Put request;
+         method Action put(UInt#(vlog) tag);
+            if ( deqPtr[tag] == fromInteger(depth-1) ) begin
+               deqPtr[tag] <= 0;
+            end
+            else begin
+               deqPtr[tag] <= deqPtr[tag] + 1;
+            end
+            // validQs[tag].deq;
+            buffer.rdReq(toAddr(tag, deqPtr[tag]));
+         endmethod
+      endinterface
+      interface Get response;
+         method ActionValue#(fifotype) get if ( buffer.rdRespValid); 
             buffer.deqRdResp;
             return buffer.rdResp;
          endmethod

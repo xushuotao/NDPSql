@@ -28,7 +28,7 @@ import BuildVector::*;
 import Connectable::*;
 import FIFO::*;
 import Bitonic::*;
-
+import NToOneRouter::*;
 
 import OneToNRouter::*;
 
@@ -94,7 +94,7 @@ module mkStreamingMergeSortSMT#(Bool ascending)(MergeSortSMT#(iType, vSz, totalS
 
    OneToNRouter#(n, SortedPacket#(vSz, iType)) distributor  = ?;
    if ( valueOf(n) > 16 ) begin
-      distributor <- mkOneToNRouterPipelined;   
+      distributor <- mkOneToNRouterBRAM;   
       zipWithM_(mkConnection, takeOutPorts(distributor), takeInPipes(mergerTree));
    end
    
@@ -288,6 +288,7 @@ module mkMergeNFoldSMT#(Bool ascending, Vector#(2, MemoryServer#(Bit#(aw), Vecto
    FIFO#(Tuple3#(Bool, Bool, Bit#(TLog#(fanIn)))) destFanQ <- mkSizedFIFO(3);
    Integer bufSz = 3+valueOf(TLog#(vSz));
    Vector#(fanIn, FIFOF#(SortedPacket#(vSz, iType))) dataInBufs <- replicateM(mkSizedFIFOF(bufSz+1));
+   // OneToNRouter#(fanIn,SortedPacket#(vSz, iType)) dataInRouter <- mkOneToNRouterBRAM;
    OneToNRouter#(fanIn,SortedPacket#(vSz, iType)) dataInRouter <- mkOneToNRouterPipelined;
    zipWithM_(mkConnection, takeOutPorts(dataInRouter), map(toPipeIn, dataInBufs));
    Vector#(fanIn, Array#(Reg#(Bit#(8)))) elemCnts <- replicateM(mkCReg(2, 0));

@@ -25,6 +25,7 @@ import RegFile::*;
 import FIFOF::*;
 import GetPut::*;
 import SpecialFIFOs::*;
+import DelayPipe::*;
 
 interface RWBramCore#(type addrT, type dataT);
    method Action wrReq(addrT a, dataT d);
@@ -92,6 +93,80 @@ module mkRWBramCore(RWBramCore#(addrT, dataT)) provisos(
    endmethod
    
    method dataT rdResp if(rdReqQ.notEmpty);
+      let retval = ?;
+      if ( useBRAM )
+         retval = rdPort.read;
+      else
+         retval = rf.sub(rdAddr);
+      return retval;
+   endmethod
+   
+   method rdRespValid = rdReqQ.notEmpty;
+   
+   method Action deqRdResp;
+      rdReqQ.deq;
+   endmethod
+endmodule
+
+module mkUGRWBramCore(RWBramCore#(addrT, dataT)) provisos(
+   Bits#(addrT, addrSz), Bits#(dataT, dataSz),
+   Bounded#(addrT)
+   );
+   
+   Bool useBRAM = valueOf(TExp#(addrSz)) > 8 && valueOf(dataSz) >= 256;
+   
+   BRAM_DUAL_PORT#(addrT, dataT) bram   = ?;
+   BRAM_PORT#(addrT, dataT)      wrPort = ?;
+   BRAM_PORT#(addrT, dataT)      rdPort = ?;
+   
+   RegFile#(addrT, dataT)        rf  = ?;
+
+   // 1 elem pipeline fifo to add guard for read req/resp
+   // must be 1 elem to make sure rdResp is not corrupted
+   // BRAMCore should not change output if no req is made
+   DelayPipe#(1, void) rdReqQ <- mkDelayPipe;
+   Reg#(addrT) rdAddr = ?;
+   DelayPipe#(1, Tuple2#(addrT, dataT)) wrReqQ = ?;
+   
+   if ( useBRAM ) begin
+      bram   <- mkBRAMCore2(valueOf(TExp#(addrSz)), False);
+      wrPort = bram.a;
+      rdPort = bram.b;
+   end
+   else begin
+      rf <- mkRegFileFull;
+      rdAddr <- mkRegU;
+      wrReqQ <- mkDelayPipe;
+   end
+
+   if (!useBRAM) begin
+      (*fire_when_enabled*)
+      rule deqWrReq if ( wrReqQ.notEmpty);
+         let {addr, data} = wrReqQ.first;
+         wrReqQ.deq;
+         rf.upd(addr, data);
+      endrule
+   end
+         
+   method Action wrReq(addrT a, dataT d);
+      if ( useBRAM )
+         wrPort.put(True, a, d);
+      else
+         wrReqQ.enq(tuple2(a,d));
+   endmethod
+   
+   method Action rdReq(addrT a);
+      if ( useBRAM ) begin
+         rdReqQ.enq(?);
+         rdPort.put(False, a, ?);
+      end
+      else begin
+         rdReqQ.enq(?);
+         rdAddr <= a;
+      end
+   endmethod
+   
+   method dataT rdResp;// if(rdReqQ.notEmpty);
       let retval = ?;
       if ( useBRAM )
          retval = rdPort.read;
