@@ -10,23 +10,20 @@ module UltraRAM #(
                   parameter DWIDTH = 72,  // Data Width
                   parameter NBPIPE = 3    // Number of pipeline Registers
                   ) (
-                     input                   clk, // Clock
+                     input               clk, // Clock
+                     
                                            // Port A
-                     input                   rst, // Reset
-                     input                   wea, // Write Enable
-                                           // input                   regcea, // Output Register Enable
-                     input                   mem_ena, // Memory Enable
-                     input [DWIDTH-1:0]      dina, // Data Input
-                     input [AWIDTH-1:0]      addra, // Address Input
+                     input               wea, // Write Enable
+                     input               mem_ena, // Memory Enable
+                     input [DWIDTH-1:0]  dina, // Data Input
+                     input [AWIDTH-1:0]  addra, // Address Input
                      output [DWIDTH-1:0] douta,// Data Output
 
                                            // Port B
-                     // input                   rstb, // Reset
-                     input                   web, // Write Enable
-                                           // input                   regceb, // Output Register Enable
-                     input                   mem_enb, // Memory Enable
-                     input [DWIDTH-1:0]      dinb, // Data Input
-                     input [AWIDTH-1:0]      addrb, // Address Input
+                     input               web, // Write Enable
+                     input               mem_enb, // Memory Enable
+                     input [DWIDTH-1:0]  dinb, // Data Input
+                     input [AWIDTH-1:0]  addrb, // Address Input
                      output [DWIDTH-1:0] doutb // Data Output
                      );
 

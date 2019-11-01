@@ -1,4 +1,5 @@
 package UltraRAMCore;
+import Assert::*;
 import BRAMCore::*;
 import List::*;
 
@@ -19,6 +20,7 @@ endinterface : UltraRAM_DUAL_PORT
 
 module mkUltraRAMCore2#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
                                                                                           Bits#(data, data_width));
+   staticAssert(pipeline_depth > 0,"pipeline_depth need to be greater than 1");
    let m_ = ?;
    if (genVerilog()) begin
       m_ <- mkUltraRAMCore2BVI(pipeline_depth);
@@ -76,7 +78,7 @@ import "BVI" UltraRAM =
 module mkUltraRAMCore2BVI#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
                                                                                              Bits#(data, data_width));
    default_clock clk(clk);
-   default_reset rst(rst);
+   default_reset no_reset;
    
    parameter AWIDTH = valueOf(addr_width);
    parameter DWIDTH = valueOf(data_width);
