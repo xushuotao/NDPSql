@@ -2,6 +2,9 @@ package UltraRAMCore;
 import BRAMCore::*;
 import List::*;
 
+export UltraRAM_PORT(..);
+export UltraRAM_DUAL_PORT(..);
+export mkUltraRAMCore2;
 
 interface UltraRAM_PORT#(type addr, type data);
    method Action put(Bool write, addr address, data datain);
@@ -11,11 +14,11 @@ endinterface : UltraRAM_PORT
 interface UltraRAM_DUAL_PORT#(type addr, type data);
    interface UltraRAM_PORT#(addr, data) a;
    interface UltraRAM_PORT#(addr, data) b;
-endinterface
+endinterface : UltraRAM_DUAL_PORT
 
 
 module mkUltraRAMCore2#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
-                                                                                         Bits#(data, data_width));
+                                                                                          Bits#(data, data_width));
    let m_ = ?;
    if (genVerilog()) begin
       m_ <- mkUltraRAMCore2BVI(pipeline_depth);
@@ -23,10 +26,8 @@ module mkUltraRAMCore2#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data))
    else begin
       m_ <- mkUltraRAMCore2SIM(pipeline_depth);
    end
-   
    return m_;
 endmodule
-
 
 module mkUltraRAMCore2SIM#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
                                                                                              Bits#(data, data_width));
