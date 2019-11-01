@@ -1,0 +1,16 @@
+// sythesize boundaries for sorter modules with
+// vector size = ${VECSZ},
+// data type = ${TYPE}
+`ifndef DEBUG
+(* synthesize *)
+module mkMergerScheduler_${VECSZ}_${TYPENAME}_synth#(Bool ascending)(MergerSched#(BufSize#(${VECSZ}), ${TYPE}));
+   let merger <- mkMergerSchedulerImpl(ascending);
+   return merger;
+endmodule
+instance MergerSchedInstance#(BufSize#(${VECSZ}), ${TYPE});
+   module mkMergerScheduler#(Bool ascending)(MergerSched#(BufSize#(${VECSZ}), ${TYPE}));
+      let m_ <- mkMergerScheduler_${VECSZ}_${TYPENAME}_synth(ascending);
+      return m_;
+   endmodule
+endinstance
+`endif

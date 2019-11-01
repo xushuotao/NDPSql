@@ -38,6 +38,7 @@ import BRAM::*;
 import RWBramCore::*;
 import SorterTypes::*;
 import OneToNRouter::*;
+import MergerSchedulerTypes::*;
 import MergerScheduler::*;
 
 import BRAMFIFOFVector::*;
@@ -46,8 +47,11 @@ import DelayPipe::*;
 import Assert::*;
 
 
-
+`ifdef DEBUG
+Bool debug = True;
+`else
 Bool debug = False;
+`endif
 
 interface MergeSortSMTSched#(type iType,
                              numeric type vSz,
@@ -91,6 +95,8 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    Mul#(TDiv#(n,2), 2, n),
    Add#(TLog#(TDiv#(n, 2)), b__, TLog#(n)),
    Add#(1, c__, n),
+   Add#(TLog#(TDiv#(n, 2)), g__, TLog#(TMul#(TDiv#(n, 2), 2))),
+   Log#(TMul#(TDiv#(n, 2), 2), TLog#(n)),
 //   Add#(1, b__, n),
 //   Add#(1, c__, TMul#(TDiv#(n, 2), 2)),
 //   Add#(n, d__, TMul#(TDiv#(n, 2), 2))
@@ -98,12 +104,13 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    // Add#(d__, 1, TLog#(TMul#(TExp#(TLog#(n)), 2))),
    Add#(f__, 2, TLog#(TMul#(TExp#(TLog#(n)), 4))),
    Add#(1, e__, vSz),
-   Add#(1, d__, TDiv#(n, 2))
+   Add#(1, d__, TDiv#(n, 2)),
+   FShow#(iType)
    );
 
    function f_sort(d) = bitonic_sort(d, ascending);
 
-   MergeNSMTSched#(iType, vSz, TDiv#(n,2)) merger <- mkMergeNSMTSched(ascending, 0);         
+   MergeNSMTSched#(iType, vSz, TDiv#(n,2)) merger <- mkMergeNSMTSched(ascending, 0);  
    
    StreamNode#(vSz, iType) sorter <- mkBitonicSort(ascending);
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
@@ -139,37 +146,19 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
       let slot = nextSpot.first;
       nextSpot.deq;
       // ready[slot].enq(?);
-      merger.in.scheduleReq[pack(slot)>>1][pack(slot)[0]].enq(SchedReq{topItem:last(d), last: True});
+      merger.in.scheduleReq.enq(TaggedSchedReq{tag: slot, topItem:last(d), last: True});
       buffer.enq(packet, slot);
    endrule
    
    
    FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkFIFO;
    
-   rule issueRd if (init);
-      // function Bool fready(FIFOF#(t) x) = x.notEmpty;
-      function Bool pready(PipeOut#(t) x) = x.notEmpty;
-      // function vpready(x) = map(pready, x);
-      
-      // Vector#(n, Bool) senderReady = map(fready, ready);
-      Vector#(TDiv#(n,2), Bool) receiverReady = map(pready, merger.in.scheduleResp);
-      
-      // Vector#(n, Bool) allReady = zipWith(\&& , senderReady, receiverReady);
-      
-      Vector#(TDiv#(n,2), Tuple2#(Bool, Bit#(TLog#(TDiv#(n,2))))) indexArray = zipWith(tuple2, receiverReady, genWith(fromInteger));
-      
-      let port = fold(elemFind, indexArray);
-      
-      // let port = findElem(True, allReady);
-      
-      if ( port matches {True, .tag} ) begin
-         let portsel = merger.in.scheduleResp[tag].first;
-         merger.in.scheduleResp[tag].deq;
-         // $display("tag = %d, port = %d", tag, portsel);
-         buffer.rdServer.request.put(unpack({tag,portsel}));
-         nextSpot.enq(unpack({tag,portsel}));
-         issuedTag.enq(unpack(tag));
-      end
+   rule issueRd if (init&&merger.in.scheduleResp.notEmpty);
+      let tag = merger.in.scheduleResp.first;
+      merger.in.scheduleResp.deq;
+      buffer.rdServer.request.put(tag);
+      nextSpot.enq(tag);
+      issuedTag.enq(unpack(truncateLSB(pack(tag))));
    endrule   
    
    rule doRdResp;
@@ -220,22 +209,26 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
       
    DelayPipe#(1, void) delayReq <- mkDelayPipe;   
    rule doReceivScheReq;
-      let d = merger.out.scheduleReq[0].first;
-      merger.out.scheduleReq[0].deq;
-      delayReq.enq(?);
+      let d = merger.out.scheduleReq.first;
+      merger.out.scheduleReq.deq;
+      merger.out.server.request.put(?);
+     // delayReq.enq(?);
    endrule
    
-   rule pullResult if ( delayReq.notEmpty);
-      merger.out.server.request.put(?);
-   endrule
-
-   // rule pullResp;
-   //    merger.out.ready[0].deq;
+   // rule pullResult if ( delayReq.notEmpty);
    //    merger.out.server.request.put(?);
    // endrule
-   
+   Reg#(Bit#(TLog#(n))) outCnt <- mkReg(0);
+
    rule getResp;
       let packet <- merger.out.server.response.get;
+      `ifdef DEBUG
+      $display(fshow(packet));
+      outCnt <= outCnt + 1;
+      if (outCnt == 0) dynamicAssert(packet.packet.first, "first packet should be first");
+      if (outCnt == maxBound) dynamicAssert(packet.packet.last, "last packet should be last");
+      if (outCnt > 0 && outCnt < maxBound) dynamicAssert(!packet.packet.first && !packet.packet.last, "packet should be neither first or last");
+      `endif
       outQ.enq(packet.packet.d);
    endrule
    

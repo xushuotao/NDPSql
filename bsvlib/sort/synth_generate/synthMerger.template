@@ -1,0 +1,17 @@
+// sythesize boundaries for sorter modules with
+// context size = ${CNTX},
+// vector size = ${VECSZ},
+// data type = ${TYPE}
+`ifndef DEBUG
+(* synthesize *)
+module mkMergerSMTSched_${CNTX}_${VECSZ}_${TYPENAME}_synth#(Bool ascending)(MergerSMTSched#(${CNTX}, BufSize#(${VECSZ}), ${VECSZ}, ${TYPE}));
+   let merger <- mkMergerSMTSched_Impl(ascending);
+   return merger;
+endmodule
+instance MergerSMTSchedInstance#(${CNTX}, BufSize#(${VECSZ}), ${VECSZ}, ${TYPE});
+   module mkMergerSMTSched#(Bool ascending)(MergerSMTSched#(${CNTX}, BufSize#(${VECSZ}), ${VECSZ}, ${TYPE}));
+      let m_ <- mkMergerSMTSched_${CNTX}_${VECSZ}_${TYPENAME}_synth(ascending);
+      return m_;
+   endmodule
+endinstance
+`endif

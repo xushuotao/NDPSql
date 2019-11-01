@@ -1,0 +1,25 @@
+// sythesize boundaries for sorter modules with
+// context size = ${CNTX},
+// vector size = ${VECSZ},
+// data type = ${TYPE}
+(* synthesize *)
+module mkTopHalfUnitSMT_${CNTX}_${VECSZ}_${TYPENAME}_synth#(Bool ascending)(TopHalfUnitSMT#(${CNTX}, ${VECSZ}, ${TYPE}));
+   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
+(* synthesize *)
+module mkUGTopHalfUnitSMT_${CNTX}_${VECSZ}_${TYPENAME}_synth#(Bool ascending)(TopHalfUnitSMT#(${CNTX}, ${VECSZ}, ${TYPE}));
+   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
+   return tophalfunit;
+endmodule
+instance TopHalfUnitSMTInstance#(${CNTX}, ${VECSZ}, ${TYPE});
+   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(${CNTX}, ${VECSZ}, ${TYPE}));
+      let m_ <- mkTopHalfUnitSMT_${CNTX}_${VECSZ}_${TYPENAME}_synth(ascending);
+      return m_;
+   endmodule
+   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(${CNTX}, ${VECSZ}, ${TYPE}));
+      let m_ <- mkUGTopHalfUnitSMT_${CNTX}_${VECSZ}_${TYPENAME}_synth(ascending);
+      return m_;
+   endmodule
+endinstance
+

@@ -282,7 +282,10 @@ module mkUGTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iTy
    endinterface 
 endmodule
 
+// `include "SynthTopHalf_UInt_32_8.bsv"
+`include "SynthTopHalf_UInt_32_16.bsv"
 
+/*
 ////////////////////////////////////////////////////////////////////////////////
 /// Synthesis Boundaries
 ////////////////////////////////////////////////////////////////////////////////
@@ -391,3 +394,4 @@ instance TopHalfUnitSMTInstance#(1, 8, UInt#(32));
    endmodule
 endinstance
 
+*/

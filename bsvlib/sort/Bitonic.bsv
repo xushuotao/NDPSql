@@ -73,10 +73,29 @@ typeclass RecursiveBitonic#(numeric type n, type itype);
 endtypeclass
 
 // base cases
-instance RecursiveBitonic#(1, itype) provisos(Ord#(itype));
+instance RecursiveBitonic#(1, itype) provisos(Bits#(itype, iSz), Ord#(itype));
    function Vector#(1, itype) sort_bitonic(Vector#(1, itype) in, Bool ascending) = in;
    function Vector#(1, itype) bitonic_merge(Vector#(1, itype) in, Bool ascending) = in;   
    function Vector#(1, itype) bitonic_sort(Vector#(1, itype) in, Bool ascending) = in;   
+   
+   module mkBitonicSort#(Bool ascending)(StreamNode#(1, itype));
+      FIFOF#(Vector#(1, itype)) fifo <- mkFIFOF;
+      interface PipeIn inPipe = toPipeIn(fifo);
+      interface PipeOut outPipe = toPipeOut(fifo);
+   endmodule
+
+   module mkSortBitonic#(Bool ascending)(StreamNode#(1, itype));
+      FIFOF#(Vector#(1, itype)) fifo <- mkBypassFIFOF;
+      interface PipeIn inPipe = toPipeIn(fifo);
+      interface PipeOut outPipe = toPipeOut(fifo);
+   endmodule
+   
+   module mkUGSortBitonic#(Bool ascending)(StreamNode#(1, itype));
+      FIFOF#(Vector#(1, itype)) fifo <- mkUGFIFOF;
+      interface PipeIn inPipe = toPipeIn(fifo);
+      interface PipeOut outPipe = toPipeOut(fifo);
+   endmodule
+   
 endinstance
 
 // base cases
@@ -237,14 +256,14 @@ instance RecursiveBitonic#(n, itype)
    
 
 module mkUGSortBitonic#(Bool ascending)(StreamNode#(n, itype));
-   Vector#(TLog#(n), Reg#(Vector#(n, itype))) stageData <- replicateM(mkRegU);
-   Vector#(TLog#(n), Reg#(Bool)) valid <- replicateM(mkReg(False));
+   Vector#(TAdd#(TLog#(n),1), Reg#(Vector#(n, itype))) stageData <- replicateM(mkRegU);
+   Vector#(TAdd#(TLog#(n),1), Reg#(Bool)) valid <- replicateM(mkReg(False));
    // Vector#(TLog#(n), FIFOF#(Vector#(n, itype))) stageData <- replicateM(mkUGFIFOF);
-   for (Integer i = 1; i < valueOf(TLog#(n)); i = i + 1 )begin
+   for (Integer i = 0; i < valueOf(TLog#(n)); i = i + 1 )begin
       (* fire_when_enabled, no_implicit_conditions *)
       rule doStage;//if (stageData[i-1].notEmpty);
          Integer stride = valueOf(n)/(2**(i+1));
-         Vector#(n, itype) data = stageData[i-1];
+         Vector#(n, itype) data = stageData[i];
 
          for ( Integer j = 0; j < 2**i; j = j + 1 ) begin
             for ( Integer k = 0; k < valueOf(n)/(2**(i+1)); k = k + 1) begin
@@ -254,9 +273,9 @@ module mkUGSortBitonic#(Bool ascending)(StreamNode#(n, itype));
                data[idx+stride] = b;
             end
          end
-         stageData[i]._write(data);
+         stageData[i+1]._write(data);
          
-         valid[i] <= valid[i-1];
+         valid[i+1] <= valid[i];
       endrule
    end
    
@@ -264,15 +283,15 @@ module mkUGSortBitonic#(Bool ascending)(StreamNode#(n, itype));
    
    rule doFirstStage;
       let in = fromMaybe(?, inWire.wget());
-      Integer stride = valueOf(n)/2;
-      Vector#(n, itype) data = ?;
-      for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
-         let idx = k;
-         let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), ascending);
-         data[idx] = a;
-         data[idx+stride] = b;
-      end
-      stageData[0]._write(data);
+      // Integer stride = valueOf(n)/2;
+      // Vector#(n, itype) data = ?;
+      // for ( Integer k = 0; k < valueOf(n)/2; k = k + 1) begin
+      //    let idx = k;
+      //    let {a, b} = cas_tpl(tuple2(in[idx],in[idx+stride]), ascending);
+      //    data[idx] = a;
+      //    data[idx+stride] = b;
+      // end
+      stageData[0]._write(in);
       
       valid[0] <= isValid(inWire.wget());
    endrule
