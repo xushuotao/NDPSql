@@ -34,7 +34,7 @@ import ClientServerHelper::*;
 
 import DelayPipe::*;
 import Assert::*;
-import UltraRAMCore::*;
+import URAMCore::*;
 
 
 interface UltraRAMPerfRequest;
@@ -62,7 +62,7 @@ module mkUltraRAMPerf#(UltraRAMPerfIndication indication)(UltraRAMPerf);
       cycleCnt <= cycleCnt + 1;
    endrule
    
-   UltraRAM_DUAL_PORT#(Bit#(17), Bit#(512)) ram <- mkUltraRAMCore2(valueOf(PPL));
+   URAM_DUAL_PORT#(Bit#(17), Bit#(512)) ram <- mkURAMCore2(valueOf(PPL));
 
    
    Vector#(2,FIFO#(Bit#(32))) cntRdMaxQ <- replicateM(mkFIFO());

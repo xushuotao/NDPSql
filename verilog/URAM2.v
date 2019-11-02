@@ -5,42 +5,41 @@
 //  Only when write is inactive data corresponding to the address is
 //  presented on the output port.
 //
-module UltraRAM #(
-                  parameter AWIDTH = 12,  // Address Width
-                  parameter DWIDTH = 72,  // Data Width
-                  parameter NBPIPE = 3    // Number of pipeline Registers
-                  ) (
-                     input               clk, // Clock
-                     
-                                           // Port A
-                     input               wea, // Write Enable
-                     input               mem_ena, // Memory Enable
-                     input [DWIDTH-1:0]  dina, // Data Input
-                     input [AWIDTH-1:0]  addra, // Address Input
-                     output [DWIDTH-1:0] douta,// Data Output
+module URAM2 #(
+               parameter AWIDTH = 12,  // Address Width
+               parameter DWIDTH = 72,  // Data Width
+               parameter NBPIPE = 3    // Number of pipeline Registers
+               ) (
+                  input               clk, // Clock
+                  // Port A
+                  input               wea, // Write Enable
+                  input               mem_ena, // Memory Enable
+                  input [DWIDTH-1:0]  dina, // Data Input
+                  input [AWIDTH-1:0]  addra, // Address Input
+                  output [DWIDTH-1:0] douta,// Data Output
 
-                                           // Port B
-                     input               web, // Write Enable
-                     input               mem_enb, // Memory Enable
-                     input [DWIDTH-1:0]  dinb, // Data Input
-                     input [AWIDTH-1:0]  addrb, // Address Input
-                     output [DWIDTH-1:0] doutb // Data Output
-                     );
+                  // Port B
+                  input               web, // Write Enable
+                  input               mem_enb, // Memory Enable
+                  input [DWIDTH-1:0]  dinb, // Data Input
+                  input [AWIDTH-1:0]  addrb, // Address Input
+                  output [DWIDTH-1:0] doutb // Data Output
+                 );
 
    (* ram_style = "ultra" *)
-   reg [DWIDTH-1:0]                                                mem[(1<<AWIDTH)-1:0];        // Memory Declaration
+   reg [DWIDTH-1:0]                  mem[(1<<AWIDTH)-1:0];        // Memory Declaration
 
-   reg [DWIDTH-1:0]                                                memrega;
-   reg [DWIDTH-1:0]                                                mem_pipe_rega[NBPIPE-1:0];    // Pipelines for memory
-   reg                                                             mem_en_pipe_rega[NBPIPE:0];   // Pipelines for memory enable
+   reg [DWIDTH-1:0]                  memrega;
+   reg [DWIDTH-1:0]                  mem_pipe_rega[NBPIPE-1:0];    // Pipelines for memory
+   reg                               mem_en_pipe_rega[NBPIPE:0];   // Pipelines for memory enable
 
-   reg [DWIDTH-1:0]                                                memregb;
-   reg [DWIDTH-1:0]                                                mem_pipe_regb[NBPIPE-1:0];    // Pipelines for memory
-   reg                                                             mem_en_pipe_regb[NBPIPE:0];   // Pipelines for memory enable
+   reg [DWIDTH-1:0]                  memregb;
+   reg [DWIDTH-1:0]                  mem_pipe_regb[NBPIPE-1:0];    // Pipelines for memory
+   reg                               mem_en_pipe_regb[NBPIPE:0];   // Pipelines for memory enable
    assign douta = mem_pipe_rega[NBPIPE-1];
    assign doutb = mem_pipe_regb[NBPIPE-1];
 
-   integer                                                         i;
+   integer                           i;
 
    // RAM : Read has one latency, Write has one latency as well.
    always @ (posedge clk)

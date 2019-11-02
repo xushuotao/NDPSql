@@ -1,37 +1,37 @@
-package UltraRAMCore;
+package URAMCore;
 import Assert::*;
 import BRAMCore::*;
 import List::*;
 
-export UltraRAM_PORT(..);
-export UltraRAM_DUAL_PORT(..);
-export mkUltraRAMCore2;
+export URAM_PORT(..);
+export URAM_DUAL_PORT(..);
+export mkURAMCore2;
 
-interface UltraRAM_PORT#(type addr, type data);
+interface URAM_PORT#(type addr, type data);
    method Action put(Bool write, addr address, data datain);
    method data read();
-endinterface : UltraRAM_PORT
+endinterface : URAM_PORT
 
-interface UltraRAM_DUAL_PORT#(type addr, type data);
-   interface UltraRAM_PORT#(addr, data) a;
-   interface UltraRAM_PORT#(addr, data) b;
-endinterface : UltraRAM_DUAL_PORT
+interface URAM_DUAL_PORT#(type addr, type data);
+   interface URAM_PORT#(addr, data) a;
+   interface URAM_PORT#(addr, data) b;
+endinterface : URAM_DUAL_PORT
 
 
-module mkUltraRAMCore2#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
+module mkURAMCore2#(Integer pipeline_depth)(URAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
                                                                                           Bits#(data, data_width));
    staticAssert(pipeline_depth > 0,"pipeline_depth need to be greater than 1");
    let m_ = ?;
    if (genVerilog()) begin
-      m_ <- mkUltraRAMCore2BVI(pipeline_depth);
+      m_ <- mkURAMCore2BVI(pipeline_depth);
    end   
    else begin
-      m_ <- mkUltraRAMCore2SIM(pipeline_depth);
+      m_ <- mkURAMCore2SIM(pipeline_depth);
    end
    return m_;
 endmodule
 
-module mkUltraRAMCore2SIM#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
+module mkURAMCore2SIM#(Integer pipeline_depth)(URAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
                                                                                              Bits#(data, data_width));
    
    BRAM_DUAL_PORT#(addr, data) ram <- mkBRAMCore2(valueOf(TExp#(addr_width)), False);
@@ -55,7 +55,7 @@ module mkUltraRAMCore2SIM#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, dat
    endrule
 
    
-   interface UltraRAM_PORT a;
+   interface URAM_PORT a;
       method Action put(Bool write, addr address, data datain);
          ram.a.put(write, address, datain);
       endmethod
@@ -63,7 +63,7 @@ module mkUltraRAMCore2SIM#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, dat
          return last(delayRegA)._read;
       endmethod
    endinterface   
-   interface UltraRAM_PORT b;
+   interface URAM_PORT b;
       method Action put(Bool write, addr address, data datain);
          ram.b.put(write, address, datain);
       endmethod
@@ -74,8 +74,8 @@ module mkUltraRAMCore2SIM#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, dat
 endmodule
 
 
-import "BVI" UltraRAM =
-module mkUltraRAMCore2BVI#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
+import "BVI" URAM2 =
+module mkURAMCore2BVI#(Integer pipeline_depth)(URAM_DUAL_PORT#(addr, data)) provisos(Bits#(addr, addr_width),
                                                                                              Bits#(data, data_width));
    default_clock clk(clk);
    default_reset no_reset;
@@ -84,7 +84,7 @@ module mkUltraRAMCore2BVI#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, dat
    parameter DWIDTH = valueOf(data_width);
    parameter NBPIPE = pipeline_depth;
    
-   interface UltraRAM_PORT a;
+   interface URAM_PORT a;
       method       put(wea, addra, dina) enable(mem_ena) clocked_by (clk) reset_by(no_reset);
       method douta read clocked_by (clk) reset_by(no_reset);
    endinterface
@@ -93,7 +93,7 @@ module mkUltraRAMCore2BVI#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, dat
    schedule (a.read) CF (a.read);
    schedule (a.put ) C (a.put);
    
-   interface UltraRAM_PORT b;
+   interface URAM_PORT b;
       method       put(web, addrb, dinb) enable(mem_enb) clocked_by (clk) reset_by(no_reset);
       method doutb read clocked_by (clk) reset_by(no_reset);
    endinterface
@@ -110,4 +110,4 @@ module mkUltraRAMCore2BVI#(Integer pipeline_depth)(UltraRAM_DUAL_PORT#(addr, dat
 
 endmodule
 
-endpackage: UltraRAMCore
+endpackage: URAMCore
