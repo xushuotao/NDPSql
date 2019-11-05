@@ -236,13 +236,13 @@ module mkColReader(ColReader);
    
    
    // size of 8 allows a maximum 8 read contentions from all colreaders
-   FIFO#(RowMaskRead) maskRdReqQ <- mkSizedFIFO(8);
-   FIFO#(MaskRdMeta) rowMaskMetaQ <- mkSizedFIFO(8);
+   FIFO#(RowMaskRead) maskRdReqQ <- mkSizedFIFO(32);
+   FIFO#(MaskRdMeta) rowMaskMetaQ <- mkSizedFIFO(32);
    // row vector mask read response from the rowMask buffer
    FIFO#(RowVectorMask) rowMaskRespQ <- mkFIFO;
    
    // size of 17 because maximum 16 beats per rowVec
-   FIFOF#(Bit#(256)) rowDataQ <- mkSizedFIFOF(17);
+   FIFOF#(Bit#(256)) rowDataQ <- mkSizedFIFOF(64);
    
    
    rule doFlashResp if ( state != Idle );

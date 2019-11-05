@@ -5,6 +5,7 @@ import ClientServer::*;
 import ClientServerHelper::*;
 import FIFO::*;
 import FIFOF::*;
+import BRAMFIFO::*;
 import DualFlashPageBuffer::*;
 import GetPut::*;
 import ISSPTypes::*;
@@ -21,11 +22,11 @@ endinterface
 
 (* synthesize *)
 module mkFlashPageReaderIO(FlashPageReaderIO);
-   FIFO#(DualFlashAddr) addrQ <- mkFIFO;//mkSizedFIFO(valueOf(PageBufSz));
+   FIFO#(DualFlashAddr) addrQ <- mkSizedBRAMFIFO(valueOf(PageBufSz));
    FIFO#(BufTagT) tagRespQ <- mkFIFO;//SizedFIFO(valueOf(PageBufSz));
    FIFOF#(Bit#(256)) dataRespQ <- mkFIFOF;
    FIFO#(BufTagT) tagReleaseQ <- mkFIFO;
-   FIFO#(BufTagT) tagDoneQ <- mkFIFO;
+   FIFO#(BufTagT) tagDoneQ <- mkFIFO;//SizedFIFO(valueOf(PageBufSz));
    // 256 beats per Page
    Reg#(Bit#(8)) beatCnt <- mkReg(0);
    Reg#(Bit#(8)) beatCnt_resp <- mkReg(0);

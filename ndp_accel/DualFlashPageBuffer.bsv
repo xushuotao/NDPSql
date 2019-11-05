@@ -19,7 +19,7 @@ import ControllerTypes::*;
 
 import Connectable::*;
 
-Bool debug = True;
+Bool debug = False;
 
 interface PageBufferClient#(numeric type numPages);
    interface Client#(DualFlashAddr, Bit#(TLog#(numPages))) bufReserve;
@@ -111,18 +111,20 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
    Vector#(numSlaves, FIFO#(Tuple2#(TagT, Bit#(256)))) flashRespQs <- replicateM(mkFIFO);
    // FIFO#(Tuple2#(TagT, Bit#(256))) flashRespQ <- mkFIFO;
    
-   FIFO#(slaveIdT) readDst <- mkPipelineFIFO;
+   FIFO#(slaveIdT) readDst <- mkFIFO;
    
-   Vector#(numSlaves, FIFO#(Bit#(256))) deqRespQs <- replicateM(mkFIFO);
+   Vector#(numSlaves, FIFO#(Bit#(256))) deqRespQs <- replicateM(mkSizedFIFO(3));
    Vector#(numSlaves, FIFO#(tagT)) doneBufQs <- replicateM(mkFIFO);
    
    Reg#(Bit#(TLog#(TAdd#(numPages,1)))) outstandingBufCnt[2] <- mkCReg(2,0);
    
-   Vector#(numSlaves, Array#(Reg#(UInt#(3)))) inPipeElemCnts <- replicateM(mkCReg(2,0));
+   // Vector#(numSlaves, Array#(Reg#(UInt#(3)))) inPipeElemCnts <- replicateM(mkCReg(2,0));
+   Vector#(numSlaves, Count#(UInt#(3))) inPipeElemCnts <- replicateM(mkCount(0));
+
    
    // delaying the bram req by one cycle to cut down critical path
-   FIFO#(Tuple3#(slaveIdT, tagT, Bit#(8))) bramRdReqQ <- mkPipelineFIFO;
-   FIFO#(Tuple3#(Bit#(256), tagT, Bit#(8))) bramWrReqQ <- mkPipelineFIFO;
+   FIFO#(Tuple3#(slaveIdT, tagT, Bit#(8))) bramRdReqQ <- mkFIFO;//mkPipelineFIFO;
+   FIFO#(Tuple3#(Bit#(256), tagT, Bit#(8))) bramWrReqQ <- mkFIFO;//mkPipelineFIFO;
    
    
    for (Integer i = 0; i < valueOf(numSlaves); i = i + 1) begin
@@ -133,8 +135,8 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
       // endrule
       rule processDoneBuf if (  doneBufQs[i].first matches .tag &&& isFull[i][tag][1]);        //if ( enqPtrs[i][doneBufQs[i].first] == 257);
          // let tag = doneBufQs[i].first;
-         outstandingBufCnt[1] <= outstandingBufCnt[1] - 1;
-         if (debug) $display("(@%t) execute doneBuf tag = %d, client = %d, outstandingBuf = %d", $time, tag, i, outstandingBufCnt[1]);
+         // outstandingBufCnt[1] <= outstandingBufCnt[1] - 1;
+         // if (debug) $display("(@%t) execute doneBuf tag = %d, client = %d, outstandingBuf = %d", $time, tag, i, outstandingBufCnt[1]);
          freeBufIdQ.enq(tag);
          doneBufQs[i].deq;
          // deqPtrs[tag] <= 0;
@@ -147,7 +149,7 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
          
       endrule
       
-      rule processDeqReq if ( deqReqQs[i].first matches .tag &&& ((zeroExtend(deqPtrs[i][tag]) < enqPtrs[i][tag] || isFull[i][tag][0]) && inPipeElemCnts[i][1] <= 2) );
+      rule processDeqReq if ( deqReqQs[i].first matches .tag &&& ((zeroExtend(deqPtrs[i][tag]) < enqPtrs[i][tag] || isFull[i][tag][0]) && inPipeElemCnts[i] <= 2) );
          // let tag = deqReqQs[i].first;
          // this is safe only since we know that we will not write exceed the capacity
          // when ( zeroExtend(deqPtrs[i][tag]) >= enqPtrs[i][tag], noAction); 
@@ -158,8 +160,8 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
          // readDst.enq(fromInteger(i));
          bramRdReqQ.enq(tuple3(fromInteger(i), tag, deqPtrs[i][tag]));  // for the sake of pipelining
          deqReqQs[i].deq;
-         if (debug) $display("(@%t) execute deq for tag = %d, client = %d, enqPtr = %d, deqPtr = %d, inPipeElems = %d", $time, tag, i, enqPtrs[i][tag], deqPtrs[i][tag], inPipeElemCnts[i][1]);
-         inPipeElemCnts[i][1] <= inPipeElemCnts[i][1] + 1; 
+         if (debug) $display("(@%t) execute deq for tag = %d, client = %d, enqPtr = %d, deqPtr = %d, inPipeElems = %d", $time, tag, i, enqPtrs[i][tag], deqPtrs[i][tag], inPipeElemCnts[i]);
+         inPipeElemCnts[i].incr(1);// <= inPipeElemCnts[i][1] + 1; 
          // end 
       endrule
       
@@ -168,7 +170,7 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
          let {fTag, data} <- toGet(flashRespQs[i]).get;
          tagT tag = truncate(fTag);
          // only write data within 8kB
-         if (debug) $display("(@%t) execute enq for tag = %d, enqPtr = %d", $time, tag, enqPtrs[i][tag]);//, deqPtrs[i][tag]);
+         if (debug) $display("(@%t) execute enq for tag = %d, client = %d, enqPtr = %d", $time, tag, i, enqPtrs[i][tag]);//, deqPtrs[i][tag]);
             
          if ( enqPtrs[i][tag] < 256 ) begin
             // buffer.wrReq(toBufferIdx(tag, enqPtrs[i][tag]), data);
@@ -218,12 +220,12 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
                           tagTable.upd(tag, fromInteger(i));
                           flashReqQ.enq(tuple2(zeroExtend(tag), addr));
                           tagRespQs[i].enq(tag);
-                          outstandingBufCnt[0] <= outstandingBufCnt[0] + 1;
+                          // outstandingBufCnt[0] <= outstandingBufCnt[0] + 1;
                           `ifdef TRACE_BUF
                           bufReserveTrace.wrReq(reserveIdx, tuple2(tag,cycle));
                           reserveIdx <= reserveIdx + 1;
                           `endif
-                          if (debug) $display("(%m) Reserved tag = %d for client = %d, outstandingBuf = %d", tag, i, outstandingBufCnt[0]);
+                          // if (debug) $display("(%m) Reserved tag = %d for client = %d, outstandingBuf = %d", tag, i, outstandingBufCnt[0]);
                        endmethod
                     endinterface
                     interface Get response = toGet(tagRespQs[i]);
@@ -234,8 +236,9 @@ module mkDualFlashPageBuffer(DualFlashPageBuffer#(numSlaves,  numPages)) proviso
                     interface Get response;// = toGet(deqRespQs[i]);
                        method ActionValue#(Bit#(256)) get();
                           let v <- toGet(deqRespQs[i]).get;
-                          inPipeElemCnts[i][0] <= inPipeElemCnts[i][0] - 1; 
-                          if (debug) $display("(%m) circularRead deq client = %d, elems = %d", i, inPipeElemCnts[i][0]);
+                          inPipeElemCnts[i].decr(1);// <= inPipeElemCnts[i][1] + 1; 
+                          // inPipeElemCnts[i][0] <= inPipeElemCnts[i][0] - 1; 
+                          // if (debug) $display("(%m) circularRead deq client = %d, elems = %d", i, inPipeElemCnts[i]);
                           // inPipeElemCnts[i].decr(1);
                           return v;
                        endmethod

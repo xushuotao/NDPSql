@@ -46,7 +46,7 @@ module mkSelect(Select#(colBytes)) provisos(
    
    Reg#(Bit#(lgColBytes)) maskSel <- mkReg(0);
    // rowVecId, isLast, hasData, mask
-   FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) beatMaskQ <- mkFIFO;
+   FIFO#(Tuple4#(Bit#(64), Bool, Bool, rowMaskT)) beatMaskQ <- mkFIFO; //mkSizedFIFOF((32/rowsPerBeat_int)+1);
    
    FIFOF#(RowData) rowDataQ <- mkSizedFIFOF((32/rowsPerBeat_int)+1);
 

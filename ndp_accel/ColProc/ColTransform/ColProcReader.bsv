@@ -16,7 +16,7 @@ import Assert::*;
 
 import DualFlashPageBuffer::*;
 
-Bool debug = False;
+Bool debug = True;
 
 
 typedef Bit#(TLog#(MaxNumCol)) ColIdT;

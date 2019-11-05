@@ -7,7 +7,7 @@ import SpecialFIFOs::*;
 import FlashCtrlIfc::*;
 import GetPut::*;
 
-Bool debug = True;
+Bool debug = False;
 
 interface ColPageEng;
    interface PipeIn#(Tuple2#(Bit#(64), Bool)) pageInPipe;
