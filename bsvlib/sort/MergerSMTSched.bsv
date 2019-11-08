@@ -184,6 +184,8 @@ module mkMergerSMTSched_Impl#(Bool ascending
       Bitonic::RecursiveBitonic#(vSz, iType),
       TopHalfUnitSMT::TopHalfUnitSMTInstance#(numTags, vSz, iType),
       MergerScheduler::MergerSchedInstance#(tagBufSz, iType),
+      MergerScheduler::MergerSchedVectorInstance#(numTags, tagBufSz, iType),
+
       Add#(1, a__, vSz),
       Add#(1, b__, numTags),
 
@@ -321,6 +323,7 @@ instance MergerSMTSchedInstance#(numTags, tagBufSz, vSz, iType) provisos(
    Bitonic::RecursiveBitonic#(vSz, iType),
    TopHalfUnitSMT::TopHalfUnitSMTInstance#(numTags, vSz, iType),
    MergerScheduler::MergerSchedInstance#(tagBufSz, iType),
+   MergerScheduler::MergerSchedVectorInstance#(numTags, tagBufSz, iType),
    Add#(1, a__, vSz),
    Add#(1, b__, numTags),
    // NumAlias#(TExp#(TLog#(tagBufSz)), tagBufSz),

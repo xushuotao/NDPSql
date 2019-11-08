@@ -204,12 +204,12 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
    Div#(sortedSz, vSz, blockLines),
    NumAlias#(blockLines, TExp#(TLog#(blockLines))), //blockLines is power of 2
    Mul#(blockLines, n, totalLines),
-   Mul#(n, 2, n4),
-   Mul#(blockLines, n4, bufferlines),
-   Alias#(Bit#(TLog#(n4)), blkIdT),
+   Mul#(n, 2, n2),
+   Mul#(blockLines, n2, bufferlines),
+   Alias#(Bit#(TLog#(n2)), blkIdT),
    Alias#(Bit#(TLog#(blockLines)), lineIdT),
    
-   Add#(TLog#(n4), TLog#(blockLines), TLog#(bufferlines)),
+   Add#(TLog#(n2), TLog#(blockLines), TLog#(bufferlines)),
    Pipe::FunnelPipesPipelined#(1, n, Tuple3#(blkIdT,  lineIdT, UInt#(TLog#(n))), 1),
 
    
@@ -217,14 +217,14 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
    
    );
    
-   FIFO#(Bit#(TLog#(n4))) freeBufIdQ <- mkSizedFIFO(valueOf(n4));
+   FIFO#(Bit#(TLog#(n2))) freeBufIdQ <- mkSizedFIFO(valueOf(n2));
    
-   Reg#(Bit#(TLog#(n4))) initCnt <- mkReg(0);
+   Reg#(Bit#(TLog#(n2))) initCnt <- mkReg(0);
    Reg#(Bool) init <- mkReg(False);
    rule doInit if (!init);
       initCnt <= initCnt + 1;
       freeBufIdQ.enq(initCnt);
-      if ( initCnt == fromInteger(valueOf(n4)-1) )
+      if ( initCnt == fromInteger(valueOf(n2)-1) )
          init <= True;
    endrule
 
