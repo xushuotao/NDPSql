@@ -1,9 +1,9 @@
-[submodule "platform/build_tools/fpgamake"]
-	path = platform/build_tools/fpgamake
-	url = git://github.com/cambridgehackers/fpgamake
 [submodule "platform/build_tools/buildcache"]
 	path = platform/build_tools/buildcache
 	url = git://github.com/cambridgehackers/buildcache
 [submodule "platform/build_tools/connectal"]
 	path = platform/build_tools/connectal
 	url = https://github.com/xushuotao/connectal.git
+[submodule "platform/build_tools/fpgamake"]
+	path = platform/build_tools/fpgamake
+	url = git@github.com:xushuotao/fpgamake.git
