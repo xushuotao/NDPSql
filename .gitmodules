@@ -6,4 +6,4 @@
 	url = https://github.com/xushuotao/connectal.git
 [submodule "platform/build_tools/fpgamake"]
 	path = platform/build_tools/fpgamake
-	url = git@github.com:xushuotao/fpgamake.git
+	url = https://github.com/xushuotao/fpgamake.git
