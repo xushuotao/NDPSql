@@ -291,6 +291,7 @@ module mkMergerSchedVector#(Bool ascending
    zipWithM_(mkConnection, map(toPipeOut, schedReqQ), concat(map(getPipeIn,schedulers)));
    
    FIFOF#(UInt#(TLog#(TMul#(numTags,2)))) willGoQ <- mkUGFIFOF;//BypassFIFOF;
+
    
    rule issueWillGo;
       
@@ -395,13 +396,13 @@ module mkMergerSchedulerImpl#(Bool ascending
       
       let selectedPort = portSel;
       
-      if ( portSel == 0 ) begin // || (isFirst && inQ[0].notEmpty) ) begin
+      if ( portSel == 0 || (isFirst && inQ[0].notEmpty) ) begin
          req <- toGet(inQ[0]).get; 
-         // selectedPort = 0;
+         selectedPort = 0;
       end
       else begin
          req <- toGet(inQ[1]).get;
-         // selectedPort = 1;
+         selectedPort = 1;
       end
       
       

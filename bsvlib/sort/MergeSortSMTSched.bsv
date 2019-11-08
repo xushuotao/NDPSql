@@ -41,8 +41,12 @@ import OneToNRouter::*;
 import MergerSchedulerTypes::*;
 import MergerScheduler::*;
 
+import RWUramCore::*;
+
 import BRAMFIFOFVector::*;
 import DelayPipe::*;
+
+import Cntrs::*;
 
 import Assert::*;
 
@@ -56,26 +60,6 @@ Bool debug = False;
 interface MergeSortSMTSched#(type iType,
                              numeric type vSz,
                              numeric type totalSz);
-   interface PipeIn#(Vector#(vSz, iType)) inPipe;
-   interface PipeOut#(Vector#(vSz, iType)) outPipe;
-endinterface
-
-interface MultiMergeNFoldSMT#(numeric type way,
-                              type iType,
-                              numeric type vSz,
-                              numeric type sortedSz,
-                              numeric type n,
-                              numeric type fanIn);
-   interface PipeIn#(Vector#(vSz, iType)) inPipe;
-   interface PipeOut#(Vector#(vSz, iType)) outPipe;
-endinterface
-
-
-interface MergeNFoldSMT#(type iType,
-                      numeric type vSz,
-                      numeric type sortedSz,
-                      numeric type n,
-                      numeric type fanIn);
    interface PipeIn#(Vector#(vSz, iType)) inPipe;
    interface PipeOut#(Vector#(vSz, iType)) outPipe;
 endinterface
@@ -167,43 +151,6 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
       merger.in.dataChannel.enq(TaggedSortedPacket{tag:tag, packet:packet});
    endrule
    
-
-
-   
-      
-   // rule issueRd if (init);
-   //    function Bool fready(FIFOF#(t) x) = x.notEmpty;
-   //    function Bool pready(PipeOut#(t) x) = x.notEmpty;
-   //    function vpready(x) = map(pready, x);
-      
-   //    Vector#(n, Bool) senderReady = map(fready, ready);
-   //    Vector#(n, Bool) receiverReady = concat(map(vpready, merger.in.ready));
-      
-   //    Vector#(n, Bool) allReady = zipWith(\&& , senderReady, receiverReady);
-      
-   //    Vector#(n, Tuple2#(Bool, Bit#(TLog#(n)))) indexArray = zipWith(tuple2, allReady, genWith(fromInteger));
-      
-   //    let port = fold(elemFind, indexArray);
-
-      
-   //    // let port = findElem(True, allReady);
-      
-   //    if ( port matches {True, .tag} ) begin
-   //       buffer.rdReq(unpack(tag));
-   //       ready[tag].deq;
-   //       merger.in.ready[tag>>1][tag[0]].deq;
-   //       nextSpot.enq(unpack(tag));
-   //       issuedTag.enq(unpack(truncateLSB(tag)));
-   //    end
-   // endrule
-   
-   
-   // rule doRdResp;
-   //    let packet = buffer.rdResp;
-   //    buffer.deqRdResp;
-   //    let tag <- toGet(issuedTag).get;
-   //    merger.in.inputResp(tag, packet);
-   // endrule
    
    FIFOF#(Vector#(vSz, iType)) outQ <- mkFIFOF;
       
@@ -235,6 +182,201 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
       
    interface PipeIn inPipe = sorter.inPipe;
    interface PipeOut outPipe = toPipeOut(outQ);
+endmodule
+
+interface StreamingMergerSMTSched#(type iType, numeric type vSz, numeric type sortedSz, numeric type fanIn);
+   interface PipeIn#(Vector#(vSz, iType)) inPipe;
+   interface PipeOut#(Vector#(vSz, iType)) outPipe;
+endinterface
+
+module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType, vSz, sortedSz, n)) provisos (
+   Bits#(iType, typeSz),
+   Add#(1, d__, n),
+   Log#(TMul#(TDiv#(n, 2), 2), TLog#(n)),
+   Add#(TLog#(TDiv#(n, 2)), a__, TLog#(TMul#(TDiv#(n, 2), 2))),
+   Add#(1, b__, vSz),
+   MergerSMTSched::RecursiveMergerSMTSched#(iType, vSz, TDiv#(n,2)),
+   
+   // Add#(c__, 4, TLog#(TMul#(TExp#(TLog#(n)), 16))),
+   // Add#(c__, 5, TLog#(TMul#(TExp#(TLog#(n)), 32))),
+   Add#(c__, TLog#(BufSize#(vSz)),   TLog#(TMul#(TExp#(TLog#(n)), BufSize#(vSz)))),
+
+   Div#(sortedSz, vSz, blockLines),
+   NumAlias#(blockLines, TExp#(TLog#(blockLines))), //blockLines is power of 2
+   Mul#(blockLines, n, totalLines),
+   Mul#(n, 2, n4),
+   Mul#(blockLines, n4, bufferlines),
+   Alias#(Bit#(TLog#(n4)), blkIdT),
+   Alias#(Bit#(TLog#(blockLines)), lineIdT),
+   
+   Add#(TLog#(n4), TLog#(blockLines), TLog#(bufferlines)),
+   Pipe::FunnelPipesPipelined#(1, n, Tuple3#(blkIdT,  lineIdT, UInt#(TLog#(n))), 1),
+
+   
+   FShow#(iType)
+   
+   );
+   
+   FIFO#(Bit#(TLog#(n4))) freeBufIdQ <- mkSizedFIFO(valueOf(n4));
+   
+   Reg#(Bit#(TLog#(n4))) initCnt <- mkReg(0);
+   Reg#(Bool) init <- mkReg(False);
+   rule doInit if (!init);
+      initCnt <= initCnt + 1;
+      freeBufIdQ.enq(initCnt);
+      if ( initCnt == fromInteger(valueOf(n4)-1) )
+         init <= True;
+   endrule
+
+   // read latency = 5   
+   RWUramCore#(Bit#(TLog#(bufferlines)), SortedPacket#(vSz, iType)) buffer <- mkRWUramCore(4);
+   // RWBramCore#(Bit#(TLog#(bufferlines)), SortedPacket#(vSz, iType)) buffer <- mkRWBramCore;
+   
+   function Bit#(TLog#(bufferlines)) toAddr(blkIdT blkId, lineIdT lineId);
+      return {blkId,lineId};
+   endfunction
+   
+
+   MergeNSMTSched#(iType, vSz, TDiv#(n,2)) merger <- mkMergeNSMTSched(ascending, 0);  
+
+   
+   FIFOF#(Vector#(vSz, iType)) inQ <- mkFIFOF;
+   FIFOF#(Vector#(vSz, iType)) outQ <- mkFIFOF;   
+      
+   Reg#(Bit#(TLog#(blockLines))) lineCnt_enq <- mkReg(0);
+   
+   Vector#(n, FIFOF#(blkIdT)) sortedBlks <- replicateM(mkUGSizedFIFOF(3));
+   
+   Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
+   rule doEnqBuffer;
+      let d <- toGet(inQ).get;
+      let bufId = freeBufIdQ.first;
+      if ( lineCnt_enq == maxBound ) begin
+         freeBufIdQ.deq;
+         fanInSel <= fanInSel + 1;
+         sortedBlks[fanInSel].enq(bufId);
+      end
+      lineCnt_enq <= lineCnt_enq + 1;
+      // $display("Enqeuing Buffer, bufId = %d, lineCnt_enq = %d, addr = %d, fanInSel = %d", bufId, lineCnt_enq, toAddr(bufId, lineCnt_enq), fanInSel);
+      buffer.wrReq(toAddr(bufId, lineCnt_enq), SortedPacket{first:lineCnt_enq==0, last:lineCnt_enq==maxBound, d:d});
+   endrule
+   
+   Integer bufSz = valueOf(BufSize#(vSz));
+   
+   Vector#(n, Count#(UInt#(TLog#(TAdd#(1,BufSize#(vSz)))))) creditV <- replicateM(mkCount(fromInteger(bufSz)));
+   Vector#(n, Reg#(lineIdT)) lineCnt_deqV <- replicateM(mkReg(0));
+   FIFO#(UInt#(TLog#(n))) dstFanQ <- mkSizedFIFO(8);
+   
+   // BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGBRAMVector;//mkUGPipelinedBRAMVector;
+   BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGPipelinedBRAMVector;
+   // FIFO#(Tuple2#(Bit#(TLog#(bufferlines)), UInt#(TLog#(n)))) readReqQ <- mkFIFO;
+   Vector#(n, FIFOF#(Tuple3#(blkIdT, lineIdT, UInt#(TLog#(n))))) bufferRdReqQs <- replicateM(mkFIFOF);
+   
+   FunnelPipe#(1, n, Tuple3#(blkIdT, lineIdT, UInt#(TLog#(n))), 1) bufferRdReqFunnel <- mkFunnelPipesPipelined(map(toPipeOut, bufferRdReqQs));
+   
+   for (Integer idx = 0; idx < valueOf(n); idx = idx + 1 ) begin
+      rule doPullData ( creditV[idx] > 0 && sortedBlks[idx].notEmpty);
+         creditV[idx].decr(1);
+         let bufId = sortedBlks[idx].first;
+         if (lineCnt_deqV[idx] == maxBound) begin
+            sortedBlks[idx].deq;
+         end
+         lineCnt_deqV[idx] <= lineCnt_deqV[idx] + 1;
+         bufferRdReqQs[idx].enq(tuple3(bufId, lineCnt_deqV[idx], fromInteger(idx)));
+      endrule
+   end
+   
+   rule doIssueReq if (bufferRdReqFunnel[0].notEmpty);
+      let {bufId, lineCnt, dst} = bufferRdReqFunnel[0].first;
+      bufferRdReqFunnel[0].deq;
+      if (lineCnt == maxBound)  freeBufIdQ.enq(bufId);
+      buffer.rdReq(toAddr(bufId, lineCnt));
+      dstFanQ.enq(dst);
+   endrule
+   
+   
+   // rule doPullData;// if ( creditV[i] > 0 );
+   //    // function Bool gtZero(Count#(UInt#(szz)) c) = (c._read() > 0);
+   //    function Bool predicate(Integer i);
+   //       return creditV[i] > 0 && sortedBlks[i].notEmpty;
+   //    endfunction
+   //    Vector#(n, Bool) readyV = genWith(predicate);
+   //    Vector#(n, Tuple2#(Bool, Bit#(TLog#(n)))) indexArray = zipWith(tuple2, readyV, genWith(fromInteger));
+         
+   //    let port = fold(elemFind, indexArray);
+            
+   //    if ( pack(readyV) != 0 ) begin
+   //       let idx = tpl_2(port);
+   //       creditV[idx].decr(1);
+   //       let bufId = sortedBlks[idx].first;
+   //       if (lineCnt_deqV[idx] == maxBound) begin
+   //          sortedBlks[idx].deq;
+   //          freeBufIdQ.enq(bufId);
+   //       end
+   //       readReqQ.enq(tuple2(toAddr(bufId, lineCnt_deqV[idx]), unpack(idx)));
+   //       lineCnt_deqV[idx] <= lineCnt_deqV[idx] + 1;
+   //    end
+   // endrule
+   // // end
+   
+   
+   // rule doSchedReq;
+   //    let {addr, dst} <- toGet(readReqQ).get;
+   //    buffer.rdReq(addr);
+   //    dstFanQ.enq(dst);
+   // endrule
+
+   rule issueSched;
+      let packet = buffer.rdResp;
+      buffer.deqRdResp;
+      let dst <- toGet(dstFanQ).get;
+      dispatchBuff.enq(packet, dst);
+      // $display("(%t) Enqueue Dispatch buf, tag = %d, packet = ", $time, dst, fshow(packet));
+      merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
+   endrule
+   
+   
+   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(3);
+
+   rule issueRd if (merger.in.scheduleResp.notEmpty);
+      let tag = merger.in.scheduleResp.first;
+      merger.in.scheduleResp.deq;
+      creditV[tag].incr(1);
+      dispatchBuff.rdServer.request.put(tag);
+      // $display("Dispatch read Req, tag = %d", tag);
+      issuedTag.enq(unpack(truncateLSB(pack(tag))));
+   endrule   
+   
+   rule doRdResp;
+      let packet <- dispatchBuff.rdServer.response.get;
+      let tag <- toGet(issuedTag).get;
+      merger.in.dataChannel.enq(TaggedSortedPacket{tag:tag, packet:packet});
+   endrule
+
+      
+   DelayPipe#(1, void) delayReq <- mkDelayPipe;   
+   rule doReceivScheReq;
+      let d = merger.out.scheduleReq.first;
+      merger.out.scheduleReq.deq;
+      merger.out.server.request.put(?);
+   endrule
+   
+   Reg#(Bit#(TLog#(TMul#(blockLines, n)))) outCnt <- mkReg(0);
+
+   rule getResp;
+      let packet <- merger.out.server.response.get;
+      // `ifdef DEBUG
+      // $display(fshow(packet));
+      outCnt <= outCnt + 1;
+      if (outCnt == 0) dynamicAssert(packet.packet.first, "first packet should be first");
+      if (outCnt == maxBound) dynamicAssert(packet.packet.last, "last packet should be last");
+      if (outCnt > 0 && outCnt < maxBound) dynamicAssert(!packet.packet.first && !packet.packet.last, "packet should be neither first or last");
+      // `endif
+      outQ.enq(packet.packet.d);
+   endrule
+   
+   interface inPipe = toPipeIn(inQ);
+   interface outPipe = toPipeOut(outQ);
 endmodule
 
 /*

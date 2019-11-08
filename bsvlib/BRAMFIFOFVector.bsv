@@ -330,3 +330,125 @@ module mkUGPipelinedBRAMVector(BRAMVector#(vlog, fifodepth, fifotype))
 endmodule
 
 
+module mkUGPipelinedURAMVector(BRAMVector#(vlog, fifodepth, fifotype))
+   provisos (
+      NumAlias#(TExp#(vlog), vSz),
+      Log#(fifodepth, dlog),
+      // NumAlias#(TExp#(TLog#(fifodepth)), fifodepth), // fifodepth is power of 2
+      Bits#(fifotype, fifotypesz),
+      Add#(a__, dlog, TLog#(TMul#(TExp#(vlog), fifodepth))),
+      Alias#(UInt#(vlog), tagT)
+      );
+   // Vector#(vSz, Reg#(UInt#(dlog))) enqPtr <- replicateM(mkReg(0)); 
+   // Vector#(vSz, Reg#(UInt#(dlog))) deqPtr <- replicateM(mkReg(0));
+   
+   RWBramCore#(UInt#(vlog), UInt#(dlog)) enqPtrBuff <- mkUGRWBramCore;
+   RWBramCore#(UInt#(vlog), UInt#(dlog)) deqPtrBuff <- mkUGRWBramCore;
+
+   RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
+   
+   Integer depth = valueOf(fifodepth);
+   
+   Vector#(vSz, Integer) offsets = zipWith(\* , genVector(), replicate(depth));
+   
+   function UInt#(TLog#(TMul#(vSz, fifodepth))) toAddr(UInt#(vlog) idx, UInt#(dlog) ptr) = fromInteger(offsets[idx])+extend(ptr);
+
+   `ifdef DEBUG   
+   Vector#(vSz, FIFOF#(void)) validQs <- replicateM(mkUGSizedFIFOF(valueOf(fifodepth)));
+   `endif
+   
+   Reg#(Bool) init <- mkReg(False);
+   Reg#(UInt#(vlog)) tagCnt <- mkReg(0);
+   rule doInit if (!init);
+      enqPtrBuff.wrReq(tagCnt,0);
+      deqPtrBuff.wrReq(tagCnt,0);
+      tagCnt <= tagCnt + 1;
+      
+      if ( tagCnt == fromInteger(valueOf(vSz)-1))
+         init <= True;
+   endrule
+   
+   DelayPipe#(1, Tuple2#(UInt#(vlog), fifotype)) enqReqQ <- mkDelayPipe;
+   // FIFOF#(Tuple2#(UInt#(vlog), fifotype)) enqReqQ <- mkUGFIFOF;
+   
+   Reg#(tagT) tag_enq <- mkReg(0);
+   Reg#(UInt#(dlog)) enq_ptr <- mkReg(0);
+   rule doEnq if ( enqPtrBuff.rdRespValid && init);
+      let {tag, data} = enqReqQ.first;
+      enqReqQ.deq;
+
+      let ptr = enq_ptr;
+      if ( tag != tag_enq ) 
+         ptr = enqPtrBuff.rdResp;
+      enqPtrBuff.deqRdResp;
+      buffer.wrReq(toAddr(tag, ptr), data);
+      //$display("%m,(%t) buffer doEnq tag = %d, enqPtr = %d, addr = %d", $time, tag, ptr, toAddr(tag, ptr));      
+      
+      if ( ptr == fromInteger(depth-1)) begin
+         ptr = 0;
+      end
+      else begin
+         ptr = ptr + 1;
+      end
+      
+      tag_enq <= tag;
+      enqPtrBuff.wrReq(tag, ptr);
+      enq_ptr <= ptr;
+   endrule
+   
+   DelayPipe#(1, UInt#(vlog)) deqReqQ <- mkDelayPipe;
+   // FIFOF#(UInt#(vlog)) deqReqQ <- mkUGFIFOF;
+   
+   Reg#(tagT) tag_deq <- mkReg(0);
+   Reg#(UInt#(dlog)) deq_ptr <- mkReg(0);
+   rule doDeq if (deqPtrBuff.rdRespValid && init);
+      let tag = deqReqQ.first;
+      deqReqQ.deq;
+
+      let ptr = deq_ptr;
+      if ( tag != tag_deq ) 
+         ptr = deqPtrBuff.rdResp;
+
+      deqPtrBuff.deqRdResp;
+      buffer.rdReq(toAddr(tag, ptr));      
+      // $display("%m,(%t) buffer doDeq tag = %d, deqPtr = %d, addr = %d", $time, tag, ptr, toAddr(tag, ptr));      
+      
+      if ( ptr == fromInteger(depth-1)) begin
+         ptr = 0;
+      end
+      else begin
+         ptr = ptr + 1;
+      end
+      
+      tag_deq <= tag;
+      deqPtrBuff.wrReq(tag, ptr);
+      deq_ptr <= ptr;
+   endrule
+   
+
+
+   method Action enq(fifotype data, UInt#(vlog) tag) if (init);
+      //$display("%m,(%t) buffer enqPtr Buff read req tag = %d ", $time, tag);
+      enqPtrBuff.rdReq(tag);
+      enqReqQ.enq(tuple2(tag, data));
+   endmethod
+
+   
+   interface Server rdServer;
+      interface Put request;
+         method Action put(UInt#(vlog) tag) if ( init);
+            //$display("%m,(%t) buffer deqPtr Buff read req tag = %d ", $time, tag);      
+            deqPtrBuff.rdReq(tag);
+            deqReqQ.enq(tag);
+         endmethod
+      endinterface
+      interface Get response;
+         method ActionValue#(fifotype) get if ( buffer.rdRespValid); 
+            buffer.deqRdResp;
+            return buffer.rdResp;
+         endmethod
+      endinterface
+   endinterface
+endmodule
+
+

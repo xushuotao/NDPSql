@@ -113,6 +113,9 @@ module mkBitonicPipelinedTest(Empty);
    endrule
 endmodule
 
+import "BDPI" function Action genSortedSeq0(UInt#(32) size, Bool ascending);
+// import "BDPI" function UInt#(32) getNextData0();
+import "BDPI" function UInt#(32) getNextData0(UInt#(32) size,Bool ascending, UInt#(32) offset, Bit#(32) gear);
 
 typedef 64 SortedSz;
 
@@ -366,6 +369,154 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
       end
    endrule
 endmodule
+
+
+
+// typedef TDiv#(1024, 4) ChunkSz;
+// typedef 128 NumChunks;
+typedef TMul#(16,TDiv#(1024, 4)) ChunkSz;
+typedef 256 NumChunks;
+
+module mkStreamingMergeNSMTSchedTest(Empty);
+   StreamingMergerSMTSched#(UInt#(32), VecSz, ChunkSz, NumChunks) merger <- mkStreamingMergeNSMTSched(ascending);
+
+   Integer testLen = 100;
+   Bit#(32) vecSz = fromInteger(valueOf(VecSz));
+   
+   Reg#(Bit#(32)) cycle <- mkReg(0);
+   Reg#(Bit#(32)) prevCycle <- mkReg(0);   
+   rule incrCycle;
+      cycle <= cycle + 1;
+   endrule
+   
+   FIFO#(UInt#(128)) sumQ <- mkFIFO;
+   
+   
+   Reg#(Bit#(32)) testCnt <- mkReg(0);
+      
+   Reg#(UInt#(128)) sum <- mkReg(0);
+      
+      
+   Reg#(UInt#(32)) prevMaxIn <- mkReg(ascending?minBound:maxBound);
+      
+   // function genSortedSeq(x,y) = genSortedSeq0(x,y);
+   function getNextData(x,y,z,w) = getNextData0(x,y,z,w);
+   
+   Bit#(32) sortedBeats = fromInteger(valueOf(ChunkSz)/valueOf(VecSz));
+   Reg#(Bit#(32)) pageCnt <- mkReg(0);
+   Reg#(Bit#(32)) beatCnt <- mkReg(0);
+
+   rule doGenInput if ( testCnt < fromInteger(testLen) );
+      if ( beatCnt+1 == sortedBeats ) begin
+         beatCnt <= 0;
+         if ( pageCnt + 1 == fromInteger(valueOf(NumChunks))) begin
+            pageCnt <= 0;
+            testCnt <= testCnt + 1;
+         end
+         else begin
+            pageCnt <= pageCnt + 1;
+         end
+      end
+      else begin
+         beatCnt <= beatCnt + 1;
+      end
+      
+      Vector#(VecSz, UInt#(32)) beatIn = ?;
+      for (Integer j = 0; j < valueOf(VecSz); j = j + 1 )begin
+         beatIn[j] = getNextData(unpack(sortedBeats*vecSz)// *fromInteger(valueOf(NumChunks))
+                                 , !ascending, fromInteger(j), beatCnt*vecSz);
+      end
+         
+//      $display("Merge inStream [%d][%d][%d] data = ", testCnt, pageCnt, beatCnt, fshow(beatIn));         
+      dynamicAssert(isSorted(beatIn, ascending),"input vec not sorted internally");
+      dynamicAssert(isSorted(vec(prevMaxIn, head(beatIn)), ascending),"input vec not sorted externally");
+         
+      merger.inPipe.enq(beatIn);
+         
+      if ( beatCnt+1 == sortedBeats ) begin
+         prevMaxIn <= ascending?minBound:maxBound;
+         if ( pageCnt + 1 == fromInteger(valueOf(NumChunks))) begin
+            sum <= 0;
+            sumQ.enq(sum+fold(\+ , map(zeroExtend, beatIn)));
+         end
+         else begin
+            sum <= sum+fold(\+ , map(zeroExtend, beatIn));
+         end
+      end
+      else begin
+         prevMaxIn <= last(beatIn);
+         sum <= sum+fold(\+ , map(zeroExtend, beatIn));
+      end
+   endrule
+
+   
+  
+
+   // Reg#(Vector#(TMul#(SortedSz,2), UInt#(32))) outBuf <- mkRegU;   
+   Reg#(Bit#(32)) outBeat <- mkReg(0);
+   Reg#(Bit#(32)) resultCnt <- mkReg(0);
+   
+   Reg#(UInt#(128)) accumulate <- mkReg(0);
+   
+   Reg#(UInt#(32)) prevMax <- mkReg(ascending?minBound:maxBound);
+   
+   rule doResult;
+       
+      merger.outPipe.deq;
+      let merged = merger.outPipe.first;
+
+      prevCycle <= cycle;
+      
+      if ( cycle - prevCycle != 1 && !(outBeat == 0)) begin
+         $display("FAIL: MergeNFoldSMTBRAM not streaming for a specific merge, cycle diff = %d, outBeat = %d", cycle-prevCycle, outBeat);
+         // $finish();
+      end
+      
+  //    $display("(@%t)Merged Sequence [%d][%d] = ", $time, resultCnt, outBeat, fshow(merged));
+      
+      if ( !isSorted(merged, ascending) ) begin
+         $display("FAILED: StreamingMergeSort2Var result not sorted internally");
+         $finish();
+      end
+      
+      if ( !isSorted(vec(prevMax, head(merged)), ascending) ) begin
+         $display("FAILED: StreamingMergeSort2Var result not sorted externally");
+         $finish();
+      end
+
+      
+      if ( outBeat+1 == sortedBeats*fromInteger(valueOf(NumChunks)) ) begin
+         accumulate <= 0;
+         outBeat <= 0;
+         resultCnt <= resultCnt + 1;
+         function doGet(x)=x.get;
+         let expected <- toGet(sumQ).get;
+         let result = accumulate + fold(\+ ,map(zeroExtend, merged));
+         prevMax <= ascending?minBound:maxBound;
+         
+         if ( expected !=  result) begin
+            $display("FAILED: MergeNFoldSMTBRAM result sum not as expected");
+            $display("result   = %d",  result);
+            $display("expected = %d", expected);
+            $finish;
+         end
+         else begin
+            $display("TestPassed for testCnt = %d",resultCnt);
+         end
+         if ( resultCnt + 1 == fromInteger(testLen) ) begin
+            $display("PASSED: MergeNFoldSMTBRAM ");
+            $display("Throughput cycles for beat = (%d/%d) %d, log_fanIn_N = %d", cycle, sortedBeats*fromInteger(valueOf(NumChunks)*testLen), cycle/(sortedBeats*fromInteger(valueOf(NumChunks)*testLen)), log2(valueOf(NumChunks))/log2(valueOf(NumChunks)));
+            $finish;
+         end
+      end
+      else begin
+         accumulate <= accumulate + fold(\+ ,map(zeroExtend, merged));
+         outBeat <= outBeat + 1;
+         prevMax <= last(merged);
+      end
+   endrule
+endmodule
+
 /*
 typedef 32 MaxBeats;
 typedef TMul#(VecSz,MaxBeats) MaxSz;

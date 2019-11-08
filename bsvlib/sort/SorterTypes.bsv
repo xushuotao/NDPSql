@@ -13,5 +13,6 @@ endfunction
 
 // typedef 2 BufSize#(numeric type vSz);
 typedef TAdd#(9, TAdd#(vSz, TLog#(vSz))) BufSize#(numeric type vSz);
+// typedef TAdd#(128, TAdd#(vSz, TLog#(vSz))) BufSize#(numeric type vSz);
 // typedef TExp#(TLog#(TAdd#(6, TAdd#(vSz, TLog#(vSz))))) BufSize#(numeric type vSz);
 
