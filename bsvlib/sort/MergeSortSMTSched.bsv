@@ -293,40 +293,8 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
       buffer.rdReq(toAddr(bufId, lineCnt));
       dstFanQ.enq(dst);
    endrule
-   
-   
-   // rule doPullData;// if ( creditV[i] > 0 );
-   //    // function Bool gtZero(Count#(UInt#(szz)) c) = (c._read() > 0);
-   //    function Bool predicate(Integer i);
-   //       return creditV[i] > 0 && sortedBlks[i].notEmpty;
-   //    endfunction
-   //    Vector#(n, Bool) readyV = genWith(predicate);
-   //    Vector#(n, Tuple2#(Bool, Bit#(TLog#(n)))) indexArray = zipWith(tuple2, readyV, genWith(fromInteger));
-         
-   //    let port = fold(elemFind, indexArray);
-            
-   //    if ( pack(readyV) != 0 ) begin
-   //       let idx = tpl_2(port);
-   //       creditV[idx].decr(1);
-   //       let bufId = sortedBlks[idx].first;
-   //       if (lineCnt_deqV[idx] == maxBound) begin
-   //          sortedBlks[idx].deq;
-   //          freeBufIdQ.enq(bufId);
-   //       end
-   //       readReqQ.enq(tuple2(toAddr(bufId, lineCnt_deqV[idx]), unpack(idx)));
-   //       lineCnt_deqV[idx] <= lineCnt_deqV[idx] + 1;
-   //    end
-   // endrule
-   // // end
-   
-   
-   // rule doSchedReq;
-   //    let {addr, dst} <- toGet(readReqQ).get;
-   //    buffer.rdReq(addr);
-   //    dstFanQ.enq(dst);
-   // endrule
 
-   rule issueSched;
+   rule issueSchedReq;
       let packet = buffer.rdResp;
       buffer.deqRdResp;
       let dst <- toGet(dstFanQ).get;
@@ -335,10 +303,9 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
       merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
    endrule
    
-   
    FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(3);
 
-   rule issueRd if (merger.in.scheduleResp.notEmpty);
+   rule issueDataReq if (merger.in.scheduleResp.notEmpty);
       let tag = merger.in.scheduleResp.first;
       merger.in.scheduleResp.deq;
       creditV[tag].incr(1);
@@ -347,7 +314,7 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
       issuedTag.enq(unpack(truncateLSB(pack(tag))));
    endrule   
    
-   rule doRdResp;
+   rule doDataResp;
       let packet <- dispatchBuff.rdServer.response.get;
       let tag <- toGet(issuedTag).get;
       merger.in.dataChannel.enq(TaggedSortedPacket{tag:tag, packet:packet});

@@ -12,6 +12,7 @@ import Assert::*;
 import SorterTypes::*;
 
 import MergerSchedulerTypes::*;
+import OneToNRouter::*;
 
 `ifdef DEBUG
 Bool debug = True;
@@ -111,9 +112,9 @@ instance MergerSchedVectorInstance#(numTags, numCredits, iType)
       Add#(1, b__, TDiv#(numTags, 2)),
       Add#(TLog#(TDiv#(numTags, 2)), 1, TLog#(numTags)),
       Add#(TDiv#(numTags, 2), c__, numTags),
-      // Add#(1, b__, TDiv#(numTags, 2)),
-      // Add#(TLog#(TDiv#(numTags, 2)), 1, TLog#(numTags)),
-      // Add#(TDiv#(numTags, 2), c__, numTags),
+      // begin:: OneToNRouter related
+      OneToNRouter::OneToNRouterInstance#(TMul#(numTags, 2), MergerSchedulerTypes::SchedReq#(iType)),
+      // end:: OneToNRouter
       FShow#(iType)
    );
 
@@ -132,13 +133,18 @@ instance MergerSchedVectorInstance#(numTags, numCredits, iType)
          `else
          replicateM(mkMergerScheduler(ascending));
          `endif
-      
-      Vector#(TMul#(numTags,2), FIFOF#(SchedReq#(iType))) schedReqQ <- replicateM(mkUGSizedFIFOF(valueOf(numCredits)+1));
-      
+
       function Vector#(2, PipeIn#(SchedReq#(b))) getPipeIn(MergerSched#(a, b) ifc) = ifc.schedReq;
-      function PipeOut#(Bit#(1)) getPipeOut(MergerSched#(a, b) ifc) = ifc.schedResp;
+   
+      OneToNRouter#(TMul#(numTags,2), SchedReq#(iType)) schedReqRouter <- mkOneToNRouterDelay2;
       
+      Vector#(TMul#(numTags,2), FIFOF#(SchedReq#(iType))) schedReqQ <- replicateM(mkUGSizedFIFOF(valueOf(numCredits)));
+
+      zipWithM_(mkConnection, schedReqRouter.outPorts,  map(toPipeIn,schedReqQ));
       zipWithM_(mkConnection, map(toPipeOut, schedReqQ), concat(map(getPipeIn,schedulers)));
+   
+      function PipeOut#(Bit#(1)) getPipeOut(MergerSched#(a, b) ifc) = ifc.schedResp;
+
       
       Vector#(2, FIFOF#(UInt#(TLog#(numTags)))) willGoQ <- replicateM(mkFIFOF);//BypassFIFOF;
       
@@ -185,7 +191,8 @@ instance MergerSchedVectorInstance#(numTags, numCredits, iType)
       interface PipeIn schedReq;
          method Action enq(TaggedSchedReq#(TMul#(numTags,2), iType) req);
             if (debug) $display(fshow(req));
-            schedReqQ[req.tag].enq(SchedReq{topItem:req.topItem, last: req.last});
+            schedReqRouter.inPort.enq(tuple2(pack(req.tag), SchedReq{topItem:req.topItem, last: req.last}));
+            // schedReqQ[req.tag].enq(SchedReq{topItem:req.topItem, last: req.last});
          endmethod
          method Bool notFull = True;
       endinterface

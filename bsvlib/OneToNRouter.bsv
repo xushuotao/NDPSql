@@ -1,5 +1,6 @@
 import Pipe::*;
 import Vector::*;
+import GetPut::*;
 import FIFOF::*;
 import BuildVector::*;
 import RWBramCore::*;
@@ -10,7 +11,9 @@ interface OneToNRouter#(numeric type n, type d);
    interface Vector#(n, PipeOut#(d)) outPorts;
 endinterface
 
-function Vector#(n, PipeOut#(d)) takeOutPorts(OneToNRouter#(n,d) ifc) = ifc.outPorts;
+function Vector#(n, PipeOut#(d)) takeOutPorts(OneToNRouter#(n,d) ifc);
+   return ifc.outPorts;
+endfunction
 
 module mkOneToNRouterPipelined(OneToNRouter#(n,d)) provisos(
    Bits#(d, a__),
@@ -94,3 +97,82 @@ module mkOneToNRouterBRAM(OneToNRouter#(n,d)) provisos(
    interface outPorts = map(toPipeOut, outQs);
    
 endmodule
+   
+   
+typeclass OneToNRouterInstance#(numeric type n, type d);
+   module mkOneToNRouterDelay2(OneToNRouter#(n,d));
+endtypeclass
+
+instance OneToNRouterInstance#(2, d) provisos(
+   Bits#(d, dSz)
+   );
+   module mkOneToNRouterDelay2(OneToNRouter#(2,d));
+   
+      Vector#(2, FIFOF#(d)) distr_L0 <- replicateM(mkFIFOF);
+   
+      interface PipeIn inPort;// = toPipeIn(inQ);
+         method Action enq(Tuple2#(Bit#(TLog#(2)), d) v);//
+            let {dst, payload} = v;
+            distr_L0[dst].enq(payload);
+         endmethod
+   
+         method Bool notFull;
+            return True;
+         endmethod
+      endinterface
+
+      interface outPorts = map(toPipeOut, distr_L0);
+   
+   endmodule
+endinstance
+
+instance OneToNRouterInstance#(n, d) provisos(
+   Bits#(d, dSz),
+   Log#(n, logn),
+   NumAlias#(TDiv#(logn,2), logL0),
+   NumAlias#(TSub#(logn, logL0), logL1),
+   Add#(b__, logL0, logn),
+   Add#(c__, logL1, logn),
+   Mul#(TExp#(logL0), TExp#(logL1), n)
+   );
+   module mkOneToNRouterDelay2(OneToNRouter#(n,d));
+   
+      Vector#(TExp#(logL0), FIFOF#(Tuple2#(Bit#(logL1), d))) distr_L0 <- replicateM(mkFIFOF);
+      Vector#(TExp#(logL0), Vector#(TExp#(logL1), FIFOF#(d))) distr_L1 <- replicateM(replicateM(mkFIFOF));
+   
+      function Bit#(logL0) toL0Addr(Bit#(logn) tag);
+         return truncateLSB(tag);
+      endfunction
+
+      function Bit#(logL1) toL1Addr(Bit#(logn) tag);
+         return truncate(tag);
+      endfunction
+   
+      for (Integer i = 0; i < valueOf(TExp#(logL0)); i = i + 1 ) begin
+         rule doL2Distr;
+            let {dst_L1, payload} <- toGet(distr_L0[i]).get;
+            distr_L1[i][dst_L1].enq(payload);
+         endrule
+      end
+
+   
+      interface PipeIn inPort;// = toPipeIn(inQ);
+         method Action enq(Tuple2#(Bit#(TLog#(n)), d) v);//
+            let {dst, payload} = v;
+            let dst_L0 = toL0Addr(dst);
+            let dst_L1 = toL1Addr(dst);
+            distr_L0[dst_L0].enq(tuple2(dst_L1, payload));
+         endmethod
+   
+         method Bool notFull;
+            return True;
+         endmethod
+      endinterface
+
+      interface outPorts = map(toPipeOut, concat(distr_L1));
+   
+   endmodule
+endinstance
+
+
+   
