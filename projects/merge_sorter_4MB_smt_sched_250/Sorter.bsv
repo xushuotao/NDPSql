@@ -64,7 +64,7 @@ import Bitonic::*;
 
 interface SorterRequest;
    method Action initSeed(Bit#(32) seed);
-   method Action startSorting(Bit#(64) iter);
+   method Action startSorting(Bit#(32) iter);
 endinterface
 
 interface SorterIndication;
@@ -129,10 +129,10 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    endrule
 
    
-   Reg#(Bit#(64)) iterCnt <- mkReg(0);
-   Reg#(Bit#(64)) iterCnt_out <- mkReg(0);
+   Reg#(Bit#(32)) iterCnt <- mkReg(0);
+   Reg#(Bit#(32)) iterCnt_out <- mkReg(0);
    
-   Reg#(Bit#(64)) elemCnt <- mkReg(0);
+   Reg#(Bit#(32)) elemCnt <- mkReg(0);
    
    Integer vecSz = valueOf(VecSz);
    Integer totalElms = valueOf(TotalElms_L1);
@@ -161,10 +161,12 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    
    Reg#(UInt#(32)) prevMax <- mkReg(descending?minBound:maxBound);
    
-   Reg#(Bit#(64)) elemCnt_out <- mkReg(0);
+   Reg#(Bit#(32)) elemCnt_out <- mkReg(0);
    
    Reg#(Bit#(64)) internalUnsortedCnt <- mkReg(0);
    Reg#(Bit#(64)) externalUnsortedCnt <- mkReg(0);
+   
+   FIFO#(Tuple3#(Bit#(64), Bit#(64), Bit#(64))) indicationFifo <- mkFIFO;
    
    rule getOutput;
       let d = sorter_bram.outPipe.first;
@@ -180,13 +182,21 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
          prevMax <= descending?minBound:maxBound;
          iterCnt_out <= iterCnt_out - 1;
          if ( iterCnt_out == 1) begin
-            indication.sortingDone(internalUnsortedCnt, externalUnsortedCnt, cycleCnt);
+            indicationFifo.enq(tuple3(internalUnsortedCnt, externalUnsortedCnt, cycleCnt));
+
          end
       end
       else begin
          elemCnt_out <= elemCnt_out + fromInteger(vecSz);
          prevMax <= last(d);
       end
+   endrule
+   
+   
+   rule sendInd;
+      let {intCnt,extCnt,cycle} = indicationFifo.first;
+      indicationFifo.deq;
+      indication.sortingDone(intCnt,extCnt,cycle);
    endrule
       
       
@@ -195,7 +205,7 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
          lfsr[cnt_init].seed(seed);
          cnt_init <= cnt_init + 1;
       endmethod
-      method Action startSorting(Bit#(64) iter) if (iterCnt == 0&&iterCnt_out==0);
+      method Action startSorting(Bit#(32) iter) if (iterCnt == 0&&iterCnt_out==0);
          iterCnt <= iter;
          iterCnt_out <= iter;
          cycleCnt <= 0;
