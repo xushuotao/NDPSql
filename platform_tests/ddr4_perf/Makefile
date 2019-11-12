@@ -20,13 +20,18 @@ CONNECTALFLAGS += --bsvpath $(BSVDIR)
 BSVFILES = Ddr4Perf.bsv
 CPPFILES = testddr4.cpp
 
-ifeq ($(BOARD), vcu108)
+ifeq ($(BOARD), $(filter $(BOARD), vcu108 vcu118))
 
 # below are for ddr4_v2_0
 CONNECTALFLAGS += \
 		--verilog $(MIGDIR)/ddr4_wrapper.v \
-		--xci $(CONNECTALDIR)/out/$(BOARD)/ddr4_0/ddr4_0.xci \
-		--implconstraint $(MIGDIR)/ddr4_0.xdc
+		--xci $(CONNECTALDIR)/out/$(BOARD)/ddr4_0/ddr4_0.xci
+
+ifeq ($(BOARD), vcu108)
+CONNECTALFLAGS += --implconstraint $(MIGDIR)/ddr4_vcu108.xdc
+else
+CONNECTALFLAGS += --implconstraint $(MIGDIR)/ddr4_vcu118.xdc
+endif
 
 DDR4_V = $(CONNECTALDIR)/out/$(BOARD)/ddr4_0/ddr4_0_stub.v
 

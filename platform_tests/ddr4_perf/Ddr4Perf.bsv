@@ -85,10 +85,14 @@ module mkDdr4Perf#(HostInterface host, Ddr4PerfIndication indication)(Ddr4Perf);
    
    
    // DDR4 C1
-   let sys_clk1_300 = host.tsys_clk1_300mhz;
-   let sys_rst1_300 <- mkAsyncResetFromCR(20, sys_clk1_300);
+   `ifdef VirtexUltrascalePlus // vcu118
+   let sys_clk1 = host.tsys_clk1_250mhz;
+   `else // vcu108
+   let sys_clk1 = host.tsys_clk1_300mhz;
+   `endif
+   let sys_rst1 <- mkAsyncResetFromCR(20, sys_clk1);
 
-   DDR4_Controller_VCU108 ddr4_ctrl_0 <- mkDDR4Controller_VCU108(defaultValue, clocked_by sys_clk1_300, reset_by sys_rst1_300);
+   DDR4_Controller_VCU108 ddr4_ctrl_0 <- mkDDR4Controller_VCU108(defaultValue, clocked_by sys_clk1, reset_by sys_rst1);
       
    Clock ddr4clk0 = ddr4_ctrl_0.user.clock;
    Reset ddr4rstn0 = ddr4_ctrl_0.user.reset_n;
@@ -97,10 +101,14 @@ module mkDdr4Perf#(HostInterface host, Ddr4PerfIndication indication)(Ddr4Perf);
    mkConnection(ddr_cli_300mhz_0, ddr4_ctrl_0.user);
    
    // DDR4 C2
-   let sys_clk2_300 = host.tsys_clk1_300mhz_buf;
-   let sys_rst2_300 <- mkAsyncResetFromCR(20, sys_clk2_300);
-   
-   DDR4_Controller_VCU108 ddr4_ctrl_1 <- mkDDR4Controller_VCU108(defaultValue, clocked_by sys_clk2_300, reset_by sys_rst2_300);
+   `ifdef VirtexUltrascalePlus // vcu118
+   let sys_clk2 = host.tsys_clk2_250mhz;
+   `else
+   let sys_clk2 = host.tsys_clk1_300mhz_buf;
+   `endif
+   let sys_rst2 <- mkAsyncResetFromCR(20, sys_clk2);
+      
+   DDR4_Controller_VCU108 ddr4_ctrl_1 <- mkDDR4Controller_VCU108(defaultValue, clocked_by sys_clk2, reset_by sys_rst2);
       
    Clock ddr4clk1 = ddr4_ctrl_1.user.clock;
    Reset ddr4rstn1 = ddr4_ctrl_1.user.reset_n;
