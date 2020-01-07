@@ -540,7 +540,7 @@ module mkStreamingDRAMMergeNSMTSchedTest(Empty);
    Vector#(2, DDR4_User_VCU108) dramCtrs <- replicateM(mkDDR4Simulator);
    zipWithM_(mkConnection, merger.dramClients, dramCtrs);   
 
-   Integer testLen = 10;
+   Integer testLen = 100;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));
    
    Reg#(Bit#(32)) cycle <- mkReg(0);
