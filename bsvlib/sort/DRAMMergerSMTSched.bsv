@@ -60,6 +60,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    Pipe::FunnelPipesPipelined#(1, n, Tuple3#(Bit#(1), Bit#(32), Bit#(TLog#(n))), 1),
    
    Div#(fDepth,vSz, fDepth_beats),
+   Add#(g__, TLog#(TMul#(fDepth_beats, 2)), TLog#(TMul#(fDepth_beats, 4))),
    
    FShow#(iType)
    
@@ -124,7 +125,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    Reg#(lineIdT) segLineCnt_load <- mkReg(0);
    
    Reg#(Bit#(2)) initCnt <- mkReg(0);
-   (* descending_urgency = "doInit, dataPreloading" *)
+   (* fire_when_enabled *)
    rule doInit if ( initCnt < 2);
       freeDRAM.enq(truncate(initCnt));
       initCnt <= initCnt + 1;
@@ -235,7 +236,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    
    Vector#(n, Count#(UInt#(TLog#(TAdd#(1,BufSize#(vSz)))))) creditV <- replicateM(mkCount(fromInteger(bufSz)));
    Vector#(n, Reg#(lineIdT)) lineCnt_deqV <- replicateM(mkReg(0));
-   FIFO#(UInt#(TLog#(n))) dstFanQ <- mkSizedFIFO(8);
+   // FIFO#(UInt#(TLog#(n))) dstFanQ <- mkSizedFIFO(8);
    
    // BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGBRAMVector;//mkUGPipelinedBRAMVector;
    BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGPipelinedBRAMVector;
