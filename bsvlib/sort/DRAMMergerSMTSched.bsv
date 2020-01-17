@@ -57,10 +57,17 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    
    Add#(e__, TAdd#(TLog#(n), TAdd#(TLog#(blockLines), 3)), 64),
    Add#(f__, TAdd#(TMul#(vSz, typeSz), 2), 640),
-   Pipe::FunnelPipesPipelined#(1, n, Tuple3#(Bit#(1), Bit#(32), Bit#(TLog#(n))), 1),
+   // Pipe::FunnelPipesPipelined#(1, n, Tuple3#(Bit#(1), Bit#(32), Bit#(TLog#(n))), 1),
+   
+   // Prefetcher::PrefetcherInstance#(fDepth_beats,SorterTypes::SortedPacket#(vSz, iType), Bit#(1)),
+   // Pipe::FunnelPipesPipelined#(1, n, Tuple2#(SorterTypes::SortedPacket#(vSz, iType), UInt#(TLog#(n))), 1),
    
    Div#(fDepth,vSz, fDepth_beats),
-   Add#(g__, TLog#(TMul#(fDepth_beats, 2)), TLog#(TMul#(fDepth_beats, 4))),
+   // Add#(g__, TLog#(TMul#(fDepth_beats, 2)), TLog#(TMul#(fDepth_beats, 4))),
+   Add#(h__, TLog#(TMul#(fDepth_beats, 2)), TLog#(TMul#(TExp#(TLog#(n)), TMul#(fDepth_beats, 2)))),
+   Add#(g__, TLog#(TDiv#(blockLines, fDepth_beats)), 32),
+   Add#(i__, TLog#(n), 32),
+   Prefetcher::VectorPrefetcherInstance#(n, fDepth_beats, TDiv#(blockLines,fDepth_beats), SorterTypes::SortedPacket#(vSz, iType), Bit#(1)),
    
    FShow#(iType)
    
@@ -97,7 +104,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       
    Reg#(Bit#(TLog#(blockLines))) lineCnt_enq <- mkReg(0);
     
-   Vector#(n, FIFOF#(blkIdT)) sortedBlks <- replicateM(mkUGSizedFIFOF(3));
+   // Vector#(n, FIFOF#(blkIdT)) sortedBlks <- replicateM(mkUGSizedFIFOF(3));
    
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
    
@@ -134,6 +141,8 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       let dramId = freeDRAM.first;
 
       if ( segLineCnt_load == maxBound ) begin
+         $display("DataPreloading: seg finished segid = %d", segCnt_load);
+
          if ( segCnt_load == fromInteger(valueOf(n)-1) ) begin
             freeDRAM.deq;
             dramReadyQ.enq(dramId);
@@ -163,36 +172,23 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
 /// DRAM Reads: 
 /// Prefetchers
 ////////////////////////////////////////////////////////////////////////////////
-   Vector#(n, Prefetcher#(fDepth_beats, SortedPacket#(vSz, iType), Bit#(1))) prefetchers <- replicateM(mkPrefetcher);
+   VectorPrefetcher#(n, fDepth_beats, TDiv#(blockLines, fDepth_beats), SortedPacket#(vSz, iType), Bit#(1)) prefetchVec <- mkVectorPrefetcher;
    rule startPrefetch;
       let dramId = dramReadyQ.first;
       dramReadyQ.deq;
-      for (Integer i = 0; i < valueOf(n); i = i + 1) begin
-         prefetchers[i].start(dramId, fromInteger(valueOf(TDiv#(blockLines, fDepth_beats))));
-      end
+      prefetchVec.start(dramId);
    endrule
 
-   // DRAM Burst Funnel for better FPGA timing
-   Vector#(n, FIFOF#(Tuple3#(Bit#(1), Bit#(32), Bit#(TLog#(n))))) dramBurstQs <- replicateM(mkFIFOF);
-   FunnelPipe#(1, n, Tuple3#(Bit#(1), Bit#(32), Bit#(TLog#(n))), 1) dramBurstFunnel <- mkFunnelPipesPipelined(map(toPipeOut, dramBurstQs));
-   
-   for (Integer segId = 0; segId < valueOf(n); segId = segId + 1) begin
-      rule issueDRAMRead;
-         let {dramId, offset} = prefetchers[segId].fetchReq.first;
-         prefetchers[segId].fetchReq.deq;
-         Bit#(32) baseAddr = fromInteger(segId * valueOf(blockLines)) + offset;
-         dramBurstQs[segId].enq(tuple3(dramId, baseAddr, fromInteger(segId)));
-      endrule
-   end
    
    Reg#(Bit#(32)) fetchCnt <- mkReg(0);
    FIFOF#(Tuple2#(Bit#(1), Bit#(TLog#(n)))) outstandingBurst <- mkSizedFIFOF(32);
    // issue bursts of DRAM requests
    rule issueDramBurst;
-      let {dramId, base, segId} = dramBurstFunnel[0].first;
-      if ( fetchCnt + 1 == fromInteger(valueOf(fDepth_beats))) begin
+      let {segId, dramId, baseCnt} = prefetchVec.fetchReq.first;
+
+      if ( fetchCnt == fromInteger(valueOf(fDepth_beats)-1) ) begin
          fetchCnt <= 0;
-         dramBurstFunnel[0].deq;
+         prefetchVec.fetchReq.deq;
       end
       else begin
          fetchCnt <= fetchCnt + 1;
@@ -202,6 +198,9 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
          outstandingBurst.enq(tuple2(dramId, segId));
       end
       
+      Bit#(32) base = (zeroExtend(segId) << fromInteger(valueOf(TLog#(blockLines)))) + 
+      (zeroExtend(baseCnt) << fromInteger(valueOf(TLog#(fDepth_beats))));
+      // $display("bursting dram id = %d, segId = %0d,  fetchCnt = %0d, baseCnt = %0d, base = %0d", dramId, segId, fetchCnt, baseCnt, base);
       dramReqQ[1].enq(tuple2(dramId, DDRRequest{address: extend({base+fetchCnt,3'b0}), writeen: 0, datain:?}));
    endrule
 
@@ -213,7 +212,9 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       dramRespQ[1].deq;
       let {dramId, segId} = outstandingBurst.first;
       
-      if ( fetchCnt_resp + 1 == fromInteger(valueOf(fDepth_beats))) begin
+      // $display("bursting response dram id = %d, segId = %0d,  fetchCnt = %0d", dramId, segId, fetchCnt_resp);
+      
+      if ( fetchCnt_resp == fromInteger(valueOf(fDepth_beats)-1)) begin
          fetchCnt_resp <= 0;
          outstandingBurst.deq;
       end
@@ -228,31 +229,53 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       else begin
          totalLineCnt[dramId] <= totalLineCnt[dramId] + 1;
       end
-      
-      prefetchers[segId].fetchResp.enq(unpack(truncate(v)));
+      prefetchVec.fetchResp.enq(tuple2(segId, unpack(truncate(v))));
    endrule
        
    Integer bufSz = valueOf(BufSize#(vSz));
    
    Vector#(n, Count#(UInt#(TLog#(TAdd#(1,BufSize#(vSz)))))) creditV <- replicateM(mkCount(fromInteger(bufSz)));
-   Vector#(n, Reg#(lineIdT)) lineCnt_deqV <- replicateM(mkReg(0));
-   // FIFO#(UInt#(TLog#(n))) dstFanQ <- mkSizedFIFO(8);
-   
    // BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGBRAMVector;//mkUGPipelinedBRAMVector;
    BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGPipelinedBRAMVector;
    
-   for (Integer idx = 0; idx < valueOf(n); idx = idx + 1 ) begin
-      rule doPullData ( creditV[idx] > 0 && prefetchers[idx].dataOut.notEmpty);
-         creditV[idx].decr(1);
-         let packet = prefetchers[idx].dataOut.first;
-         prefetchers[idx].dataOut.deq;
-         let dst = fromInteger(idx);
-         // TODO:: maybe the following can be pipelined
-         // $display("(%t) Enqueue Dispatch buf, tag = %d, packet = ", $time, dst, fshow(packet));
-         dispatchBuff.enq(packet, dst);
-         merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
+   FIFOF#(UInt#(TLog#(n))) dstQ <- mkSizedFIFOF(3);
+   
+   Vector#(n, FIFOF#(void)) rdReqQs <- replicateM(mkFIFOF);
+   
+   for (Integer i = 0; i < valueOf(n); i = i + 1 ) begin
+      rule doPullData if ( creditV[i] > 0 && prefetchVec.dataReady[i].notEmpty);
+         prefetchVec.dataReady[i].deq;
+         creditV[i].decr(1);
+         rdReqQs[i].enq(?);
+         // let idx = tpl_2(port);
+         // prefetchVec.rdServer.request.put(unpack(idx));
+         // creditV[idx].decr(1);
+         // dstQ.enq(unpack(idx));
       endrule
    end
+   
+   function Bool canGoFunc(Integer i);
+      return rdReqQs[i].notEmpty;
+   endfunction
+      
+   Vector#(n, Bool) canGo = genWith(canGoFunc);
+   Vector#(n, Tuple2#(Bool, UInt#(TLog#(n)))) indexArray = zipWith(tuple2, canGo, genWith(fromInteger));
+   let port = fold(elemFind, indexArray);
+   
+   rule issueRdReq if (pack(canGo) != 0);
+      let idx= tpl_2(port);
+      rdReqQs[idx].deq;
+      prefetchVec.rdServer.request.put(idx);
+      dstQ.enq(idx);
+   endrule
+   
+      
+   rule doPushData;
+      let dst <- toGet(dstQ).get;
+      let packet <- prefetchVec.rdServer.response.get;
+      dispatchBuff.enq(packet, dst);
+      merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
+   endrule
    
    FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(3);
 

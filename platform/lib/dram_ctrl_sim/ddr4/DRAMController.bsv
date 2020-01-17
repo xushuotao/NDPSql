@@ -256,28 +256,34 @@ instance Connectable#(DDR4Client, DDR4_User_VCU108);
    module mkConnection#(DDR4Client cli, DDR4_User_VCU108 usr)(Empty);
       
       // Make sure we have enough buffer space to not drop responses!
-      Counter#(TLog#(MAX_OUTSTANDING_READS)) reads <- mkCounter(0, clocked_by(usr.clock), reset_by(usr.reset_n));
-      FIFO#(DDRResponse) respbuf <- mkSizedFIFO(valueof(MAX_OUTSTANDING_READS), clocked_by(usr.clock), reset_by(usr.reset_n));
+      // Counter#(TLog#(TAdd#(1, MAX_OUTSTANDING_READS))) reads <- mkCounter(0, clocked_by(usr.clock), reset_by(usr.reset_n));
+      // FIFO#(DDRResponse) respbuf <- mkSizedFIFO(valueof(MAX_OUTSTANDING_READS), clocked_by(usr.clock), reset_by(usr.reset_n));
+      // FIFO#(DDRResponse) respbuf <- mkSizedFIFO(valueof(MAX_OUTSTANDING_READS), clocked_by(usr.clock), reset_by(usr.reset_n));
    
-      rule request (reads.value() != fromInteger(valueof(MAX_OUTSTANDING_READS)-1));
+   
+      rule request;// (reads.value() != fromInteger(valueof(MAX_OUTSTANDING_READS)) );
          let req <- cli.request.get();
          usr.request(truncate(req.address), req.writeen, req.datain);
          
-         if (req.writeen == 0) begin
-            reads.up();
-         end
+         // if (req.writeen == 0) begin
+         //    reads.up();
+         // end
       endrule
    
       rule response (True);
          let x <- usr.read_data;
-         respbuf.enq(x);
-      endrule
-   
-      rule forward (True);
-         let x <- toGet(respbuf).get();
          cli.response.put(x);
-         reads.down();
-      endrule
+      endrule   
+      // rule response (True);
+      //    let x <- usr.read_data;
+      //    respbuf.enq(x);
+      // endrule
+   
+      // rule forward (True);
+      //    let x <- toGet(respbuf).get();
+      //    cli.response.put(x);
+      //    reads.down();
+      // endrule
    endmodule
 endinstance
 
@@ -287,8 +293,8 @@ module mkDDR4ClientSync#(DDR4Client ddr4,
     Clock sclk, Reset srst, Clock dclk, Reset drst
     ) (DDR4Client);
 
-    SyncFIFOIfc#(DDRRequest) reqs <- mkSyncFIFO(32, sclk, srst, dclk);
-    SyncFIFOIfc#(DDRResponse) resps <- mkSyncFIFO(32, dclk, drst, sclk);
+    SyncFIFOIfc#(DDRRequest) reqs <- mkSyncBRAMFIFO(32, sclk, srst, dclk, drst);
+    SyncFIFOIfc#(DDRResponse) resps <- mkSyncBRAMFIFO(32, dclk, drst, sclk, srst);
 
     mkConnection(toPut(reqs), toGet(ddr4.request));
     mkConnection(toGet(resps), toPut(ddr4.response));

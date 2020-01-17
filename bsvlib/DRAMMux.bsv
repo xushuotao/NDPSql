@@ -41,7 +41,8 @@ module mkDRAMMux(DRAMMux#(nCli, nCtr)) provisos(
    
    // Vector#(nCli, CompletionBuffer#(NTokens, DDRResponse)) cmplBuf <- replicateM(mkCompletionBuffer);
    // Vector#(nCli, Count#(UInt#(TLog#(TAdd#(NTokens,1))))) reqTokens <- replicateM(mkCount(fromInteger(nTokens_int)));
-   Vector#(nCli, CmplBuf#(NTokens, DDRResponse)) cmplBuf <- replicateM(mkCmplBuf);
+   // Vector#(nCli, CmplBuf#(NTokens, DDRResponse)) cmplBuf <- replicateM(mkCmplBuf);
+   Vector#(nCli, CmplBuf#(NTokens, DDRResponse)) cmplBuf <- replicateM(mkCmplBufPP);
 
    
    function Bool fifoReady(FIFOF#(d) fifo) = fifo.notEmpty;
@@ -74,8 +75,9 @@ module mkDRAMMux(DRAMMux#(nCli, nCtr)) provisos(
          end
       end
       
-      if (hasAction)
-         $display("MuxReq:: ",fshow(memReqs));
+      if (hasAction) begin
+         // $display("MuxReq:: ",fshow(memReqs));
+      end
       
       for (Integer i = 0; i < valueOf(nCtr); i = i + 1) begin
          if ( memReqs[i] matches tagged Valid {.cliId, .token, .request} ) begin
@@ -103,8 +105,9 @@ module mkDRAMMux(DRAMMux#(nCli, nCtr)) provisos(
          end
       end
       
-      if (hasAction)
-         $display("MuxResp:: ",fshow(memResp));
+      if (hasAction) begin
+         // $display("MuxResp:: ",fshow(memResp));
+      end
       
       for (Integer i = 0; i < valueOf(nCli); i = i + 1) begin
          if ( memResp[i] matches tagged Valid {.token, .data} ) begin

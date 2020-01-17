@@ -36,11 +36,11 @@ module mkDDR4Simulator(DDR4_User_VCU108);
    //    return pack(unrotated);
    // endfunction
    
-   Vector#(32, FIFO#(DDR4Data)) delayQs <- replicateM(mkFIFO());
+   // Vector#(32, FIFO#(DDR4Data)) delayQs <- replicateM(mkFIFO());
    
-   for (Integer i = 0; i < 31; i = i + 1) begin
-      mkConnection(toGet(delayQs[i]), toPut(delayQs[i+1]));
-   end
+   // for (Integer i = 0; i < 31; i = i + 1) begin
+   //    mkConnection(toGet(delayQs[i]), toPut(delayQs[i+1]));
+   // end
    
    interface clock = user_clock;
    interface reset_n = user_reset_n;
@@ -75,15 +75,15 @@ module mkDDR4Simulator(DDR4_User_VCU108);
       data.upd(burstaddr, new_data);
       
       if (writeen == 0) begin
-         //responses.enq(new_rotated);
+         responses.enq(new_data);
          // delayQs[0].enq(new_rotated);
-         delayQs[0].enq(new_data);
+         // delayQs[0].enq(new_data);
       end
    endmethod
       
    method ActionValue#(DDR4Data) read_data;
-      //let v <- toGet(responses).get();
-      let v <- toGet(delayQs[31]).get();
+      let v <- toGet(responses).get();
+      // let v <- toGet(delayQs[31]).get();
       //$display("last, %d, %h", $time, v);
       if (debug) $display("%m, ddr resp %h", v);
       return v;

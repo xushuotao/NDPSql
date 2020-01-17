@@ -155,6 +155,7 @@ module mkUGBRAMVector(BRAMVector#(vlog, fifodepth, fifotype))
    
    Reg#(Bool) init <- mkReg(False);
    Reg#(UInt#(vlog)) tagCnt <- mkReg(0);
+   
    rule doInit if (!init);
       enqPtr.upd(tagCnt,0);
       deqPtr.upd(tagCnt,0);

@@ -54,3 +54,6 @@ set_clock_groups -name async24 -asynchronous -group [get_clocks -of_objects [get
 
 set_false_path -from [get_pins -hier -filter {NAME=~ *ep7/pcie_ep/inst/user_reset_reg/C}]
 set_false_path -from [get_pins -hier -filter {NAME=~ *ep7/pcieReset250/IN_RST}]
+set_false_path -from [get_pins -hier -filter {NAME=~ *ep7/pcieReset250/reset_hold_reg[4]/C}]
+set_false_path -from [get_pins -hier -filter {NAME=~ *ep7/pcieReset250/reset_hold_reg[4]_rep*/C}]
+    

@@ -228,8 +228,8 @@ module mkXilinxDDR4Controller#(VDDR4_Controller_Xilinx#(`DDR4_PRM) ddr4Ifc, DDR4
         	      ddr4datasize,
         	      ddr4besize))           fRequest            <- mkFIFO(clocked_by user_clock, reset_by user_reset_n);
    
-   // FIFO#(DDR4Response#(ddr4datasize))        fResponse           <- mkSizedFIFO(reads, clocked_by user_clock, reset_by user_reset_n);
-   FIFO#(DDR4Response#(ddr4datasize))        fResponse           <- mkFIFO(clocked_by user_clock, reset_by user_reset_n);
+   FIFO#(DDR4Response#(ddr4datasize))        fResponse           <- mkSizedFIFO(reads, clocked_by user_clock, reset_by user_reset_n);
+   // FIFO#(DDR4Response#(ddr4datasize))        fResponse           <- mkFIFO(clocked_by user_clock, reset_by user_reset_n);
    
    // Count#(Int#(32))                         rReadsPending       <- mkCount(0, clocked_by user_clock, reset_by user_reset_n);
    Counter#(32)                              rReadsPending       <- mkCounter(0, clocked_by user_clock, reset_by user_reset_n);
@@ -284,7 +284,8 @@ module mkXilinxDDR4Controller#(VDDR4_Controller_Xilinx#(`DDR4_PRM) ddr4Ifc, DDR4
          pwAppWdfEnd.send;
       endrule      
       
-      rule process_read_request(fRequest.first.rnw && ctrl_ready_req);
+      // rule process_read_request(fRequest.first.rnw && ctrl_ready_req );//&& rReadsPending.value < fromInteger(reads));
+      rule process_read_request(fRequest.first.rnw && ctrl_ready_req && rReadsPending.value < fromInteger(reads));
     // rule process_read_request(fRequest.first.byteen == 0 && ctrl_ready_req && rReadsPending < fromInteger(reads));      // rule process_read_request(fRequest.first.byteen == 0 && ctrl_ready_req);
          let request <- toGet(fRequest).get;
          wAppCmd  <= zeroExtend(pack(request.rnw));
@@ -295,8 +296,8 @@ module mkXilinxDDR4Controller#(VDDR4_Controller_Xilinx#(`DDR4_PRM) ddr4Ifc, DDR4
       endrule
       
       rule process_read_response(read_data_ready);
-	 fResponse.enq(unpack(ddr4Ifc.user.app_rd_data));
-	 // rReadsPending.decr(1);
+	     fResponse.enq(unpack(ddr4Ifc.user.app_rd_data));
+	     // rReadsPending.decr(1);
          rReadsPending.down;
       endrule
    endrule
