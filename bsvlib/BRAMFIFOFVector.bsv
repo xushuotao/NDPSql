@@ -346,7 +346,9 @@ module mkUGPipelinedURAMVector(BRAMVector#(vlog, fifodepth, fifotype))
    RWBramCore#(UInt#(vlog), UInt#(dlog)) enqPtrBuff <- mkUGRWBramCore;
    RWBramCore#(UInt#(vlog), UInt#(dlog)) deqPtrBuff <- mkUGRWBramCore;
 
-   RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
+    RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
+   //RWUramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWUramCore;
+
    
    Integer depth = valueOf(fifodepth);
    

@@ -21,7 +21,10 @@ module mkDRAMMuxTest(Empty);
    
    Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramClients = zipWith(toClient, reqQ, respQ);
    
-   DRAMMux#(2, 2) dramMux <- mkDRAMMux;
+   // DRAMMux#(2, 2) dramMux <- mkDRAMMux;
+      
+   DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
+
    
    zipWithM_(mkConnection, dramClients, dramMux.dramServers);
    zipWithM_(mkConnection, dramMux.dramControllers, dramCtrs);   

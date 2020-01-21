@@ -132,3 +132,80 @@ module mkDRAMMux(DRAMMux#(nCli, nCtr)) provisos(
    interface dramServers = zipWith(toServer, cliReqQ, cliRespQ);
    interface dramControllers = zipWith(toClient, serReqQ, serRespQ);
 endmodule
+
+(* synthesize *)
+module mkRwDualDRAMMux(DRAMMux#(2, 2)) provisos(   
+   Alias#(Bit#(TLog#(2)), cliIdT),
+   Alias#(Bit#(TLog#(2)), ctrIdT)
+   );
+   
+   //0 is wr port
+   //1 is rd port
+   Vector#(2, FIFOF#(Tuple2#(ctrIdT, DDRRequest))) cliReqQ <- replicateM(mkFIFOF);
+   Vector#(2, FIFOF#(DDRResponse)) cliRespQ <- replicateM(mkFIFOF);
+   
+   let wrReqQ = cliReqQ[0];
+   let rdReqQ = cliReqQ[1];   
+   let rdRespQ = cliRespQ[1];   
+
+   FIFOF#(ctrIdT) outstandingReqQ <- mkSizedFIFOF(nTokens_int);
+   Vector#(2, FIFOF#(DDRRequest)) serReqQ <- replicateM(mkFIFOF);
+   Vector#(2, FIFOF#(DDRResponse)) serRespQ <- replicateM(mkFIFOF);
+   
+   function Bool fifoReady(FIFOF#(d) fifo) = fifo.notEmpty;
+   
+   rule doDistReq if ( fold(\|| , map(fifoReady, cliReqQ)) );
+      Vector#(2, Maybe#(DDRRequest)) memReqs = replicate(tagged Invalid);
+      Bool hasAction = False;
+      
+      if ( wrReqQ.notEmpty) begin
+         let {wrCtr, wrReq} = wrReqQ.first;
+         wrReqQ.deq;
+         memReqs[wrCtr] = tagged Valid wrReq;
+         hasAction = True;
+      end
+     
+      if ( rdReqQ.notEmpty) begin
+         let {rdCtr, rdReq} = rdReqQ.first;
+         if ( isValid(memReqs[rdCtr]) ) begin
+            // nothing
+         end
+         else begin
+            rdReqQ.deq;
+            memReqs[rdCtr] = tagged Valid DDRRequest{writeen: 0, address: rdReq.address, datain:?};
+            outstandingReqQ.enq(rdCtr);
+            hasAction = True;
+         end
+      end
+      
+      
+      // if (hasAction) begin
+      //    $display("MuxReq:: ",fshow(memReqs));
+      // end
+      
+      for (Integer i = 0; i < 2; i = i + 1) begin
+         if ( memReqs[i] matches tagged Valid .req ) begin
+            serReqQ[i].enq(req);
+         end
+      end
+   endrule
+   
+   rule doDistResp;
+      let nextReq = outstandingReqQ.first;
+      if ( nextReq == 0 && serRespQ[0].notEmpty) begin
+         let resp = serRespQ[0].first;
+         serRespQ[0].deq;
+         rdRespQ.enq(resp);
+         outstandingReqQ.deq;
+      end
+      else if (nextReq == 1 && serRespQ[1].notEmpty) begin
+         let resp = serRespQ[1].first;
+         serRespQ[1].deq;
+         rdRespQ.enq(resp);
+         outstandingReqQ.deq;
+      end
+   endrule
+   
+   interface dramServers = zipWith(toServer, cliReqQ, cliRespQ);
+   interface dramControllers = zipWith(toClient, serReqQ, serRespQ);
+endmodule

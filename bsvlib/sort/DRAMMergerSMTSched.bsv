@@ -118,7 +118,9 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    Vector#(2, FIFOF#(Tuple2#(Bit#(1), DDRRequest))) dramReqQ <- replicateM(mkFIFOF); 
    Vector#(2, FIFOF#(DDRResponse)) dramRespQ <- replicateM(mkFIFOF); 
 
-   DRAMMux#(2, 2) dramMux <- mkDRAMMux;
+   // DRAMMux#(2, 2) dramMux <- mkDRAMMux;
+   DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
+
    Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramClis = zipWith(toClient, dramReqQ, dramRespQ);
    zipWithM_(mkConnection, dramClis, dramMux.dramServers);
    

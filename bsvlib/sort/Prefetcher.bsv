@@ -9,6 +9,7 @@ import GetPut::*;
 import ClientServer::*;
 import Vector::*;
 import RegFile::*;
+import BuildVector::*;
 
 interface Prefetcher#(numeric type fDepth, type dtype, type tagT);
    method Action start(tagT tag, Bit#(32) totalBlks);
@@ -321,11 +322,166 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
    
 endmodule
 
+module mkVectorPrefetcherImplSplit(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, tagT)) provisos(
+   // NumAlias#(TExp#(TLog#(vSz)), vSz),
+   Bits#(dtype, dSz),
+   Bits#(tagT, tagSz),
+   Mul#(fDepth, 2, bufDepth),
+   Alias#(Bit#(TLog#(TMul#(fDepth,2))), bufLineIdT),
+   
+   Add#(1, a__, vSz),
+   Add#(1, b__, TDiv#(vSz, 2)),
+   Add#(TDiv#(vSz, 2), c__, vSz),
+   Add#(1, TLog#(TDiv#(vSz, 2)), TLog#(vSz)),
+
+   Add#(d__, TLog#(bufDepth), TLog#(TMul#(TExp#(TLog#(vSz)), bufDepth)))
+
+
+   );
+   Integer depthInt = valueOf(fDepth);
+   
+
+   // double buffering;
+   // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGBRAMVector;
+   BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGPipelinedBRAMVector;
+
+   Vector#(vSz, Count#(UInt#(TLog#(TAdd#(bufDepth,1))))) elemCnt <- replicateM(mkCount(0));
+   Vector#(vSz, FIFOF#(void)) dataReadyQs <- replicateM(mkFIFOF);
+
+   Vector#(vSz, Count#(UInt#(2))) availCnt <- replicateM(mkCount(2));
+   
+   Vector#(vSz, Reg#(Bool)) doneReg <- replicateM(mkReg(True));
+   
+   
+   Vector#(vSz, FIFOF#(Tuple2#(tagT, Bit#(TLog#(numFetches))))) fetchReqQ <- replicateM(mkFIFOF);
+   
+   FIFOF#(Tuple3#(Bit#(TLog#(vSz)), tagT, Bit#(TLog#(numFetches)))) issueQ <- mkFIFOF;
+   Vector#(vSz, Reg#(Bit#(TLog#(numFetches)))) fetchCnt <- replicateM(mkReg(0));
+   
+   Reg#(tagT) currTag <- mkRegU;
+   
+   
+   for (Integer i = 0; i < valueOf(vSz); i = i + 1) begin
+      rule genFetchReq if ( availCnt[i] > 0 && !doneReg[i] );
+         if ( fetchCnt[i] == fromInteger(valueOf(numFetches)-1) ) begin
+            doneReg[i] <= True;
+            fetchCnt[i] <= 0;
+         end
+         else begin
+            fetchCnt[i] <= fetchCnt[i] + 1;
+         end
+         availCnt[i].decr(1);
+         fetchReqQ[i].enq(tuple2(currTag, fetchCnt[i]));
+         // $display("genFetchReq i = %d, availCnt = %d, fetchCnt = %d, numFetches = %d", i, availCnt[i], fetchCnt[i], valueOf(numFetches));
+      endrule
+      
+      rule genDataReady if ( elemCnt[i] > 0 );
+         elemCnt[i].decr(1);
+         dataReadyQs[i].enq(?);
+      endrule
+   end
+
+
+   function Bool fReqReady(FIFOF#(t) x) = x.notEmpty;
+   
+   Vector#(2, Vector#(TDiv#(vSz,2), FIFOF#(Tuple2#(tagT, Bit#(TLog#(numFetches)))))) fetchReqQsSplit = vec(take(fetchReqQ), drop(fetchReqQ));
+   Vector#(2, FIFOF#(Tuple3#(Bit#(TLog#(TDiv#(vSz,2))), tagT, Bit#(TLog#(numFetches))))) issueQs <- replicateM(mkFIFOF);
+
+   for (Integer i = 0; i < 2; i = i + 1) begin
+      Vector#(TDiv#(vSz,2), Bool) canGo = map(fReqReady, fetchReqQsSplit[i]);
+      Vector#(TDiv#(vSz,2), Tuple2#(Bool, Bit#(TLog#(TDiv#(vSz,2))))) indexArray = zipWith(tuple2, canGo, genWith(fromInteger));
+      let port = fold(elemFind, indexArray);
+      rule issueFetchReq if ( pack(canGo) != 0);
+         let idx = tpl_2(port);
+         fetchReqQsSplit[i][idx].deq;
+         let {tag, cnt} = fetchReqQsSplit[i][idx].first;
+         issueQs[i].enq(tuple3(idx, tag, cnt));
+      endrule
+   end   
+   
+   rule doIssue;
+      if ( issueQs[0].notEmpty) begin
+         let {idx, tag, cnt} = issueQs[0].first;
+         issueQs[0].deq;
+         issueQ.enq(tuple3({1'b0, idx}, tag, cnt));
+      end
+      else begin
+         let {idx, tag, cnt} = issueQs[1].first;
+         issueQs[1].deq;
+         issueQ.enq(tuple3({1'b1, idx}, tag, cnt));
+      end
+   endrule
+
+   // Vector#(vSz, Reg#(Bit#(TLog#(fDepth)))) rdCnt <- replicateM(mkReg(0));
+   RegFile#(UInt#(TLog#(vSz)), Bit#(TLog#(fDepth))) rdCnt <- mkRegFileFull;
+   Reg#(UInt#(TLog#(vSz))) initCnt <- mkReg(0);
+   Reg#(Bool) initReg <- mkReg(False);
+   rule initrdCnt if ( !initReg );
+      initCnt <= initCnt + 1;
+      if (initCnt == maxBound) initReg <= True;
+      rdCnt.upd(initCnt, 0);
+   endrule
+
+
+   method Action start(tagT tag) if ( fold(\&& , readVReg(doneReg)) );
+      writeVReg(doneReg, replicate(False));
+      currTag <= tag;
+   endmethod
+
+   interface PipeOut fetchReq = toPipeOut(issueQ);
+   
+   interface PipeIn fetchResp;
+      method Action enq(Tuple2#(Bit#(TLog#(vSz)), dtype) d);
+         let {tag, data} = d;
+         // $display("fetchResp segId = %d", tag);
+         buffer.enq(data, unpack(tag));
+         elemCnt[tag].incr(1);
+      endmethod
+      method Bool notFull;
+         return True;
+      endmethod
+   endinterface
+
+   // method Vector#(vSz, Bool) dataReady;
+   //    function d getValue(Count#(d) cntifc) = cntifc._read;
+   //    return zipWith(\> , map(getValue, elemCnt), replicate(0));
+   // endmethod
+   
+   interface dataReady = map(toPipeOut, dataReadyQs);
+   interface Server rdServer;
+      interface Put request;
+         method Action put(UInt#(TLog#(vSz)) tag) if (initReg);
+            buffer.rdServer.request.put(tag);
+            // elemCnt[tag].decr(1);
+            // $display("prefetcher rdServer, elemCnt[%d] = %d", tag, elemCnt[tag]);
+            let rdCntVal = rdCnt.sub(tag);
+            if (rdCntVal == fromInteger(depthInt-1) ) begin
+               // $display("prefetcher rdServer incr availCnt");
+               availCnt[tag].incr(1);
+               rdCnt.upd(tag,0);
+            end
+            else begin
+               rdCnt.upd(tag,rdCntVal+1);
+               // rdCnt[tag] <= rdCnt[tag] + 1;
+            end
+         endmethod
+      endinterface
+      interface Get response;
+         method ActionValue#(dtype) get();
+            let v <- buffer.rdServer.response.get;
+            return v;
+         endmethod
+      endinterface
+   endinterface
+   
+endmodule
+
+
 
 //2KB burst of 4MB-block
 (*synthesize*)
 module mkVectorPrefetcher_32_16_uint_32_synth(VectorPrefetcher#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
-   let m_ <- mkVectorPrefetcherImpl;
+   let m_ <- mkVectorPrefetcherImplSplit;
    return m_;
 endmodule
 instance VectorPrefetcherInstance#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
@@ -338,7 +494,7 @@ endinstance
 //1KB burst of 4MB-block
 (*synthesize*)
 module mkVectorPrefetcher_16_16_uint_32_synth(VectorPrefetcher#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
-   let m_ <- mkVectorPrefetcherImpl;
+   let m_ <- mkVectorPrefetcherImplSplit;
    return m_;
 endmodule
 instance VectorPrefetcherInstance#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
