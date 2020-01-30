@@ -61,10 +61,10 @@ prebuild:: $(DDR4_V) $(SYNCFIFO_784_32) $(SYNCFIFO_640_32)
 $(DDR4_V): $(BASEDIR)/core-scripts/synth-ddr4.tcl
 	(cd $(BOARD); vivado -mode batch -source $(BASEDIR)/core-scripts/synth-ddr4.tcl)
 
-$(SYNCFIFO_784_32): $(PLATFORMDIR)/core-scripts/synth_sync_bram_fifo.tcl
+$(SYNCFIFO_784_32): $(BASEDIR)/core-scripts/synth_sync_bram_fifo.tcl
 	(cd $(PROJECTDIR); vivado -mode batch -source $^ -tclargs 784 32)
 
-$(SYNCFIFO_640_32): $(PLATFORMDIR)/core-scripts/synth_sync_bram_fifo.tcl
+$(SYNCFIFO_640_32): $(BASEDIR)/core-scripts/synth_sync_bram_fifo.tcl
 	(cd $(PROJECTDIR); vivado -mode batch -source $^ -tclargs 640 32)
 
 endif
