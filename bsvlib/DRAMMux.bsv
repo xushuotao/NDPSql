@@ -1,16 +1,21 @@
 import DRAMControllerTypes::*;
 import Vector::*;
 import GetPut::*;
+import FIFO::*;
 import FIFOF::*;
+import DelayPipe::*;
 import ClientServer::*;
 import ClientServerHelper::*;
 import Pipe::*;
 import FIFOG::*;
+import Connectable::*;
 
 // import CompletionBuffer::*;
 // import Cntrs::*;
 
 import CmplBuf::*;
+
+// import D
 
 
 typedef 32 NTokens;
@@ -144,6 +149,8 @@ module mkRwDualDRAMMux(DRAMMux#(2, 2)) provisos(
    Vector#(2, FIFOF#(Tuple2#(ctrIdT, DDRRequest))) cliReqQ <- replicateM(mkFIFOF);
    Vector#(2, FIFOF#(DDRResponse)) cliRespQ <- replicateM(mkFIFOF);
    
+   
+   
    let wrReqQ = cliReqQ[0];
    let rdReqQ = cliReqQ[1];   
    let rdRespQ = cliRespQ[1];   
@@ -151,6 +158,12 @@ module mkRwDualDRAMMux(DRAMMux#(2, 2)) provisos(
    FIFOF#(ctrIdT) outstandingReqQ <- mkSizedFIFOF(nTokens_int);
    Vector#(2, FIFOF#(DDRRequest)) serReqQ <- replicateM(mkFIFOF);
    Vector#(2, FIFOF#(DDRResponse)) serRespQ <- replicateM(mkFIFOF);
+   
+   // Vector#(2, FIFO#(DDRRequest)) delaySerReqQ <- replicateM(mkDelayPipeG(8));
+   // Vector#(2, FIFO#(DDRResponse)) delaySerRespQ <- replicateM(mkDelayPipeG(8));
+   
+   // zipWithM_(mkConnection, map(toGet, serReqQ), map(toPut, delaySerReqQ));
+   // zipWithM_(mkConnection, map(toGet, delaySerRespQ), map(toPut, serRespQ));
    
    function Bool fifoReady(FIFOF#(d) fifo) = fifo.notEmpty;
    
@@ -206,6 +219,9 @@ module mkRwDualDRAMMux(DRAMMux#(2, 2)) provisos(
       end
    endrule
    
+      
    interface dramServers = zipWith(toServer, cliReqQ, cliRespQ);
    interface dramControllers = zipWith(toClient, serReqQ, serRespQ);
+
+   // interface dramControllers = zipWith(toClient, delaySerReqQ, delaySerRespQ);
 endmodule

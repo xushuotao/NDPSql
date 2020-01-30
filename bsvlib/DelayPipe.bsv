@@ -1,6 +1,9 @@
 import Vector::*;
 import List::*;
+import FIFO::*;
 import ConfigReg::*;
+import GetPut::*;
+import Connectable::*;
 
 interface DelayPipe#(numeric type n, type dtype);
    method Action enq(dtype d);
@@ -61,3 +64,16 @@ module mkDelayReg#(Integer depth)(DelayReg#(dtype)) provisos(Bits#(dtype, dSz));
    method Maybe#(dtype) _read = List::last(ppReg)._read;
 endmodule
 
+
+module mkDelayPipeG#(Integer depth)(FIFO#(dtype)) provisos(Bits#(dtype, dSz));
+   List#(FIFO#(dtype)) pipes <- List::replicateM(depth, mkFIFO);
+   
+   let deqs = List::take(depth-1, pipes);
+   let enqs = List::tail(pipes);
+   
+   List::zipWithM(mkConnection, List::map(toGet, deqs), List::map(toPut, enqs));
+   
+   method Action enq(dtype d) = pipes[0].enq(d);
+   method dtype first = List::last(pipes).first;
+   method Action deq = List::last(pipes).deq;
+endmodule

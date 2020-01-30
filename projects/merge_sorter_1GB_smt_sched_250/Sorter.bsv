@@ -43,6 +43,8 @@ import Bitonic::*;
 import DDR4Controller::*;
 import DDR4Common::*;
 
+import DRAMMux::*;
+
 `ifdef SIMULATION
 import DDR4Sim::*;
 `else
@@ -152,18 +154,21 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    Reg#(Bit#(32)) elemCnt <- mkReg(0);
    
    Integer vecSz = valueOf(VecSz);
-   Integer totalElms = valueOf(TotalElms_L1);
+   Integer totalElms = valueOf(TotalElms_L2);
    
    let sorter_reg <- mkStreamingMergeSort_synth;
    let sorter_bram <- mkStreamingMerger_synth;
    let sorter_dram <- mkStreamingMergerDRAM_synth;
+   
+   DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
+   zipWithM_(mkConnection, sorter_dram.dramMuxClients, dramMux.dramServers);
    
 ////////////////////////////////////////////////////////////////////////////////
 /// DRAM Section
 ////////////////////////////////////////////////////////////////////////////////
    `ifdef SIMULATION
    let ddr4_ctrl_users <- replicateM(mkDDR4Simulator);
-   zipWithM_(mkConnection, sorter_dram.dramClients, ddr4_ctrl_users);   
+   zipWithM_(mkConnection, dramMux.dramControllers, ddr4_ctrl_users);   
    `else 
    Clock curr_clk <- exposeCurrentClock();
    Reset curr_rst_n <- exposeCurrentReset();
@@ -182,7 +187,9 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    Clock ddr4clk0 = ddr4_ctrl_0.user.clock;
    Reset ddr4rstn0 = ddr4_ctrl_0.user.reset_n;
    
-   let ddr_cli_300mhz_0 <- mkDDR4ClientSync(sorter_dram.dramClients[0], curr_clk, curr_rst_n, ddr4clk0, ddr4rstn0);
+   // let ddr_cli_300mhz_0 <- mkDDR4ClientSync(sorter_dram.dramClients[0], curr_clk, curr_rst_n, ddr4clk0, ddr4rstn0);
+   let ddr_cli_300mhz_0 <- mkDDR4ClientSync(dramMux.dramControllers[0], curr_clk, curr_rst_n, ddr4clk0, ddr4rstn0);
+
    mkConnection(ddr_cli_300mhz_0, ddr4_ctrl_0.user);
    
    // DDR4 C2
@@ -198,7 +205,8 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    Clock ddr4clk1 = ddr4_ctrl_1.user.clock;
    Reset ddr4rstn1 = ddr4_ctrl_1.user.reset_n;
    
-   let ddr_cli_300mhz_1 <- mkDDR4ClientSync(sorter_dram.dramClients[1], curr_clk, curr_rst_n, ddr4clk1, ddr4rstn1);
+   // let ddr_cli_300mhz_1 <- mkDDR4ClientSync(sorter_dram.dramClients[1], curr_clk, curr_rst_n, ddr4clk1, ddr4rstn1);
+   let ddr_cli_300mhz_1 <- mkDDR4ClientSync(dramMux.dramControllers[1], curr_clk, curr_rst_n, ddr4clk1, ddr4rstn1);
    mkConnection(ddr_cli_300mhz_1, ddr4_ctrl_1.user);
    `endif
 ////////////////////////////////////////////////////////////////////////////////

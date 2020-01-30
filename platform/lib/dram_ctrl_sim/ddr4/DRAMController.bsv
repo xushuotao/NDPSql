@@ -12,6 +12,7 @@ import Shifter::*;
 
 import FIFO::*;
 import BRAMFIFO::*;
+import ConnectalBramFifo::*;
 import FIFOF::*;
 import GetPut::*;
 import ClientServer::*;
@@ -19,6 +20,11 @@ import Connectable::*;
 import Counter::*;
 
 import DRAMControllerTypes::*;
+
+import XilinxSyncFifo::*;
+import XilinxSyncFifoW784D32::*;
+import XilinxSyncFifoW640D32::*;
+
 
 // interface DebugProbe;
 //    method DDRRequest req;
@@ -293,8 +299,16 @@ module mkDDR4ClientSync#(DDR4Client ddr4,
     Clock sclk, Reset srst, Clock dclk, Reset drst
     ) (DDR4Client);
 
-    SyncFIFOIfc#(DDRRequest) reqs <- mkSyncBRAMFIFO(32, sclk, srst, dclk, drst);
-    SyncFIFOIfc#(DDRResponse) resps <- mkSyncBRAMFIFO(32, dclk, drst, sclk, srst);
+   //FIFOF#(DDRRequest) reqs <- mkDualClockBramFIFOF(sclk, srst, dclk, drst);
+   //FIFOF#(DDRResponse) resps <- mkDualClockBramFIFOF(dclk, drst, sclk, srst);
+   // SyncFIFOIfc#(DDRRequest) reqs <- mkSyncBRAMFIFO(32, sclk, srst, dclk, drst);
+   // SyncFIFOIfc#(DDRResponse) resps <- mkSyncBRAMFIFO(32, dclk, drst, sclk, srst);
+   
+   // SyncFIFOIfc#(DDRRequest) reqs <- mkSyncFIFO(16, sclk, srst, dclk);//, drst);
+   // SyncFIFOIfc#(DDRResponse) resps <- mkSyncFIFO(16, dclk, drst, sclk);//, srst);
+   SyncFIFOIfc#(DDRRequest) reqs <- mkSyncBramFifo_w784_d32(sclk, srst, dclk);
+   SyncFIFOIfc#(DDRResponse) resps <- mkSyncBramFifo_w640_d32(dclk, drst, sclk);
+
 
     mkConnection(toPut(reqs), toGet(ddr4.request));
     mkConnection(toGet(resps), toPut(ddr4.response));

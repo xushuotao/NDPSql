@@ -27,7 +27,8 @@ import GetPut::*;
 interface DRAMStreamingMergerSMTSched#(type iType, numeric type vSz, numeric type sortedSz, numeric type fanIn, numeric type fDepth);
    interface PipeIn#(Vector#(vSz, iType)) inPipe;
    interface PipeOut#(Vector#(vSz, iType)) outPipe;
-   interface Vector#(2, DDR4Client) dramClients;
+   // interface Vector#(2, DDR4Client) dramClients;
+   interface Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramMuxClients;
 endinterface
 
 // typedef TMul#(1024,8) PrefSz;
@@ -119,10 +120,10 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    Vector#(2, FIFOF#(DDRResponse)) dramRespQ <- replicateM(mkFIFOF); 
 
    // DRAMMux#(2, 2) dramMux <- mkDRAMMux;
-   DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
+   // DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
 
-   Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramClis = zipWith(toClient, dramReqQ, dramRespQ);
-   zipWithM_(mkConnection, dramClis, dramMux.dramServers);
+   // Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramClis = zipWith(toClient, dramReqQ, dramRespQ);
+   // zipWithM_(mkConnection, dramClis, dramMux.dramServers);
    
 ////////////////////////////////////////////////////////////////////////////////
 /// DRAM writes: 
@@ -240,7 +241,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    // BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGBRAMVector;//mkUGPipelinedBRAMVector;
    BRAMVector#(TLog#(n), BufSize#(vSz), SortedPacket#(vSz,iType)) dispatchBuff <- mkUGPipelinedBRAMVector;
    
-   FIFOF#(UInt#(TLog#(n))) dstQ <- mkSizedFIFOF(3);
+   FIFOF#(UInt#(TLog#(n))) dstQ <- mkSizedFIFOF(8);
    
    Vector#(n, FIFOF#(void)) rdReqQs <- replicateM(mkFIFOF);
    
@@ -279,7 +280,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
    endrule
    
-   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(3);
+   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(4);
 
    rule issueDataReq if (merger.in.scheduleResp.notEmpty);
       let tag = merger.in.scheduleResp.first;
@@ -290,8 +291,16 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       issuedTag.enq(unpack(truncateLSB(pack(tag))));
    endrule   
    
+   
+   FIFO#(SortedPacket#(vSz,iType)) dispatchDelayQ <- mkFIFO;
+   
    rule doDataResp;
       let packet <- dispatchBuff.rdServer.response.get;
+      dispatchDelayQ.enq(packet);
+   endrule
+   
+   rule doConn;
+      let packet <- toGet(dispatchDelayQ).get;
       let tag <- toGet(issuedTag).get;
       merger.in.dataChannel.enq(TaggedSortedPacket{tag:tag, packet:packet});
    endrule
@@ -320,7 +329,8 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    
    interface inPipe = toPipeIn(inQ);
    interface outPipe = toPipeOut(outQ);
-   interface dramClients = dramMux.dramControllers;
+   // interface dramClients = dramMux.dramControllers;
+   interface dramMuxClients = zipWith(toClient, dramReqQ, dramRespQ);
 
 endmodule
 

@@ -1,4 +1,5 @@
 import RWBramCore::*;
+import RWUramCore::*;
 import Vector::*;
 import Pipe::*;
 import FIFO::*;
@@ -330,6 +331,88 @@ module mkUGPipelinedBRAMVector(BRAMVector#(vlog, fifodepth, fifotype))
    endinterface
 endmodule
 
+module mkUGURAMVector(BRAMVector#(vlog, fifodepth, fifotype))
+   provisos (
+      NumAlias#(TExp#(vlog), vSz),
+      Log#(fifodepth, dlog),
+      // NumAlias#(TExp#(TLog#(fifodepth)), fifodepth), // fifodepth is power of 2
+      Bits#(fifotype, fifotypesz),
+      Add#(a__, dlog, TLog#(TMul#(TExp#(vlog), fifodepth)))
+      );
+   // Vector#(vSz, Reg#(UInt#(dlog))) enqPtr <- replicateM(mkReg(0)); 
+   // Vector#(vSz, Reg#(UInt#(dlog))) deqPtr <- replicateM(mkReg(0));
+   
+   RegFile#(UInt#(vlog), UInt#(dlog)) enqPtr <- mkRegFileFull;//replicateM(mkReg(0)); 
+   RegFile#(UInt#(vlog), UInt#(dlog)) deqPtr <- mkRegFileFull;//replicateM(mkReg(0)); 
+
+   // RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
+   RWUramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWUramCore(4);
+   
+   Integer depth = valueOf(fifodepth);
+   
+   Vector#(vSz, Integer) offsets = zipWith(\* , genVector(), replicate(depth));
+   
+   function UInt#(TLog#(TMul#(vSz, fifodepth))) toAddr(UInt#(vlog) idx, UInt#(dlog) ptr) = fromInteger(offsets[idx])+extend(ptr);
+
+   `ifdef DEBUG   
+   Vector#(vSz, FIFOF#(void)) validQs <- replicateM(mkUGSizedFIFOF(valueOf(fifodepth)));
+   `endif
+   
+   Reg#(Bool) init <- mkReg(False);
+   Reg#(UInt#(vlog)) tagCnt <- mkReg(0);
+   
+   rule doInit if (!init);
+      enqPtr.upd(tagCnt,0);
+      deqPtr.upd(tagCnt,0);
+      tagCnt <= tagCnt + 1;
+      
+      if ( tagCnt == fromInteger(valueOf(vSz)-1))
+         init <= True;
+   endrule
+
+   method Action enq(fifotype data, UInt#(vlog) tag) if (init);
+      let ptr = enqPtr.sub(tag);
+      if ( ptr == fromInteger(depth-1)) begin
+         enqPtr.upd(tag, 0);
+      end
+      else begin
+         enqPtr.upd(tag, ptr+1);
+      end
+      `ifdef DEBUG   
+      validQs[tag].enq(?);
+      `endif
+      // $display("%m,(%t) buffer wrReq tag = %d, enqPtr = %d, addr = %d", $time, tag, enqPtr[tag], toAddr(tag, enqPtr[tag]));
+      buffer.wrReq(toAddr(tag, ptr), data);
+   endmethod
+
+   
+   interface Server rdServer;
+      interface Put request;
+         method Action put(UInt#(vlog) tag) if ( init);
+            let ptr = deqPtr.sub(tag);
+            if ( ptr == fromInteger(depth-1)) begin
+               deqPtr.upd(tag, 0);
+            end
+            else begin
+               deqPtr.upd(tag, ptr+1);
+            end
+            `ifdef DEBUG   
+            validQs[tag].deq;
+
+            `endif
+            buffer.rdReq(toAddr(tag, ptr));
+            // $display("%m,(%t) buffer rdReq tag = %d, deqPtr = %d, addr = %d", $time, tag, deqPtr[tag], toAddr(tag, deqPtr[tag]));
+         endmethod
+      endinterface
+      interface Get response;
+         method ActionValue#(fifotype) get if ( buffer.rdRespValid); 
+            buffer.deqRdResp;
+            return buffer.rdResp;
+         endmethod
+      endinterface
+   endinterface
+endmodule
+
 
 module mkUGPipelinedURAMVector(BRAMVector#(vlog, fifodepth, fifotype))
    provisos (
@@ -346,8 +429,8 @@ module mkUGPipelinedURAMVector(BRAMVector#(vlog, fifodepth, fifotype))
    RWBramCore#(UInt#(vlog), UInt#(dlog)) enqPtrBuff <- mkUGRWBramCore;
    RWBramCore#(UInt#(vlog), UInt#(dlog)) deqPtrBuff <- mkUGRWBramCore;
 
-    RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
-   //RWUramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWUramCore;
+    // RWBramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWBramCore;
+   RWUramCore#(UInt#(TLog#(TMul#(vSz, fifodepth))), fifotype) buffer <- mkUGRWUramCore(4);
 
    
    Integer depth = valueOf(fifodepth);

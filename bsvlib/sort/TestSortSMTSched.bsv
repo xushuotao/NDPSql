@@ -16,6 +16,7 @@ import DRAMControllerTypes::*;
 import DRAMController::*;
 import DDR4Sim::*;
 import Connectable::*;
+import DRAMMux::*;
 
 
 import ClientServer::*;
@@ -537,8 +538,13 @@ typedef TDiv#(1024, 4) FDepth;
 module mkStreamingDRAMMergeNSMTSchedTest(Empty);
    // StreamingMergerSMTSched#(UInt#(32), VecSz, ChunkSz, NumChunks) merger <- mkStreamingMergeNSMTSched(ascending);
    DRAMStreamingMergerSMTSched#(UInt#(32), VecSz, SegSz, NumSegs, FDepth) merger <- mkDRAMStreamingMergeNSMTSched(ascending);
+   
+   DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
+   // Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramClis = zipWith(toClient, dramReqQ, dramRespQ);
+   zipWithM_(mkConnection, merger.dramMuxClients, dramMux.dramServers);
+
    Vector#(2, DDR4_User_VCU108) dramCtrs <- replicateM(mkDDR4Simulator);
-   zipWithM_(mkConnection, merger.dramClients, dramCtrs);   
+   zipWithM_(mkConnection, dramMux.dramControllers, dramCtrs);   
 
    Integer testLen = 10;
    Bit#(32) vecSz = fromInteger(valueOf(VecSz));

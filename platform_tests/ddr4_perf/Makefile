@@ -4,7 +4,7 @@ CONNECTALDIR?=$(PLATFORMDIR)/build_tools/connectal/
 
 MIGDIR=$(abspath ../../platform/xilinx/ddr4_v2_2/)
 
-BSVDIR=$(BASEDIR)/bsvlib:$(MIGDIR):$(PLATFORMDIR)/lib/dram_ctrl_sim/ddr4
+BSVDIR=$(BASEDIR)/bsvlib:$(MIGDIR):$(PLATFORMDIR)/lib/dram_ctrl_sim/ddr4:$(PLATFORMDIR)/lib/
 
 
 S2H_INTERFACES = Ddr4PerfRequest:Ddr4Perf.request
@@ -35,10 +35,25 @@ endif
 
 DDR4_V = $(CONNECTALDIR)/out/$(BOARD)/ddr4_0/ddr4_0_stub.v
 
-prebuild:: $(DDR4_V)
+SYNCFIFO_784_32 = $(CONNECTALDIR)/out/$(BOARD)/sync_bram_fifo_w784_d32/sync_bram_fifo_w784_d32.xci
+SYNCFIFO_640_32 = $(CONNECTALDIR)/out/$(BOARD)/sync_bram_fifo_w640_d32/sync_bram_fifo_w640_d32.xci
+
+CONNECTALFLAGS += \
+		--xci $(SYNCFIFO_784_32) \
+		--xci $(SYNCFIFO_640_32)
+
+
+
+prebuild:: $(DDR4_V) $(SYNCFIFO_784_32) $(SYNCFIFO_640_32)
 
 $(DDR4_V): $(PLATFORMDIR)/core-scripts/synth-ddr4.tcl
 	(cd $(BOARD); vivado -mode batch -source $(PLATFORMDIR)/core-scripts/synth-ddr4.tcl)
+
+$(SYNCFIFO_784_32): $(PLATFORMDIR)/core-scripts/synth_sync_bram_fifo.tcl
+	(cd $(PROJECTDIR); vivado -mode batch -source $^ -tclargs 784 32)
+
+$(SYNCFIFO_640_32): $(PLATFORMDIR)/core-scripts/synth_sync_bram_fifo.tcl
+	(cd $(PROJECTDIR); vivado -mode batch -source $^ -tclargs 640 32)
 
 endif
 

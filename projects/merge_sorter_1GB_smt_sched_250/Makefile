@@ -10,7 +10,7 @@ S2H_INTERFACES = SorterRequest:Sorter.request
 H2S_INTERFACES = Sorter:SorterIndication:host
 
 
-
+CONNECTALFLAGS += --mainclockperiod=5 
 CONNECTALFLAGS += -D IMPORT_HOSTIF -D XILINX_SYS_CLK
 
 CONNECTALFLAGS += --bsvpath $(BSVDIR)
@@ -49,10 +49,23 @@ endif
 
 DDR4_V = $(CONNECTALDIR)/out/$(BOARD)/ddr4_0/ddr4_0_stub.v
 
-prebuild:: $(DDR4_V)
+SYNCFIFO_784_32 = $(CONNECTALDIR)/out/$(BOARD)/sync_bram_fifo_w784_d32/sync_bram_fifo_w784_d32.xci
+SYNCFIFO_640_32 = $(CONNECTALDIR)/out/$(BOARD)/sync_bram_fifo_w640_d32/sync_bram_fifo_w640_d32.xci
+
+CONNECTALFLAGS += \
+		--xci $(SYNCFIFO_784_32) \
+		--xci $(SYNCFIFO_640_32)
+
+prebuild:: $(DDR4_V) $(SYNCFIFO_784_32) $(SYNCFIFO_640_32)
 
 $(DDR4_V): $(BASEDIR)/core-scripts/synth-ddr4.tcl
 	(cd $(BOARD); vivado -mode batch -source $(BASEDIR)/core-scripts/synth-ddr4.tcl)
+
+$(SYNCFIFO_784_32): $(PLATFORMDIR)/core-scripts/synth_sync_bram_fifo.tcl
+	(cd $(PROJECTDIR); vivado -mode batch -source $^ -tclargs 784 32)
+
+$(SYNCFIFO_640_32): $(PLATFORMDIR)/core-scripts/synth_sync_bram_fifo.tcl
+	(cd $(PROJECTDIR); vivado -mode batch -source $^ -tclargs 640 32)
 
 endif
 

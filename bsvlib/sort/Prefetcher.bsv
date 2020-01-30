@@ -1,3 +1,4 @@
+import FIFO::*;
 import FIFOF::*;
 import Pipe::*;
 import RWBramCore::*;
@@ -10,6 +11,8 @@ import ClientServer::*;
 import Vector::*;
 import RegFile::*;
 import BuildVector::*;
+import DelayPipe::*;
+import Connectable::*;
 
 interface Prefetcher#(numeric type fDepth, type dtype, type tagT);
    method Action start(tagT tag, Bit#(32) totalBlks);
@@ -101,7 +104,7 @@ module mkPrefetcherImpl(Prefetcher#(fDepth, dtype, tagT)) provisos(
    //    buffer.deqRdResp;
    //    dataOutQ.enq(d);
    // endrule
-
+ 
    method Action start(tagT tag, Bit#(32) totalBlks);
       fetchJobQ.enq(tuple2(tag, totalBlks));
    endmethod
@@ -173,7 +176,10 @@ instance VectorPrefetcherInstance#(vSz, fDepth, numFetches, dtype, tagT) proviso
    Alias#(Bit#(TLog#(TMul#(fDepth,2))), bufLineIdT),
    
    Add#(1, a__, vSz),
-   Add#(b__, TLog#(bufDepth), TLog#(TMul#(TExp#(TLog#(vSz)), bufDepth)))
+   Add#(b__, TLog#(bufDepth), TLog#(TMul#(TExp#(TLog#(vSz)), bufDepth))),
+   
+   Pipe::FunnelPipesPipelined#(1, vSz, Tuple3#(Bit#(TLog#(vSz)), tagT, Bit#(TLog#(numFetches))), 1)
+   
    );
    module mkVectorPrefetcher(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, tagT));
       let m_ <- mkVectorPrefetcherImpl;
@@ -198,7 +204,9 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
    Alias#(Bit#(TLog#(TMul#(fDepth,2))), bufLineIdT),
    
    Add#(1, a__, vSz),
-   Add#(b__, TLog#(bufDepth), TLog#(TMul#(TExp#(TLog#(vSz)), bufDepth)))
+   Add#(b__, TLog#(bufDepth), TLog#(TMul#(TExp#(TLog#(vSz)), bufDepth))),
+                                                                                                
+   Pipe::FunnelPipesPipelined#(1, vSz, Tuple3#(Bit#(TLog#(vSz)), tagT, Bit#(TLog#(numFetches))), 1)
 
    );
    Integer depthInt = valueOf(fDepth);
@@ -207,6 +215,9 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
    // double buffering;
    // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGBRAMVector;
    BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGPipelinedBRAMVector;
+   // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGURAMVector;
+   // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGPipelinedURAMVector;
+
 
    Vector#(vSz, Count#(UInt#(TLog#(TAdd#(bufDepth,1))))) elemCnt <- replicateM(mkCount(0));
    Vector#(vSz, FIFOF#(void)) dataReadyQs <- replicateM(mkFIFOF);
@@ -216,7 +227,10 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
    Vector#(vSz, Reg#(Bool)) doneReg <- replicateM(mkReg(True));
    
    
-   Vector#(vSz, FIFOF#(Tuple2#(tagT, Bit#(TLog#(numFetches))))) fetchReqQ <- replicateM(mkFIFOF);
+   Vector#(vSz, FIFOF#(Tuple3#(Bit#(TLog#(vSz)), tagT, Bit#(TLog#(numFetches))))) fetchReqQ <- replicateM(mkFIFOF);
+   
+   FunnelPipe#(1, vSz, Tuple3#(Bit#(TLog#(vSz)), tagT, Bit#(TLog#(numFetches))), 1) fetchReqFunnel <- mkFunnelPipesPipelined(map(toPipeOut, fetchReqQ));
+
    
    FIFOF#(Tuple3#(Bit#(TLog#(vSz)), tagT, Bit#(TLog#(numFetches)))) issueQ <- mkFIFOF;
    Vector#(vSz, Reg#(Bit#(TLog#(numFetches)))) fetchCnt <- replicateM(mkReg(0));
@@ -234,7 +248,7 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
             fetchCnt[i] <= fetchCnt[i] + 1;
          end
          availCnt[i].decr(1);
-         fetchReqQ[i].enq(tuple2(currTag, fetchCnt[i]));
+         fetchReqQ[i].enq(tuple3(fromInteger(i), currTag, fetchCnt[i]));
          // $display("genFetchReq i = %d, availCnt = %d, fetchCnt = %d, numFetches = %d", i, availCnt[i], fetchCnt[i], valueOf(numFetches));
       endrule
       
@@ -244,21 +258,7 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
       endrule
    end
    
-   function Bool fReqReady(FIFOF#(t) x) = x.notEmpty;
-   Vector#(vSz, Bool) canGo = map(fReqReady, fetchReqQ);
-   Vector#(vSz, Tuple2#(Bool, Bit#(TLog#(vSz)))) indexArray = zipWith(tuple2, canGo, genWith(fromInteger));
-   let port = fold(elemFind, indexArray);
 
-   
-   rule issueFetchReq if ( pack(canGo) != 0);
-      let idx = tpl_2(port);
-      fetchReqQ[idx].deq;
-      let {tag, cnt} = fetchReqQ[idx].first;
-      issueQ.enq(tuple3(idx, tag, cnt));
-   endrule
-   
-   
-   // Vector#(vSz, Reg#(Bit#(TLog#(fDepth)))) rdCnt <- replicateM(mkReg(0));
    RegFile#(UInt#(TLog#(vSz)), Bit#(TLog#(fDepth))) rdCnt <- mkRegFileFull;
    Reg#(UInt#(TLog#(vSz))) initCnt <- mkReg(0);
    Reg#(Bool) initReg <- mkReg(False);
@@ -267,6 +267,15 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
       if (initCnt == maxBound) initReg <= True;
       rdCnt.upd(initCnt, 0);
    endrule
+   
+   FIFO#(dtype) delayPipe <- mkDelayPipeG(1);
+   
+   mkConnection(buffer.rdServer.response, toPut(delayPipe));
+   
+   // rule delayBuffer;
+   //     let v <- buffer.rdServer.response.get;
+   // endrule
+
 
 
    method Action start(tagT tag) if ( fold(\&& , readVReg(doneReg)) );
@@ -274,7 +283,7 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
       currTag <= tag;
    endmethod
 
-   interface PipeOut fetchReq = toPipeOut(issueQ);
+   interface PipeOut fetchReq = fetchReqFunnel[0];
    
    interface PipeIn fetchResp;
       method Action enq(Tuple2#(Bit#(TLog#(vSz)), dtype) d);
@@ -312,12 +321,12 @@ module mkVectorPrefetcherImpl(VectorPrefetcher#(vSz, fDepth, numFetches, dtype, 
             end
          endmethod
       endinterface
-      interface Get response;
-         method ActionValue#(dtype) get();
-            let v <- buffer.rdServer.response.get;
-            return v;
-         endmethod
-      endinterface
+      interface Get response = toGet(delayPipe);
+      //    method ActionValue#(dtype) get();
+      //       let v <- buffer.rdServer.response.get;
+      //       return v;
+      //    endmethod
+      // endinterface
    endinterface
    
 endmodule
@@ -344,6 +353,8 @@ module mkVectorPrefetcherImplSplit(VectorPrefetcher#(vSz, fDepth, numFetches, dt
    // double buffering;
    // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGBRAMVector;
    BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGPipelinedBRAMVector;
+   // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGURAMVector;
+   // BRAMVector#(TLog#(vSz), bufDepth, dtype) buffer <- mkUGPipelinedURAMVector;
 
    Vector#(vSz, Count#(UInt#(TLog#(TAdd#(bufDepth,1))))) elemCnt <- replicateM(mkCount(0));
    Vector#(vSz, FIFOF#(void)) dataReadyQs <- replicateM(mkFIFOF);
@@ -481,7 +492,7 @@ endmodule
 //2KB burst of 4MB-block
 (*synthesize*)
 module mkVectorPrefetcher_32_16_uint_32_synth(VectorPrefetcher#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
-   let m_ <- mkVectorPrefetcherImplSplit;
+   let m_ <- mkVectorPrefetcherImpl;
    return m_;
 endmodule
 instance VectorPrefetcherInstance#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
@@ -494,7 +505,7 @@ endinstance
 //1KB burst of 4MB-block
 (*synthesize*)
 module mkVectorPrefetcher_16_16_uint_32_synth(VectorPrefetcher#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
-   let m_ <- mkVectorPrefetcherImplSplit;
+   let m_ <- mkVectorPrefetcherImpl;
    return m_;
 endmodule
 instance VectorPrefetcherInstance#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
