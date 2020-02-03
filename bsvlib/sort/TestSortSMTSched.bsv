@@ -501,7 +501,8 @@ module mkStreamingMergeNSMTSchedTest(Empty);
    Reg#(UInt#(32)) prevMax <- mkReg(ascending?minBound:maxBound);
    
    rule doResult;
-       
+      let coin <- rand32();
+      if ( coin%3 != 0) begin
       merger.outPipe.deq;
       let merged = merger.outPipe.first;
 
@@ -553,6 +554,7 @@ module mkStreamingMergeNSMTSchedTest(Empty);
          accumulate <= accumulate + fold(\+ ,map(zeroExtend, merged));
          outBeat <= outBeat + 1;
          prevMax <= last(merged);
+      end
       end
    endrule
 endmodule

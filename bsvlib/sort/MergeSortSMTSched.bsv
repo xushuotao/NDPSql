@@ -149,7 +149,7 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
          packetCnt <= packetCnt + 1;
       end
       
-      $display("fifoIdCnt, packetCnt = (%0d, %0d)", fifoIdCnt, packetCnt);
+      //$display("fifoIdCnt, packetCnt = (%0d, %0d)", fifoIdCnt, packetCnt);
       
       let d = sorter.outPipe.first;
       sorter.outPipe.deq;
