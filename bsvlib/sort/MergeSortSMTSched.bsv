@@ -30,6 +30,8 @@ import FIFO::*;
 import Bitonic::*;
 import NToOneRouter::*;
 
+import RegFile::*;
+
 import OneToNRouter::*;
 
 import MergerSMTSched::*;
@@ -47,7 +49,7 @@ import BRAMFIFOFVector::*;
 import DelayPipe::*;
 
 import Cntrs::*;
-
+import Counter::*;
 // import DRAMControllerTypes::*;
 // import ClientServerHelper::*;
 
@@ -104,18 +106,26 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    StreamNode#(vSz, iType) sorter <- mkBitonicSort(ascending);
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
    
-   FIFO#(UInt#(TLog#(n))) nextSpot <- mkSizedFIFO(valueOf(n)*4);
+   // FIFO#(UInt#(TLog#(n))) nextSpot <- mkSizedFIFO(valueOf(n)*4);
+   Vector#(4, FIFO#(UInt#(TLog#(n)))) nextSpot <- replicateM(mkSizedFIFO(valueOf(n)));
+   
+   RegFile#(UInt#(TLog#(n)), Bit#(2)) tagCntRf <- mkRegFileFull;   
    
    Reg#(UInt#(TLog#(n))) spotCnt <- mkReg(0);
    Reg#(Bool) init <- mkReg(False);
    Reg#(Bit#(32)) iterCnt <- mkReg(0);
    rule doInit if( !init);
 
-      nextSpot.enq(spotCnt);
+      for (Integer i = 0; i < 4; i = i + 1)
+         nextSpot[i].enq(spotCnt);
+      
+      tagCntRf.upd(spotCnt, 0);
+      
       if ( spotCnt == fromInteger(valueOf(n)-1)) begin
          spotCnt <= 0;
-         iterCnt <= iterCnt + 1;
-         if ( iterCnt == 3) init <= True;
+         // iterCnt <= iterCnt + 1;
+         // if ( iterCnt == 3) 
+         init <= True;
       end
       else begin
          spotCnt <= spotCnt + 1;
@@ -128,12 +138,24 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    // RWBramCore#(UInt#(TLog#(bufSz)), SortedPacket#(vSz, iType)) buffer <- mkRWBramCore;
    BRAMVector#(TLog#(n), 4, SortedPacket#(vSz, iType)) buffer <- mkUGBRAMVector;
    
+   Reg#(Bit#(TLog#(n))) packetCnt <- mkReg(0);
+   Reg#(Bit#(2)) fifoIdCnt <- mkReg(0);   
    rule doEnqMerger if(init);
+      if ( packetCnt == fromInteger(valueOf(n)-1) ) begin
+         packetCnt <= 0;
+         fifoIdCnt <= fifoIdCnt + 1;
+      end
+      else begin
+         packetCnt <= packetCnt + 1;
+      end
+      
+      $display("fifoIdCnt, packetCnt = (%0d, %0d)", fifoIdCnt, packetCnt);
+      
       let d = sorter.outPipe.first;
       sorter.outPipe.deq;
       let packet = SortedPacket{d:d, first:True, last:True};
-      let slot = nextSpot.first;
-      nextSpot.deq;
+      let slot = nextSpot[fifoIdCnt].first;
+      nextSpot[fifoIdCnt].deq;
       // ready[slot].enq(?);
       merger.in.scheduleReq.enq(TaggedSchedReq{tag: slot, topItem:last(d), last: True});
       buffer.enq(packet, slot);
@@ -141,12 +163,17 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    
    
    FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkFIFO;
+   // FIFO#(UInt#(TLog#(n))) issuedTag <- mkFIFO;
+   
+
    
    rule issueRd if (init&&merger.in.scheduleResp.notEmpty);
       let tag = merger.in.scheduleResp.first;
       merger.in.scheduleResp.deq;
       buffer.rdServer.request.put(tag);
-      nextSpot.enq(tag);
+      let fifoId = tagCntRf.sub(tag);
+      tagCntRf.upd(tag, fifoId+1);
+      nextSpot[fifoId].enq(tag);
       issuedTag.enq(unpack(truncateLSB(pack(tag))));
    endrule   
    
@@ -157,14 +184,17 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    endrule
    
    
-   FIFOF#(Vector#(vSz, iType)) outQ <- mkFIFOF;
+   FIFOF#(Vector#(vSz, iType)) outQ <- mkSizedFIFOF(5);
       
-   DelayPipe#(1, void) delayReq <- mkDelayPipe;   
-   rule doReceivScheReq;
+   // DelayPipe#(1, void) delayReq <- mkDelayPipe;   
+   Counter#(TLog#(TAdd#(1, 4))) outPending  <- mkCounter(0);
+
+   rule doReceivScheReq if ( outPending.value < 4);
       let d = merger.out.scheduleReq.first;
       merger.out.scheduleReq.deq;
       merger.out.server.request.put(?);
      // delayReq.enq(?);
+      outPending.up;
    endrule
    
    // rule pullResult if ( delayReq.notEmpty);
@@ -186,7 +216,15 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    
       
    interface PipeIn inPipe = sorter.inPipe;
-   interface PipeOut outPipe = toPipeOut(outQ);
+   interface PipeOut outPipe;// = toPipeOut(outQ);
+      method Vector#(vSz, iType) first = outQ.first;
+      method Action deq;
+         outQ.deq;
+         outPending.down;
+      endmethod
+      method Bool notEmpty = outQ.notEmpty;
+   endinterface
+
 endmodule
 
 
@@ -247,7 +285,7 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
 
    
    FIFOF#(Vector#(vSz, iType)) inQ <- mkFIFOF;
-   FIFOF#(Vector#(vSz, iType)) outQ <- mkFIFOF;   
+   FIFOF#(Vector#(vSz, iType)) outQ <- mkSizedFIFOF(4);   
       
    Reg#(Bit#(TLog#(blockLines))) lineCnt_enq <- mkReg(0);
    
@@ -327,11 +365,14 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
    endrule
 
       
-   DelayPipe#(1, void) delayReq <- mkDelayPipe;   
-   rule doReceivScheReq;
+   // DelayPipe#(1, void) delayReq <- mkDelayPipe;
+   Counter#(TLog#(TAdd#(1, 4))) outPending  <- mkCounter(0);
+
+   rule doReceivScheReq if ( outPending.value < 4);
       let d = merger.out.scheduleReq.first;
       merger.out.scheduleReq.deq;
       merger.out.server.request.put(?);
+      outPending.up;
    endrule
    
    Reg#(Bit#(TLog#(TMul#(blockLines, n)))) outCnt <- mkReg(0);
@@ -349,7 +390,15 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
    endrule
    
    interface inPipe = toPipeIn(inQ);
-   interface outPipe = toPipeOut(outQ);
+   interface PipeOut outPipe;// = toPipeOut(outQ);
+      method Vector#(vSz, iType) first = outQ.first;
+      method Action deq;
+         outQ.deq;
+         outPending.down;
+      endmethod
+      method Bool notEmpty = outQ.notEmpty;
+   endinterface
+
 endmodule
 
 // `include "DRAMMergerSMTSched.bsv"

@@ -22,6 +22,7 @@ import DRAMMux::*;
 import ClientServer::*;
 import DelayPipe::*;
 
+import Counter::*;
 
 import Vector::*;
 import FIFO::*;
@@ -31,6 +32,8 @@ import Pipe::*;
 import Randomizable::*;
 import BuildVector::*;
 import Assert::*;
+
+// import Randomizable::*;
 
 Bool ascending = True;
 typedef 16 VecSz;
@@ -206,7 +209,7 @@ module mkMergeSMT2SchedTest(Empty);
       function doGet(x)=x.get;
       let v <- mapM(doGet, map(toGet, inputQs));
       expectedQ.enq(bitonic_sort(concat(v), ascending));
- endrule
+   endrule
       
 
    Reg#(Vector#(TMul#(SortedSz,2), UInt#(32))) outBuf <- mkRegU;   
@@ -215,20 +218,34 @@ module mkMergeSMT2SchedTest(Empty);
    
    FIFO#(void) resultPull <- mkFIFO;
 
-   DelayPipe#(1, void) delayReq <- mkDelayPipe;   
-   rule doReceivScheReq;
+   DelayPipe#(1, void) delayReq <- mkDelayPipe;
+   
+   Counter#(32) outPending <- mkCounter(0);
+   
+   FIFO#(TaggedSortedPacket#(1, VecSz, UInt#(32))) outQ <- mkSizedFIFO(5);
+   
+   rule doReceivScheReq if (outPending.value < 4);
       let d = merger.out.scheduleReq.first;
       merger.out.scheduleReq.deq;
       // delayReq.enq(?);
-      merger.out.server.request.put(?);      
+      merger.out.server.request.put(?);
+      outPending.up;     
    endrule
    
    // rule pullResult if ( delayReq.notEmpty);
    //    merger.out.server.request.put(?);
    // endrule
    
-   rule doResult;
+   rule enqResult;
       let merged <- merger.out.server.response.get;
+      outQ.enq(merged);
+   endrule
+   
+   rule doResult;
+      let coin <- rand32();
+      if ( coin % 3 != 0 ) begin
+      let merged <- toGet(outQ).get;
+         outPending.down;
       // let merged = merger.outPipe.first;
       Vector#(TMul#(SortedSz,2), UInt#(32)) resultV = drop(append(outBuf, merged.packet.d));
       outBuf <= resultV;
@@ -263,6 +280,7 @@ module mkMergeSMT2SchedTest(Empty);
       end
       else begin
          outGear <= outGear + vecSz;
+      end
       end
    endrule
 endmodule
@@ -308,7 +326,7 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
       end
       sorter.inPipe.enq(inV);
       
-      $display("Sort Input [%d] [@%d] = ", inCnt, cycle, fshow(inV));
+      $display("Sort Input [%d] [%d] [@%d] = ", testCntIn, inCnt, cycle, fshow(inV));
       
       if ( inCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin              
          inCnt <= 0;
@@ -334,51 +352,60 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
    Reg#(UInt#(128)) sumRegOut <- mkReg(0);   
    Reg#(UInt#(128)) grandTotalOut <- mkReg(0);   
    rule getOutput;
-      let d = sorter.outPipe.first;
-      sorter.outPipe.deq;
+      let coin <- rand32();
+      if ( coin%3 == 0 ) begin
+         let d = sorter.outPipe.first;
+         sorter.outPipe.deq;
 
 
-      $display("\t\t\t\tSort Result [%d] [@%d] = ", outCnt, cycle, fshow(d));
+         $display("\t\t\t\tSort Result [%d] [%d] [@%d] = ", testCntOut, outCnt, cycle, fshow(d));
       
-      prevCycle <= cycle;
-      if ( cycle - prevCycle != 1 && !(outCnt == 0&&testCntOut==0)) begin
-         $display("FAIL: StreamingMergeSort not streaming");
-         // $finish();
-      end
-      grandTotalOut <= grandTotalOut + fold(\+ , map(extend, d));
-      if ( !isSorted(d, ascending) || !isSorted(vec(prevMax, head(d)), ascending)) begin
-         $display("FAILED: StreamingMergeSort result not sorted");
-         $finish();
-      end
-
-      if (outCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin
-         outCnt <= 0;
-         prevMax <= ascending?minBound:maxBound;
-         testCntOut <= testCntOut + 1;
-         
-         if ( sumRegOut + fold(\+ , map(extend, d)) != sumQ.first) begin
-            $display("Warning: StreamingMergeSort result sum not matched %d vs %d", sumRegOut + fold(\+ ,map(extend,d)), sumQ.first);
+         prevCycle <= cycle;
+         if ( cycle - prevCycle != 1 && !(outCnt == 0&&testCntOut==0)) begin
+            $display("FAIL: StreamingMergeSort not streaming");
             // $finish();
          end
-         sumQ.deq;
-         sumRegOut <= 0;
-         $display("TestCnt[%d] Passed", testCntOut);
-         if ( testCntOut + 1 == fromInteger(testLen) ) begin
-            if ( grandTotalOut + fold(\+ , map(extend, d)) == grandTotalQ.first) begin
-               $display("PASSED: StreamingMergeSort %d vs %d", grandTotalOut + fold(\+ , map(extend, d)), grandTotalQ.first);
-            end
-            else begin
-               $display("FAILED: StreamingMergeSort grand total not matched %d vs %d", grandTotalOut + fold(\+ , map(extend, d)), grandTotalQ.first);
-            end
-            grandTotalQ.deq;
+         grandTotalOut <= grandTotalOut + fold(\+ , map(extend, d));
+         
+         if ( !isSorted(d, ascending) ) begin
+            $display("FAILED: StreamingMergeSort result not sorted internally");
             $finish();
-
          end
-      end
-      else begin
-         sumRegOut <= sumRegOut + fold(\+ , map(extend, d));
-         outCnt <= outCnt + fromInteger(vecSz);
-         prevMax <= last(d);
+      
+         if ( !isSorted(vec(prevMax, head(d)), ascending)) begin
+            $display("FAILED: StreamingMergeSort result not sorted externally");
+            $finish();
+         end
+         
+         if (outCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin
+            outCnt <= 0;
+            prevMax <= ascending?minBound:maxBound;
+            testCntOut <= testCntOut + 1;
+         
+            if ( sumRegOut + fold(\+ , map(extend, d)) != sumQ.first) begin
+               $display("Warning: StreamingMergeSort result sum not matched %d vs %d", sumRegOut + fold(\+ ,map(extend,d)), sumQ.first);
+            // $finish();
+            end
+            sumQ.deq;
+            sumRegOut <= 0;
+            $display("TestCnt[%d] Passed", testCntOut);
+            if ( testCntOut + 1 == fromInteger(testLen) ) begin
+               if ( grandTotalOut + fold(\+ , map(extend, d)) == grandTotalQ.first) begin
+                  $display("PASSED: StreamingMergeSort %d vs %d", grandTotalOut + fold(\+ , map(extend, d)), grandTotalQ.first);
+               end
+               else begin
+                  $display("FAILED: StreamingMergeSort grand total not matched %d vs %d", grandTotalOut + fold(\+ , map(extend, d)), grandTotalQ.first);
+               end
+               grandTotalQ.deq;
+               $finish();
+               
+            end
+         end
+         else begin
+            sumRegOut <= sumRegOut + fold(\+ , map(extend, d));
+            outCnt <= outCnt + fromInteger(vecSz);
+            prevMax <= last(d);
+         end
       end
    endrule
 endmodule
@@ -624,6 +651,9 @@ module mkStreamingDRAMMergeNSMTSchedTest(Empty);
    Reg#(UInt#(32)) prevMax <- mkReg(ascending?minBound:maxBound);
    
    rule doResult;
+      
+      let coin <- rand32();
+      if ( coin % 3 != 0 ) begin
       merger.outPipe.deq;
       let merged = merger.outPipe.first;
 
@@ -675,6 +705,7 @@ module mkStreamingDRAMMergeNSMTSchedTest(Empty);
          accumulate <= accumulate + fold(\+ ,map(zeroExtend, merged));
          outBeat <= outBeat + 1;
          prevMax <= last(merged);
+      end
       end
    endrule
 endmodule

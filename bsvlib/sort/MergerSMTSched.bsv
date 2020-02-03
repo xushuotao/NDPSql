@@ -217,7 +217,7 @@ module mkMergerSMTSched_Impl#(Bool ascending
    // BRAMVector#(TLog#(numTags), tagBufSz, SortedPacket#(vSz, iType)) buffer <- mkUGBRAMVector;
    
    // Vector#(numTags, FIFOF#(SchedReq#(iType))) schedReqQ <- replicateM(mkSizedFIFOF(valueOf(tagBufSz)+1));
-   FIFOF#(TaggedSchedReq#(numTags, iType)) schedReqQ <- mkSizedFIFOF(3);
+   FIFOF#(TaggedSchedReq#(numTags, iType)) schedReqQ <- mkSizedFIFOF(valueOf(tagBufSz));
 
    `ifdef DEBUG
    Vector#(numTags, Reg#(Maybe#(iType))) prevMax <- replicateM(mkReg(tagged Invalid));
@@ -255,7 +255,8 @@ module mkMergerSMTSched_Impl#(Bool ascending
    Vector#(numTags, Reg#(Bool)) isFirst <- replicateM(mkReg(True));
    Vector#(numTags, Reg#(Bool)) doneOne <- replicateM(mkReg(False));
    
-   FIFOF#(tagT) rdTagQ <- mkUGSizedFIFOF(3);
+   //FIFOF#(tagT) rdTagQ <- mkUGSizedFIFOF(3);
+   FIFOF#(tagT) rdTagQ <- mkSizedFIFOF(3);
    // Reg#(tagT) rdTag <- mkRegU;
 
    // function getSchedReq(x) = x.schedReq;
@@ -269,7 +270,9 @@ module mkMergerSMTSched_Impl#(Bool ascending
          method Action enq(TaggedSortedPacket#(numTags, vSz,iType) v);
             let tag = v.tag;
             let packet = v.packet;
-            // if (debug) $display("(%t) %s[%0d-%0d]In:: first = %d, last = %d, (prevMax, currHead) = ", $time, tab, level, tag, packet.first, packet.last, fshow(prevMax[tag]), " ", fshow(packet.d[0]));
+            `ifdef DEBUG
+            $display("(%t) %s[%0d-%0d]In:: first = %d, last = %d, (prevMax, currHead) = ", $time, tab, level, tag, packet.first, packet.last, fshow(prevMax[tag]), " ", fshow(packet.d[0]));
+            `endif
             mergerCore.enq(packet.d, tag, isFirst[tag], !isFirst[tag]&&packet.first, doneOne[tag]&&packet.last);
             if ( !doneOne[tag] && packet.last ) doneOne[tag] <= True;
             if ( doneOne[tag] && packet.last) begin doneOne[tag] <= False; isFirst[tag] <= True; end

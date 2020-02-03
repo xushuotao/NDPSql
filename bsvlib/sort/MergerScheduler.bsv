@@ -307,7 +307,7 @@ module mkMergerSchedulerImpl#(Bool ascending
       `ifdef DEBUG 
       $display("(%t) %s[%0d-%0d]::scheduler update, credit = %d, portSel = %d, last = %d, nextSel = %d", $time, tab, level, tag, credit, portSel, last, nextSel); 
       numDecr <= numDecr + 1;
-      $display("numIncr = %d, numDecr = %d", numIncr, numDecr);
+      $display("numIncr = %d, numDecr = %d, numCredits", numIncr, numDecr,  valueOf(numCredits));
       dynamicAssert(numIncr <= numDecr, "num of incrCredit should alway be smaller than num of decrCredit");
       `endif
       portSel <= nextSel;

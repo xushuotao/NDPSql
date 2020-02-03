@@ -16,6 +16,7 @@ import Assert::*;
 import DRAMMux::*;
 import Prefetcher::*;
 import Cntrs::*;
+import Counter::*;
 
 import DelayPipe::*;
 import BRAMFIFOFVector::*;
@@ -23,12 +24,19 @@ import BRAMFIFOFVector::*;
 import Connectable::*;
 import GetPut::*;
 
+interface DRAMPrefDebugIfc;
+   method Vector#(2, Tuple3#(Bit#(64), Bit#(64), Bit#(64))) dumpStatus;
+endinterface
+
 
 interface DRAMStreamingMergerSMTSched#(type iType, numeric type vSz, numeric type sortedSz, numeric type fanIn, numeric type fDepth);
    interface PipeIn#(Vector#(vSz, iType)) inPipe;
    interface PipeOut#(Vector#(vSz, iType)) outPipe;
    // interface Vector#(2, DDR4Client) dramClients;
    interface Vector#(2, Client#(Tuple2#(Bit#(1), DDRRequest), DDRResponse)) dramMuxClients;
+   `ifdef Debug
+   interface DRAMPrefDebugIfc debug;
+   `endif
 endinterface
 
 // typedef TMul#(1024,8) PrefSz;
@@ -101,7 +109,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
 
    
    FIFOF#(Vector#(vSz, iType)) inQ <- mkFIFOF;
-   FIFOF#(Vector#(vSz, iType)) outQ <- mkFIFOF;   
+   FIFOF#(Vector#(vSz, iType)) outQ <- mkSizedFIFOF(4);   
       
    Reg#(Bit#(TLog#(blockLines))) lineCnt_enq <- mkReg(0);
     
@@ -135,6 +143,12 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    Reg#(lineIdT) segLineCnt_load <- mkReg(0);
    
    Reg#(Bit#(2)) initCnt <- mkReg(0);
+   
+   `ifdef Debug
+   Vector#(2, Reg#(Bit#(64))) totalDRAMReadReq  <- replicateM(mkReg(0));
+   Vector#(2, Reg#(Bit#(64))) totalDRAMReadResp <- replicateM(mkReg(0));
+   Vector#(2, Reg#(Bit#(64))) totalDRAMWrite    <- replicateM(mkReg(0));
+   `endif
    (* fire_when_enabled *)
    rule doInit if ( initCnt < 2);
       freeDRAM.enq(truncate(initCnt));
@@ -169,6 +183,9 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       dramReqQ[0].enq(tuple2(dramId, DDRRequest{address: extend({segCnt_load,segLineCnt_load, 3'b0}), 
                                                 writeen: -1, 
                                                 datain:extend(pack(sortedPacket))}));
+      `ifdef Debug
+      totalDRAMWrite[dramId] <= totalDRAMWrite[dramId] + 1;
+      `endif
    endrule
    
 ////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +222,9 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       (zeroExtend(baseCnt) << fromInteger(valueOf(TLog#(fDepth_beats))));
       // $display("bursting dram id = %d, segId = %0d,  fetchCnt = %0d, baseCnt = %0d, base = %0d", dramId, segId, fetchCnt, baseCnt, base);
       dramReqQ[1].enq(tuple2(dramId, DDRRequest{address: extend({base+fetchCnt,3'b0}), writeen: 0, datain:?}));
+      `ifdef Debug
+      totalDRAMReadReq[dramId] <= totalDRAMReadReq[dramId] + 1;
+      `endif
    endrule
 
    Reg#(Bit#(32)) fetchCnt_resp <- mkReg(0);
@@ -213,7 +233,13 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    rule doDramResp;
       let v = dramRespQ[1].first;
       dramRespQ[1].deq;
+
       let {dramId, segId} = outstandingBurst.first;
+      
+      `ifdef Debug
+      totalDRAMReadResp[dramId] <= totalDRAMReadResp[dramId] + 1;
+      `endif
+
       
       // $display("bursting response dram id = %d, segId = %0d,  fetchCnt = %0d", dramId, segId, fetchCnt_resp);
       
@@ -306,11 +332,15 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    endrule
 
       
-   DelayPipe#(1, void) delayReq <- mkDelayPipe;   
-   rule doReceivScheReq;
+   // DelayPipe#(1, void) delayReq <- mkDelayPipe;
+   
+   Counter#(TLog#(TAdd#(1, 4))) outPending  <- mkCounter(0);
+
+   rule doReceivScheReq if ( outPending.value < 4);
       let d = merger.out.scheduleReq.first;
       merger.out.scheduleReq.deq;
       merger.out.server.request.put(?);
+      outPending.up;
    endrule
    
    Reg#(Bit#(TLog#(TMul#(blockLines, n)))) outCnt <- mkReg(0);
@@ -328,9 +358,28 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    endrule
    
    interface inPipe = toPipeIn(inQ);
-   interface outPipe = toPipeOut(outQ);
+   interface PipeOut outPipe;// = toPipeOut(outQ);
+      method Vector#(vSz, iType) first = outQ.first;
+      method Action deq;
+         outQ.deq;
+         outPending.down;
+      endmethod
+      method Bool notEmpty = outQ.notEmpty;
+   endinterface
    // interface dramClients = dramMux.dramControllers;
    interface dramMuxClients = zipWith(toClient, dramReqQ, dramRespQ);
+   
+   `ifdef Debug
+   interface DRAMPrefDebugIfc debug;
+      method Vector#(2, Tuple3#(Bit#(64), Bit#(64), Bit#(64))) dumpStatus;
+         return zipWith3(tuple3, 
+                         readVReg(totalDRAMWrite),
+                         readVReg(totalDRAMReadReq),
+                         readVReg(totalDRAMReadResp)
+                         );
+      endmethod
+   endinterface
+   `endif
 
 endmodule
 
