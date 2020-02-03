@@ -69,10 +69,21 @@ endinterface
 interface SorterRequest;
    method Action initSeed(Bit#(32) seed);
    method Action startSorting(Bit#(32) iter);
+   method Action getStatus();
+   method Action getDramSorterStatus();
+   method Action getDramCntrStatus();
+   method Action getDramCntrsDump();
 endinterface
 
 interface SorterIndication;
    method Action sortingDone(Bit#(64) int_unsorted_cnt, Bit#(64) ext_unsorted_cnt, Bit#(64) cycles);
+   method Action ackStatus(Bit#(32) iterCnt, Bit#(32) inCnt, Bit#(32) outCnt);
+   method Action dramSorterStatus(Bit#(64) writes0, Bit#(64) reads0, Bit#(64) readResps0,
+                                  Bit#(64) writes1, Bit#(64) reads1, Bit#(64) readResps1);
+   method Action dramCtrlStatus(Bit#(64) writes0, Bit#(64) reads0, Bit#(64) readResps0,
+                                Bit#(64) writes1, Bit#(64) reads1, Bit#(64) readResps1);
+   method Action dramCntrDump0(Bit#(64) req_cycle, Bit#(64) req_addr, Bool req_rnw, Bit#(64) resp_cycle, Bit#(64) resp_addr);
+   method Action dramCntrDump1(Bit#(64) req_cycle, Bit#(64) req_addr, Bool req_rnw, Bit#(64) resp_cycle, Bit#(64) resp_addr);
 endinterface
 
 interface Sorter;
@@ -163,12 +174,21 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    DRAMMux#(2, 2) dramMux <- mkRwDualDRAMMux;
    zipWithM_(mkConnection, sorter_dram.dramMuxClients, dramMux.dramServers);
    
+   Vector#(2, DDR4Client) ddr4Clients = ?;
+   `ifdef DEBUG
+   Vector#(2, DDR4TrafficCapture) trafficCaps <- replicateM(mkDDR4TrafficCapture);
+   zipWithM_(mkConnection, dramMux.dramControllers, vec(trafficCaps[0].ddr4Server,trafficCaps[1].ddr4Server) );
+   ddr4Clients = vec(trafficCaps[0].ddr4Client, trafficCaps[1].ddr4Client);
+   `else
+   ddr4Clients = dramMux.dramControllers;
+   `endif
+   
 ////////////////////////////////////////////////////////////////////////////////
 /// DRAM Section
 ////////////////////////////////////////////////////////////////////////////////
    `ifdef SIMULATION
    let ddr4_ctrl_users <- replicateM(mkDDR4Simulator);
-   zipWithM_(mkConnection, dramMux.dramControllers, ddr4_ctrl_users);   
+   zipWithM_(mkConnection, ddr4Clients, ddr4_ctrl_users);   
    `else 
    Clock curr_clk <- exposeCurrentClock();
    Reset curr_rst_n <- exposeCurrentReset();
@@ -188,7 +208,7 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    Reset ddr4rstn0 = ddr4_ctrl_0.user.reset_n;
    
    // let ddr_cli_300mhz_0 <- mkDDR4ClientSync(sorter_dram.dramClients[0], curr_clk, curr_rst_n, ddr4clk0, ddr4rstn0);
-   let ddr_cli_300mhz_0 <- mkDDR4ClientSync(dramMux.dramControllers[0], curr_clk, curr_rst_n, ddr4clk0, ddr4rstn0);
+   let ddr_cli_300mhz_0 <- mkDDR4ClientSync(ddr4Clients[0], curr_clk, curr_rst_n, ddr4clk0, ddr4rstn0);
 
    mkConnection(ddr_cli_300mhz_0, ddr4_ctrl_0.user);
    
@@ -206,7 +226,7 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    Reset ddr4rstn1 = ddr4_ctrl_1.user.reset_n;
    
    // let ddr_cli_300mhz_1 <- mkDDR4ClientSync(sorter_dram.dramClients[1], curr_clk, curr_rst_n, ddr4clk1, ddr4rstn1);
-   let ddr_cli_300mhz_1 <- mkDDR4ClientSync(dramMux.dramControllers[1], curr_clk, curr_rst_n, ddr4clk1, ddr4rstn1);
+   let ddr_cli_300mhz_1 <- mkDDR4ClientSync(ddr4Clients[1], curr_clk, curr_rst_n, ddr4clk1, ddr4rstn1);
    mkConnection(ddr_cli_300mhz_1, ddr4_ctrl_1.user);
    `endif
 ////////////////////////////////////////////////////////////////////////////////
@@ -272,6 +292,19 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
       indicationFifo.deq;
       indication.sortingDone(intCnt,extCnt,cycle);
    endrule
+   
+   `ifdef Debug
+   rule doDumpInd0;
+      let {req_cycle, req_addr, req_rnw, resp_cycle, resp_addr} <- trafficCaps[0].dumpResp;
+      indication.dramCntrDump0(req_cycle, req_addr, req_rnw, resp_cycle, resp_addr);
+   endrule
+   
+   rule doDumpInd1;
+      let {req_cycle, req_addr, req_rnw, resp_cycle, resp_addr} <- trafficCaps[1].dumpResp;
+      indication.dramCntrDump1(req_cycle, req_addr, req_rnw, resp_cycle, resp_addr);
+   endrule
+
+   `endif
       
       
    interface SorterRequest request;
@@ -286,6 +319,38 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
          internalUnsortedCnt <= 0;
          externalUnsortedCnt <= 0;
       endmethod
+   
+      method Action getStatus();
+         indication.ackStatus(iterCnt, elemCnt, elemCnt_out);
+      endmethod
+   
+      method Action getDramSorterStatus();
+         `ifdef Debug
+         let statusV = sorter_dram.debug.dumpStatus;
+         let {writes0, reads0, readResps0} = statusV[0];
+         let {writes1, reads1, readResps1} = statusV[1];
+         indication.dramSorterStatus(writes0, reads0, readResps0,
+                                     writes1, reads1, readResps1);
+         `endif
+      endmethod
+   
+   
+      method Action getDramCntrStatus();
+         `ifdef Debug
+         let {writes0, reads0, readResps0} = trafficCaps[0].status;
+         let {writes1, reads1, readResps1} = trafficCaps[1].status;
+         indication.dramCtrlStatus(writes0, reads0, readResps0,
+                                   writes1, reads1, readResps1);
+         `endif
+      endmethod
+   
+      method Action getDramCntrsDump();
+         `ifdef Debug
+         trafficCaps[0].dumpTraffic;
+         trafficCaps[1].dumpTraffic;
+         `endif
+      endmethod
+
    endinterface
    
    interface Top_Pins pins;      
