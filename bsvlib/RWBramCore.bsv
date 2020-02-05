@@ -40,7 +40,7 @@ module mkRWBramCore(RWBramCore#(addrT, dataT)) provisos(
    Bounded#(addrT)
    );
    
-   Bool useBRAM = valueOf(TExp#(addrSz)) > 8 && valueOf(dataSz) >= 256;
+   Bool useBRAM = (valueOf(TExp#(addrSz)) > 8 && valueOf(dataSz) >= 256) || valueOf(TExp#(addrSz)) > 256;
    
    BRAM_DUAL_PORT#(addrT, dataT) bram   = ?;
    BRAM_PORT#(addrT, dataT)      wrPort = ?;

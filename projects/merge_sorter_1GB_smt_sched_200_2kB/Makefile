@@ -15,15 +15,15 @@ CONNECTALFLAGS += -D IMPORT_HOSTIF -D XILINX_SYS_CLK
 
 CONNECTALFLAGS += --bsvpath $(BSVDIR)
 
-CONNECTALFLAGS += -D SORT_SZ_L0=16384 -D SORT_SZ_L1=4194304 -D SORT_SZ_L2=1073741824 -D PREFETCH_SZ=1024 --bscflags=" -steps-max-intervals 10000000 +RTS -K1G -RTS -D Debug"
+CONNECTALFLAGS += -D SORT_SZ_L0=16384 -D SORT_SZ_L1=4194304 -D SORT_SZ_L2=1073741824 -D PREFETCH_SZ=2048 --bscflags=" -steps-max-intervals 10000000 +RTS -K1G -RTS -D Debug"
 
 CONNECTALFLAGS += -D DEBUG
 
 CONNECTALFLAGS += --verilog $(abspath ../../verilog)
 
 
-BSVFILES = Sorter.bsv
-CPPFILES = testsorter.cpp
+BSVFILES = ../merge_sorter_1GB_smt_sched_200_1kB/Sorter.bsv
+CPPFILES = ../merge_sorter_1GB_smt_sched_200_1kB/testsorter.cpp
 
 ifeq ($(BOARD),vcu108)
 CONNECTALFLAGS += \

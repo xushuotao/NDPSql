@@ -201,7 +201,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
 
    
    Reg#(Bit#(32)) fetchCnt <- mkReg(0);
-   FIFOF#(Tuple2#(Bit#(1), Bit#(TLog#(n)))) outstandingBurst <- mkSizedFIFOF(32);
+   FIFOF#(Tuple2#(Bit#(1), Bit#(TLog#(n)))) outstandingBurst <- mkSizedFIFOF(64);
    // issue bursts of DRAM requests
    rule issueDramBurst;
       let {segId, dramId, baseCnt} = prefetchVec.fetchReq.first;
@@ -318,7 +318,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    endrule   
    
    
-   FIFO#(SortedPacket#(vSz,iType)) dispatchDelayQ <- mkFIFO;
+   FIFO#(SortedPacket#(vSz,iType)) dispatchDelayQ <- mkDelayPipeG(2);
    
    rule doDataResp;
       let packet <- dispatchBuff.rdServer.response.get;

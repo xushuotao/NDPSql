@@ -491,12 +491,12 @@ endmodule
 
 //4KB burst of 4MB-block
 (*synthesize*)
-module mkVectorPrefetcher_64_16_uint_32_synth(VectorPrefetcher#(256, 64, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+module mkVectorPrefetcher_64_16_uint_32_synth(VectorPrefetcher#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1)));
    let m_ <- mkVectorPrefetcherImpl;
    return m_;
 endmodule
-instance VectorPrefetcherInstance#(256, 64, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
-   module mkVectorPrefetcher(VectorPrefetcher#(256, 64, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+instance VectorPrefetcherInstance#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1));
+   module mkVectorPrefetcher(VectorPrefetcher#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1)));
       let m_ <- mkVectorPrefetcher_64_16_uint_32_synth;
       return m_;
    endmodule
@@ -505,12 +505,12 @@ endinstance
 
 //2KB burst of 4MB-block
 (*synthesize*)
-module mkVectorPrefetcher_32_16_uint_32_synth(VectorPrefetcher#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+module mkVectorPrefetcher_32_16_uint_32_synth(VectorPrefetcher#(256, 32, 2048, SortedPacket#(16, UInt#(32)), Bit#(1)));
    let m_ <- mkVectorPrefetcherImpl;
    return m_;
 endmodule
-instance VectorPrefetcherInstance#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
-   module mkVectorPrefetcher(VectorPrefetcher#(256, 32, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+instance VectorPrefetcherInstance#(256, 32, 2048, SortedPacket#(16, UInt#(32)), Bit#(1));
+   module mkVectorPrefetcher(VectorPrefetcher#(256, 32, 2048, SortedPacket#(16, UInt#(32)), Bit#(1)));
       let m_ <- mkVectorPrefetcher_32_16_uint_32_synth;
       return m_;
    endmodule

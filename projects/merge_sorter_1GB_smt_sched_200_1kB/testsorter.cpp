@@ -133,6 +133,7 @@ void doMergeTrace(uint32_t ctrId){
         } else {
             fprintf(stderr, "%25lu|%25lu|%25u|%25lu|%25lu\n", reqCycle[ctrId][idx_i], reqAddr[ctrId][idx_i], reqRNW[ctrId][idx_i],
                     respCycle[ctrId][idx_j], respAddr[ctrId][idx_j]);
+            i++;
             j++;
         }
         total++;
@@ -168,7 +169,6 @@ int main(int argc, const char **argv){
   }
 
   device->startSorting(iter);
-  // sem_wait(&done_sem);
 
   // uint32_t iterCnt = 0;
 
@@ -179,17 +179,17 @@ int main(int argc, const char **argv){
           break;
       }
       pthread_mutex_unlock(&mutex);
-      //device->getStatus();
-      // if (++iterCnt > 100)
-      //     break;
+      // device->getStatus();
+      // if (++iterCnt > 10)
+          // break;
 #ifdef SIMULATION
-      sleep(1);
+      sleep(10);
 #else
       usleep(1000);
 #endif
   }
 
-  /*device->getDramCntrsDump();
+  device->getDramCntrsDump();
   while( true ) {
       pthread_mutex_lock(&mutex);
       if (doneTrace0 && doneTrace1) {
@@ -198,9 +198,8 @@ int main(int argc, const char **argv){
       }
       pthread_mutex_unlock(&mutex);
   }
-  // doMergeTrace(0);
-  // doMergeTrace(1);
-  */
+  doMergeTrace(0);
+  doMergeTrace(1);
   device->getDramSorterStatus();
   device->getDramCntrStatus();
 

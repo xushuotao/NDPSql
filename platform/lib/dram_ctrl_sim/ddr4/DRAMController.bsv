@@ -25,6 +25,8 @@ import XilinxSyncFifo::*;
 import XilinxSyncFifoW784D32::*;
 import XilinxSyncFifoW640D32::*;
 
+import RWBramCore::*;
+
 
 // interface DebugProbe;
 //    method DDRRequest req;
@@ -315,6 +317,94 @@ module mkDDR4ClientSync#(DDR4Client ddr4,
 
     interface Get request = toGet(reqs);
     interface Put response = toPut(resps);
+endmodule
+
+interface DDR4TrafficCapture;
+   interface DDR4Server ddr4Server;
+   interface DDR4Client ddr4Client;
+   method Tuple3#(Bit#(64), Bit#(64), Bit#(64)) status;
+   method Action dumpTraffic;
+   method ActionValue#(Tuple5#(Bit#(64), Bit#(64), Bool, Bit#(64), Bit#(64))) dumpResp;
+endinterface
+
+module mkDDR4TrafficCapture(DDR4TrafficCapture);
+   Reg#(Bit#(10)) reqPtr <- mkReg(0);
+   Reg#(Bit#(10)) respPtr <- mkReg(0);
+   RWBramCore#(Bit#(10), Tuple3#(Bit#(64), Bit#(64), Bool)) reqTraffic <- mkRWBramCore;
+   RWBramCore#(Bit#(10), Tuple2#(Bit#(64), Bit#(64))) respTraffic <- mkRWBramCore;
+   FIFO#(Bit#(64)) readAddrQ <- mkSizedFIFO(64);
+   
+   FIFO#(DDRRequest) reqQ <- mkFIFO;
+   FIFO#(DDRResponse) respQ <- mkFIFO;
+   Reg#(Bit#(64)) cycle <- mkReg(0);
+   FIFOF#(void) dumpReqQ <- mkFIFOF;
+   
+   Reg#(Bit#(64)) totalDRAMWrite    <- mkReg(0);
+   Reg#(Bit#(64)) totalDRAMReadReq  <- mkReg(0);
+   Reg#(Bit#(64)) totalDRAMReadResp <- mkReg(0);
+
+
+   (* fire_when_enabled, no_implicit_conditions *)
+   rule doCycle;
+      cycle <= cycle + 1;
+   endrule
+   
+   Reg#(Bit#(10)) dumpPtr <- mkReg(0);
+   rule doDump if (dumpReqQ.notEmpty);
+      if (dumpPtr == maxBound) dumpReqQ.deq;
+      dumpPtr <= dumpPtr + 1;
+      reqTraffic.rdReq(dumpPtr);
+      respTraffic.rdReq(dumpPtr);
+   endrule
+   
+   
+   interface DDR4Server ddr4Server;
+      interface Put request;
+         method Action put(DDRRequest req);
+            reqTraffic.wrReq(reqPtr, tuple3(cycle, req.address, req.writeen == 0));
+            reqPtr <= reqPtr + 1;
+            if ( req.writeen == 0) begin
+               readAddrQ.enq(req.address);
+               totalDRAMReadReq <= totalDRAMReadReq + 1;
+            end
+            else begin
+               totalDRAMWrite <= totalDRAMWrite + 1;
+            end
+            reqQ.enq(req);
+         endmethod
+      endinterface
+      interface Get response = toGet(respQ);
+   endinterface
+   
+   interface DDR4Client ddr4Client;
+      interface Get request = toGet(reqQ);
+      interface Put response;
+         method Action put(DDRResponse resp);
+            let addr <- toGet(readAddrQ).get;
+            totalDRAMReadResp <= totalDRAMReadResp + 1;
+            respTraffic.wrReq(respPtr, tuple2(cycle, addr));
+            respPtr <= respPtr + 1;
+            respQ.enq(resp);
+         endmethod
+      endinterface
+   endinterface
+   
+   method Tuple3#(Bit#(64), Bit#(64), Bit#(64)) status;
+      return tuple3(totalDRAMWrite   ,
+                    totalDRAMReadReq ,
+                    totalDRAMReadResp);
+         
+   endmethod
+   method Action dumpTraffic;
+      dumpReqQ.enq(?);
+   endmethod
+   method ActionValue#(Tuple5#(Bit#(64), Bit#(64), Bool, Bit#(64), Bit#(64))) dumpResp;
+      let {reqCycle, reqAddr, rnw} = reqTraffic.rdResp;
+      let {respCycle, respAddr} = respTraffic.rdResp;
+      reqTraffic.deqRdResp;
+      respTraffic.deqRdResp;
+      return tuple5(reqCycle, reqAddr, rnw, respCycle, respAddr);
+   endmethod
 endmodule
 
 endpackage: DRAMController

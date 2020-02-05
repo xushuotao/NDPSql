@@ -113,6 +113,11 @@ typedef `SORT_SZ_L2 SortSz_L2;
 typedef 1073741824 SortSz_L2;
 `endif
 
+`ifdef PREFETCH_SZ
+typedef `PREFETCH_SZ Prefetch_Sz;
+`else
+typedef 1024 Prefetch_Sz;
+`endif
 
 typedef TDiv#(SortSz_L0,TDiv#(ElemSz,8)) TotalElms_L0;
 
@@ -137,7 +142,7 @@ module mkStreamingMerger_synth(StreamingMergerSMTSched#(UInt#(32), VecSz, TotalE
 endmodule
 
 (* synthesize *)
-module mkStreamingMergerDRAM_synth(DRAMStreamingMergerSMTSched#(UInt#(32), VecSz, TotalElms_L1, TDiv#(TotalElms_L2, TotalElms_L1), TDiv#(1024,TDiv#(ElemSz,8))));
+module mkStreamingMergerDRAM_synth(DRAMStreamingMergerSMTSched#(UInt#(32), VecSz, TotalElms_L1, TDiv#(TotalElms_L2, TotalElms_L1), TDiv#(Prefetch_Sz,TDiv#(ElemSz,8))));
    let sorter_L2_dram <- mkDRAMStreamingMergeNSMTSched(descending);
    return sorter_L2_dram;
 endmodule

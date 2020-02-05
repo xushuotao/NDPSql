@@ -262,7 +262,11 @@ module mkUGPipelinedBRAMVector(BRAMVector#(vlog, fifodepth, fifotype))
          ptr = enqPtrBuff.rdResp;
       enqPtrBuff.deqRdResp;
       buffer.wrReq(toAddr(tag, ptr), data);
-      //$display("%m,(%t) buffer doEnq tag = %d, enqPtr = %d, addr = %d", $time, tag, ptr, toAddr(tag, ptr));      
+      //$display("%m,(%t) buffer doEnq tag = %d, enqPtr = %d, addr = %d", $time, tag, ptr, toAddr(tag, ptr));
+      
+      `ifdef DEBUG
+      validQs[tag].enq(?);
+      `endif
       
       if ( ptr == fromInteger(depth-1)) begin
          ptr = 0;
@@ -303,6 +307,10 @@ module mkUGPipelinedBRAMVector(BRAMVector#(vlog, fifodepth, fifotype))
       tag_deq <= tag;
       deqPtrBuff.wrReq(tag, ptr);
       deq_ptr <= ptr;
+      
+      `ifdef DEBUG
+      validQs[tag].deq;
+      `endif
    endrule
    
 
