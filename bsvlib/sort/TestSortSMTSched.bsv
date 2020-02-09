@@ -655,7 +655,7 @@ module mkStreamingDRAMMergeNSMTSchedTest(Empty);
    rule doResult;
       
       let coin <- rand32();
-      if ( coin % 3 != 0 ) begin
+      if ( coin % 3 != 3 ) begin
       merger.outPipe.deq;
       let merged = merger.outPipe.first;
 

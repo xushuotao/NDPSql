@@ -33,10 +33,11 @@ uint64_t respAddr[2][TraceSz];
 
 class SorterIndication : public SorterIndicationWrapper{
 public:
-	virtual void sortingDone(uint64_t int_unsorted_cnt, uint64_t ext_unsorted_cnt, uint64_t cycles){
+	virtual void sortingDone(int sumMatch, uint64_t int_unsorted_cnt, uint64_t ext_unsorted_cnt, uint64_t cycles){
 		fprintf(stderr, "Sorting done in %lu cycles\n", cycles);
 		fprintf(stderr, "\tCycles per beat (%lu,%lu) = %lf\n",
 				cycles, iter*SORT_SZ_L2/64, (double)cycles/(double)(iter*SORT_SZ_L2/64));
+        fprintf(stderr, "\tSum %s\n", sumMatch?"Matched":"Unmatched");
 		fprintf(stderr, "\tInternal Unsorted Count %lu\n", int_unsorted_cnt);
 		fprintf(stderr, "\tExternal Unsorted Count %lu\n", ext_unsorted_cnt);
         pthread_mutex_lock(&mutex);
@@ -45,8 +46,8 @@ public:
 		// sem_post(&done_sem);
 	}
     
-    virtual void ackStatus(uint32_t iterCnt, uint32_t inCnt, uint32_t outCnt){
-		fprintf(stderr, "Sorter status (iter, inCnt, outCnt) =  (%u, %u, %u), elemPerIter = %u\n", iterCnt, inCnt, outCnt, SORT_SZ_L2/4);
+    virtual void ackStatus(uint32_t iterCnt, uint32_t inCnt, uint32_t iterCnt_out, uint32_t outCnt){
+		fprintf(stderr, "Sorter status (iter_in, inCnt, iter_out, outCnt) =  (%u, %u, %u, %u), elemPerIter = %u\n", iterCnt, inCnt, iterCnt_out, outCnt, SORT_SZ_L2/4);
     }
 
     virtual void dramSorterStatus(uint64_t writes0, uint64_t reads0, uint64_t readResps0,
@@ -158,17 +159,23 @@ int main(int argc, const char **argv){
   std::cout << "Input your test iterations: ";
   std::cin >> iter;
 
+  uint32_t sortness;
+
+  std::cout << "Input your test input sortness (0->sorted, 1->revsorted, 2->random): ";
+  std::cin >> sortness;
+
 #ifdef SIMULATION
   fprintf(stderr, "SIMULATION STARTS\n");
 #else
   fprintf(stderr, "FPGA STARTS\n");
 #endif
 
-  for (int i = 0; i < 8; i++){
+  // srand(time(NULL));
+  for (int i = 0; i < 16; i++){
 	  device->initSeed(rand());
   }
 
-  device->startSorting(iter);
+  device->startSorting(iter, sortness);
 
   // uint32_t iterCnt = 0;
 
@@ -189,6 +196,7 @@ int main(int argc, const char **argv){
 #endif
   }
 
+  /*
   device->getDramCntrsDump();
   while( true ) {
       pthread_mutex_lock(&mutex);
@@ -204,6 +212,7 @@ int main(int argc, const char **argv){
   device->getDramCntrStatus();
 
   sleep(1);
+  */
   pthread_mutex_destroy(&mutex);
 
   return 0;

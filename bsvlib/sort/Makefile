@@ -14,6 +14,8 @@ targets_smt := MergeSMT2 StreamingMergeSortSMT MergeNFoldSMTBRAM
 
 targets_sched := MergeSMT2Sched StreamingMergeSortSMTSched StreamingMergeNSMTSched StreamingDRAMMergeNSMTSched
 
+targets_datagen := UInt32 UInt64 UInt128
+
 src = $(wildcard *.bsv) $(wildcard *.cpp)
 
 $(targets): $(src)
@@ -34,12 +36,19 @@ $(targets_sched): $(src)
 	bsc $(bscflags) -sim -u -g mk$@Test TestSortSMTSched.bsv
 	bsc $(bscflags) -sim -u -e mk$@Test -o $@ bdpi_sort.cpp
 
+$(targets_datagen): DataGen.bsv
+	echo "here"
+	touch ConnectalProjectConfig.bsv
+	mkdir -p build_dir/$@
+	bsc $(bscflags) -sim -u -g mk$@Test DataGen.bsv
+	bsc $(bscflags) -sim -u -e mk$@Test -o $@
 
-all: $(targets) $(targets_smt) $(targets_sched)
+
+all: $(targets) $(targets_smt) $(targets_sched) $(targets_datagen)
 
 clean:
-	rm -rf build_dir $(targets) $(targets_smt) $(targets_sched) *.so *.o *.sched ConnectalProjectConfig.bsv
+	rm -rf build_dir $(targets) $(targets_smt) $(targets_sched) $(targets_datagen) *.so *.o *.sched ConnectalProjectConfig.bsv
 
-.PHONY: $(targets) $(targets_smt) $(targets_sched)
+.PHONY: $(targets) $(targets_smt) $(targets_sched) $(targets_datagen)
 .DEFAULT_GOAL := all
 

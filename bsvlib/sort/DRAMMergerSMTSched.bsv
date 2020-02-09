@@ -306,7 +306,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
    endrule
    
-   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(4);
+   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(5);
 
    rule issueDataReq if (merger.in.scheduleResp.notEmpty);
       let tag = merger.in.scheduleResp.first;

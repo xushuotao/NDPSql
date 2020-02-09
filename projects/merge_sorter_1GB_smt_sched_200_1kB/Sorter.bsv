@@ -35,6 +35,8 @@ import MergeSortSMTSched::*;
 import DRAMMergerSMTSched::*;
 
 import LFSR::*;
+import DataGen::*;
+import SortCheck::*;
 import Pipe::*;
 import BuildVector::*;
 import Bitonic::*;
@@ -67,8 +69,8 @@ endinterface
 
 
 interface SorterRequest;
-   method Action initSeed(Bit#(32) seed);
-   method Action startSorting(Bit#(32) iter);
+   method Action initSeed(Bit#(64) seed);
+   method Action startSorting(Bit#(32) iter, Bit#(2) sortness);
    method Action getStatus();
    method Action getDramSorterStatus();
    method Action getDramCntrStatus();
@@ -76,8 +78,8 @@ interface SorterRequest;
 endinterface
 
 interface SorterIndication;
-   method Action sortingDone(Bit#(64) int_unsorted_cnt, Bit#(64) ext_unsorted_cnt, Bit#(64) cycles);
-   method Action ackStatus(Bit#(32) iterCnt, Bit#(32) inCnt, Bit#(32) outCnt);
+   method Action sortingDone(Bool sumMatch, Bit#(64) int_unsorted_cnt, Bit#(64) ext_unsorted_cnt, Bit#(64) cycles);
+   method Action ackStatus(Bit#(32) iterCnt, Bit#(32) inCnt, Bit#(32) iterCnt_out, Bit#(32) outCnt);
    method Action dramSorterStatus(Bit#(64) writes0, Bit#(64) reads0, Bit#(64) readResps0,
                                   Bit#(64) writes1, Bit#(64) reads1, Bit#(64) readResps1);
    method Action dramCtrlStatus(Bit#(64) writes0, Bit#(64) reads0, Bit#(64) readResps0,
@@ -127,23 +129,23 @@ typedef TDiv#(SortSz_L2,TDiv#(ElemSz,8)) TotalElms_L2;
 
 
 typedef TDiv#(TotalElms_L1, TotalElms_L0) N_L1;
-Bool descending = True;
+Bool ascending = True;
 
 (* synthesize *)
 module mkStreamingMergeSort_synth(MergeSortSMTSched#(UInt#(32), VecSz, TotalElms_L0));
-   let sorter_L0 <- mkStreamingMergeSortSMTSched(descending);
+   let sorter_L0 <- mkStreamingMergeSortSMTSched(ascending);
    return sorter_L0;
 endmodule
 
 (* synthesize *)
 module mkStreamingMerger_synth(StreamingMergerSMTSched#(UInt#(32), VecSz, TotalElms_L0, TDiv#(TotalElms_L1, TotalElms_L0)));
-   let sorter_L1 <- mkStreamingMergeNSMTSched(descending);
+   let sorter_L1 <- mkStreamingMergeNSMTSched(ascending);
    return sorter_L1;
 endmodule
 
 (* synthesize *)
 module mkStreamingMergerDRAM_synth(DRAMStreamingMergerSMTSched#(UInt#(32), VecSz, TotalElms_L1, TDiv#(TotalElms_L2, TotalElms_L1), TDiv#(Prefetch_Sz,TDiv#(ElemSz,8))));
-   let sorter_L2_dram <- mkDRAMStreamingMergeNSMTSched(descending);
+   let sorter_L2_dram <- mkDRAMStreamingMergeNSMTSched(ascending);
    return sorter_L2_dram;
 endmodule
 
@@ -241,61 +243,25 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
    mkConnection(sorter_reg.outPipe, sorter_bram.inPipe);
    mkConnection(sorter_bram.outPipe, sorter_dram.inPipe);
    
-   rule genInput if ( iterCnt > 0);
-      if ( elemCnt + fromInteger(vecSz) >= fromInteger(totalElms) ) begin              
-         elemCnt <= 0;
-         iterCnt <= iterCnt - 1;
-      end
-      else begin
-         elemCnt <= elemCnt + fromInteger(vecSz);
-      end
-      
-      function t getValue(LFSR#(t) x) = x.value;
-      function nextValue(x) = x.next;
-      
-      Vector#(VecSz, UInt#(32)) inV = map(unpack, map(getValue, lfsr));
-      mapM_(nextValue, lfsr);
-      sorter_reg.inPipe.enq(inV);
-   endrule
+   function UInt#(32) genElm(Bit#(32) v) = unpack(v);
+   // function module#(LFSR#(Bit#(32))) mkLFSR() = mkLFSR_32;
+   DataGen#(VecSz, UInt#(32)) inputGen <- mkDataGen(totalElms,
+                                                    mkLFSR_32,
+                                                    genElm
+                                                    );
    
-   Reg#(UInt#(32)) prevMax <- mkReg(descending?minBound:maxBound);
+   mkConnection(inputGen.dataPort, sorter_reg.inPipe);
    
-   Reg#(Bit#(32)) elemCnt_out <- mkReg(0);
+   SortCheck#(VecSz, UInt#(32)) outputChk <- mkSortCheck(totalElms, ascending);
    
-   Reg#(Bit#(64)) internalUnsortedCnt <- mkReg(0);
-   Reg#(Bit#(64)) externalUnsortedCnt <- mkReg(0);
-   
-   FIFO#(Tuple3#(Bit#(64), Bit#(64), Bit#(64))) indicationFifo <- mkFIFO;
-   
+   mkConnection(sorter_dram.outPipe, outputChk.inPipe);
+
    rule getOutput;
-      let d = sorter_dram.outPipe.first;
-      sorter_dram.outPipe.deq;
-
-      // $display("Sort Result [%d] [@%d] = ", elemCnt_out, cycleCnt, fshow(d));
-      `ifdef SIMULATION
-      if (!isSorted(d, descending) ) internalUnsortedCnt <= internalUnsortedCnt + 1;
-      if (!isSorted(vec(prevMax, head(d)), descending)) externalUnsortedCnt <= externalUnsortedCnt + 1;
-      `endif
-      if (elemCnt_out + fromInteger(vecSz) >= fromInteger(totalElms) ) begin
-         elemCnt_out <= 0;
-         prevMax <= descending?minBound:maxBound;
-         iterCnt_out <= iterCnt_out - 1;
-         if ( iterCnt_out == 1) begin
-            indicationFifo.enq(tuple3(internalUnsortedCnt, externalUnsortedCnt, cycleCnt));
-
-         end
-      end
-      else begin
-         elemCnt_out <= elemCnt_out + fromInteger(vecSz);
-         prevMax <= last(d);
-      end
-   endrule
-   
-   
-   rule sendInd;
-      let {intCnt,extCnt,cycle} = indicationFifo.first;
-      indicationFifo.deq;
-      indication.sortingDone(intCnt,extCnt,cycle);
+      let {internalUnsortedCnt, externalUnsortedCnt} <- outputChk.checkDone;
+      let sumIn <- inputGen.getSum;
+      let sumOut <- outputChk.getSum;
+      $display("done = %d, %d", sumIn, sumOut);
+      indication.sortingDone(sumIn == sumOut, internalUnsortedCnt, externalUnsortedCnt, cycleCnt);
    endrule
    
    `ifdef Debug
@@ -308,25 +274,22 @@ module mkSorter#(HostInterface host, SorterIndication indication)(Sorter);
       let {req_cycle, req_addr, req_rnw, resp_cycle, resp_addr} <- trafficCaps[1].dumpResp;
       indication.dramCntrDump1(req_cycle, req_addr, req_rnw, resp_cycle, resp_addr);
    endrule
-
    `endif
       
-      
    interface SorterRequest request;
-      method Action initSeed(Bit#(32) seed);
-         lfsr[cnt_init].seed(seed);
-         cnt_init <= cnt_init + 1;
+      method Action initSeed(Bit#(64) seed);
+         inputGen.initSeed(unpack(truncate(seed)));
       endmethod
-      method Action startSorting(Bit#(32) iter) if (iterCnt == 0&&iterCnt_out==0);
-         iterCnt <= iter;
-         iterCnt_out <= iter;
+      method Action startSorting(Bit#(32) iter, Bit#(2) sortness);// if (iterCnt == 0&&iterCnt_out==0);
          cycleCnt <= 0;
-         internalUnsortedCnt <= 0;
-         externalUnsortedCnt <= 0;
+         inputGen.start(iter, sortness);
+         outputChk.start(iter);
       endmethod
    
       method Action getStatus();
-         indication.ackStatus(iterCnt, elemCnt, elemCnt_out);
+         let {iterCnt, elemCnt} = inputGen.status;
+         let {iterCnt_out, elemCnt_out} = outputChk.status;
+         indication.ackStatus(iterCnt, elemCnt, iterCnt_out, elemCnt_out);
       endmethod
    
       method Action getDramSorterStatus();
