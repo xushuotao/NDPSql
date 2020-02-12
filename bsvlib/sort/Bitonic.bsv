@@ -379,6 +379,16 @@ function Bool isSorted(Vector#(n, itype) in, Bool ascending)
       end
    end
    return !unSorted;
+   // Bool sorted = True;
+   // for (Integer i = 1; i < valueOf(n); i = i + 1) begin
+   //    if ( ascending ) begin
+   //       sorted = in[i-1] <= in[i] && sorted;
+   //    end
+   //    else begin
+   //       sorted = in[i-1] >= in[i] && sorted;
+   //    end
+   // end
+   // return sorted;
 endfunction
 
 ////////////////////////////////////////////////////////////////////////////////

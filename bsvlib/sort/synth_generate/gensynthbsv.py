@@ -4,7 +4,7 @@ import argparse, json, os, re, string, subprocess, sys, math
 def generateFile(args, bsvmodule, context_size):
     synthFileData = ""
     log_cntx_max = math.log(context_size,2)
-    typename_string = args.data_type.replace("#","").replace(")","").replace("(","_")
+    typename_string = args.data_type.replace("#","").replace(")","").replace("(","_").replace(",","_")
     for log_cntx in range(0, int(log_cntx_max)+1):
         cntx = 1<<log_cntx
         # print log_cntx, cntx

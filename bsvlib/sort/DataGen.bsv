@@ -21,7 +21,8 @@ module mkDataGen#(
    ) (DataGen#(vSz, dType)) provisos (
       Bits#(dType, dSz),
       Add#(a__, dSz, 128),
-      Add#(b__, 1, vSz)
+      Add#(b__, 1, vSz),
+      FShow#(dType)
       );
    Reg#(Bit#(2)) genType <- mkRegU;
    
@@ -118,6 +119,7 @@ module mkDataGen#(
      method Action deq;
         let {l, sum, dummy} = last(dataQ).first;
         last(dataQ).deq;
+        $display("DataGen: ", fshow(dummy));
    
         if ( l ) begin
            sumReg <= 0;

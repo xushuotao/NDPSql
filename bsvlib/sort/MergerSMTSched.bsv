@@ -22,6 +22,7 @@ import MergerSchedulerTypes::*;
 import MergerScheduler::*;
 import MergerCore::*;
 
+import KeyValue::*;
 
 
 `ifdef DEBUG
@@ -349,5 +350,7 @@ instance MergerSMTSchedInstance#(numTags, tagBufSz, vSz, iType) provisos(
    endmodule
 endinstance
 
-// `include "SynthMerger_UInt_32_8.bsv"
 `include "SynthMerger_UInt_32_16.bsv"
+`include "SynthMerger_UInt_64_8.bsv"
+`include "SynthMerger_KVPair_UInt_32_UInt_32_8.bsv"
+`include "SynthMerger_KVPair_UInt_64_UInt_64_4.bsv"

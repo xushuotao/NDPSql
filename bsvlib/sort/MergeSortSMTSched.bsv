@@ -205,7 +205,7 @@ module mkStreamingMergeSortSMTSched#(Bool ascending)(MergeSortSMTSched#(iType, v
    rule getResp;
       let packet <- merger.out.server.response.get;
       `ifdef DEBUG
-      $display(fshow(packet));
+      // $display("Reg Merger, outCnt = %d ", outCnt, fshow(packet));
       outCnt <= outCnt + 1;
       if (outCnt == 0) dynamicAssert(packet.packet.first, "first packet should be first");
       if (outCnt == maxBound) dynamicAssert(packet.packet.last, "last packet should be last");
@@ -289,7 +289,9 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
       
    Reg#(Bit#(TLog#(blockLines))) lineCnt_enq <- mkReg(0);
    
-   Vector#(n, FIFOF#(blkIdT)) sortedBlks <- replicateM(mkUGSizedFIFOF(3));
+   Vector#(n, FIFOF#(blkIdT)) sortedBlks <- replicateM(mkUGSizedFIFOF(4));
+   
+   Vector#(n, Counter#(64)) sortedBlksLevel <- replicateM(mkCounter(0));
    
    Reg#(Bit#(TLog#(n))) fanInSel <- mkReg(0);
    rule doEnqBuffer;
@@ -299,6 +301,8 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
          freeBufIdQ.deq;
          fanInSel <= fanInSel + 1;
          sortedBlks[fanInSel].enq(bufId);
+         sortedBlksLevel[fanInSel].up;
+         $display("fanInSel = %d, sortedBlksLevel = %d, bufId = %d", fanInSel, sortedBlksLevel[fanInSel].value, bufId);
       end
       lineCnt_enq <= lineCnt_enq + 1;
       // $display("Enqeuing Buffer, bufId = %d, lineCnt_enq = %d, addr = %d, fanInSel = %d", bufId, lineCnt_enq, toAddr(bufId, lineCnt_enq), fanInSel);
@@ -324,6 +328,7 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
          let bufId = sortedBlks[idx].first;
          if (lineCnt_deqV[idx] == maxBound) begin
             sortedBlks[idx].deq;
+            sortedBlksLevel[idx].down;
          end
          lineCnt_deqV[idx] <= lineCnt_deqV[idx] + 1;
          bufferRdReqQs[idx].enq(tuple3(bufId, lineCnt_deqV[idx], fromInteger(idx)));
@@ -379,13 +384,13 @@ module mkStreamingMergeNSMTSched#(Bool ascending)(StreamingMergerSMTSched#(iType
 
    rule getResp;
       let packet <- merger.out.server.response.get;
-      // `ifdef DEBUG
-      // $display(fshow(packet));
+      `ifdef DEBUG
+      // $display("SRAM Merge, outCnt = %d ", outCnt, fshow(packet));
       outCnt <= outCnt + 1;
       if (outCnt == 0) dynamicAssert(packet.packet.first, "first packet should be first");
       if (outCnt == maxBound) dynamicAssert(packet.packet.last, "last packet should be last");
       if (outCnt > 0 && outCnt < maxBound) dynamicAssert(!packet.packet.first && !packet.packet.last, "packet should be neither first or last");
-      // `endif
+      `endif
       outQ.enq(packet.packet.d);
    endrule
    

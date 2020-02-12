@@ -159,7 +159,7 @@ module mkRwDualDRAMMux(DRAMMux#(2, 2)) provisos(
    Vector#(2, FIFOF#(DDRRequest)) serReqQ <- replicateM(mkFIFOF);
    Vector#(2, FIFOF#(DDRResponse)) serRespQ <- replicateM(mkFIFOF);
    
-   Vector#(2, FIFO#(DDRRequest)) delaySerReqQ <- replicateM(mkDelayPipeG(4));
+   Vector#(2, FIFO#(DDRRequest)) delaySerReqQ <- replicateM(mkDelayPipeG(3));
    Vector#(2, FIFO#(DDRResponse)) delaySerRespQ <- replicateM(mkDelayPipeG(2));
    
    zipWithM_(mkConnection, map(toGet, serReqQ), map(toPut, delaySerReqQ));

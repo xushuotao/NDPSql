@@ -7,6 +7,7 @@ import SpecialFIFOs::*;
 import RegFile::*;
 import BuildVector::*;
 import Pipe::*;
+import KeyValue::*;
 
 Bool debug = False;
 
@@ -87,14 +88,16 @@ instance TopHalfStageInstance#(numTags,1,vSzMax,iType) provisos(
          let currTop = currTopCtxt.sub(tag);
          if ( valid ) begin
             if ( op == Normal ) begin
-               iType tailItem = getTop(vec(currTop[0], last(in)), ascending);
+               iType tailItem = ?;//getTop(vec(currTop[0], last(in)), ascending);
                if ( isSorted(vec(currTop[0],last(in)), ascending) ) begin
                   nextIn <= rotateBy(in, 1);
                   nextTailPtr <= 1;
+                  tailItem = last(in);
                end
                else begin
                   nextIn <= in;
                   nextTailPtr <= 0;
+                  tailItem = currTop[0];
                end
                currTopCtxt.upd(tag, vec(tailItem));
                readReg <= vec(tailItem);
@@ -144,14 +147,16 @@ instance TopHalfStageInstance#(numTags,vSz,vSzMax,iType) provisos(
          
             let currTop = currTopCtxt.sub(tag);
             if ( op == Normal ) begin
-               iType tailItem = getTop(vec(currTop[tailPtr], last(in)), ascending);
+               iType tailItem = ?;//getTop(vec(currTop[tailPtr], last(in)), ascending);
                if ( isSorted(vec(currTop[tailPtr],last(in)), ascending)) begin
                   nextIn <= rotateBy(in, 1);
                   nextTailPtr <= zeroExtend(tailPtr) + 1;
+                  tailItem = last(in);
                end
                else begin
                   nextIn <= in;
                   nextTailPtr <= zeroExtend(tailPtr);
+                  tailItem = currTop[tailPtr];
                end
                currTopCtxt.upd(tag, cons(tailItem, prevTop));
                readReg <= cons(tailItem, prevTop);
@@ -282,116 +287,8 @@ module mkUGTopHalfUnitSMTImpl#(Bool ascending)(TopHalfUnitSMT#(numTags, vSz, iTy
    endinterface 
 endmodule
 
-// `include "SynthTopHalf_UInt_32_8.bsv"
+
 `include "SynthTopHalf_UInt_32_16.bsv"
-
-/*
-////////////////////////////////////////////////////////////////////////////////
-/// Synthesis Boundaries
-////////////////////////////////////////////////////////////////////////////////
-(* synthesize *)
-module mkTopHalfUnitSMT_16_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-(* synthesize *)
-module mkUGTopHalfUnitSMT_16_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
-   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-instance TopHalfUnitSMTInstance#(16, 8, UInt#(32));
-   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_16_uint32_synth(ascending);
-      return m_;
-   endmodule
-   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(16, 8, UInt#(32)));
-      let m_ <- mkUGTopHalfUnitSMT_16_uint32_synth(ascending);
-      return m_;
-   endmodule
-endinstance
-
-(* synthesize *)
-module mkTopHalfUnitSMT_8_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-(* synthesize *)
-module mkUGTopHalfUnitSMT_8_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
-   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-instance TopHalfUnitSMTInstance#(8, 8, UInt#(32));
-   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_8_uint32_synth(ascending);
-      return m_;
-   endmodule
-   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(8, 8, UInt#(32)));
-      let m_ <- mkUGTopHalfUnitSMT_8_uint32_synth(ascending);
-      return m_;
-   endmodule
-endinstance
-
-(* synthesize *)
-module mkTopHalfUnitSMT_4_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-(* synthesize *)
-module mkUGTopHalfUnitSMT_4_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
-   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-instance TopHalfUnitSMTInstance#(4, 8, UInt#(32));
-   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_4_uint32_synth(ascending);
-      return m_;
-   endmodule
-   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(4, 8, UInt#(32)));
-      let m_ <- mkUGTopHalfUnitSMT_4_uint32_synth(ascending);
-      return m_;
-   endmodule
-endinstance
-
-(* synthesize *)
-module mkTopHalfUnitSMT_2_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-(* synthesize *)
-module mkUGTopHalfUnitSMT_2_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
-   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-instance TopHalfUnitSMTInstance#(2, 8, UInt#(32));
-   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_2_uint32_synth(ascending);
-      return m_;
-   endmodule
-   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(2, 8, UInt#(32)));
-      let m_ <- mkUGTopHalfUnitSMT_2_uint32_synth(ascending);
-      return m_;
-   endmodule
-endinstance
-
-(* synthesize *)
-module mkTopHalfUnitSMT_1_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
-   let tophalfunit <- mkTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-(* synthesize *)
-module mkUGTopHalfUnitSMT_1_uint32_synth#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
-   let tophalfunit <- mkUGTopHalfUnitSMTImpl(ascending);
-   return tophalfunit;
-endmodule
-instance TopHalfUnitSMTInstance#(1, 8, UInt#(32));
-   module mkTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
-      let m_ <- mkTopHalfUnitSMT_1_uint32_synth(ascending);
-      return m_;
-   endmodule
-   module mkUGTopHalfUnitSMT#(Bool ascending)(TopHalfUnitSMT#(1, 8, UInt#(32)));
-      let m_ <- mkUGTopHalfUnitSMT_1_uint32_synth(ascending);
-      return m_;
-   endmodule
-endinstance
-
-*/
+`include "SynthTopHalf_UInt_64_8.bsv"
+`include "SynthTopHalf_KVPair_UInt_32_UInt_32_8.bsv"
+`include "SynthTopHalf_KVPair_UInt_64_UInt_64_4.bsv"

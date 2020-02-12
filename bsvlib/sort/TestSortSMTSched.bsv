@@ -324,6 +324,9 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
          let v <- rand32();
          inV[i] = unpack(v);
       end
+      
+      inV = map(unpack, zipWith(\- , replicate(fromInteger(totalElms-1) - inCnt), genWith(fromInteger))); 
+
       sorter.inPipe.enq(inV);
       
       $display("Sort Input [%d] [%d] [@%d] = ", testCntIn, inCnt, cycle, fshow(inV));
@@ -353,7 +356,7 @@ module mkStreamingMergeSortSMTSchedTest(Empty);
    Reg#(UInt#(128)) grandTotalOut <- mkReg(0);   
    rule getOutput;
       let coin <- rand32();
-      if ( coin%3 == 0 ) begin
+      if ( coin%3 != 3 ) begin
          let d = sorter.outPipe.first;
          sorter.outPipe.deq;
 

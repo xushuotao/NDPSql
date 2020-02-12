@@ -66,6 +66,8 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    
    Add#(e__, TAdd#(TLog#(n), TAdd#(TLog#(blockLines), 3)), 64),
    Add#(f__, TAdd#(TMul#(vSz, typeSz), 2), 640),
+   // Add#(l__, k__, 640),
+
    // Pipe::FunnelPipesPipelined#(1, n, Tuple3#(Bit#(1), Bit#(32), Bit#(TLog#(n))), 1),
    
    // Prefetcher::PrefetcherInstance#(fDepth_beats,SorterTypes::SortedPacket#(vSz, iType), Bit#(1)),
@@ -306,7 +308,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
       merger.in.scheduleReq.enq(TaggedSchedReq{tag: dst, topItem:last(packet.d), last: packet.last});
    endrule
    
-   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(5);
+   FIFO#(UInt#(TLog#(TDiv#(n,2)))) issuedTag <- mkSizedFIFO(4);
 
    rule issueDataReq if (merger.in.scheduleResp.notEmpty);
       let tag = merger.in.scheduleResp.first;
@@ -318,7 +320,7 @@ module mkDRAMStreamingMergeNSMTSched#(Bool ascending)(DRAMStreamingMergerSMTSche
    endrule   
    
    
-   FIFO#(SortedPacket#(vSz,iType)) dispatchDelayQ <- mkDelayPipeG(2);
+   FIFO#(SortedPacket#(vSz,iType)) dispatchDelayQ <- mkDelayPipeG(1);
    
    rule doDataResp;
       let packet <- dispatchBuff.rdServer.response.get;

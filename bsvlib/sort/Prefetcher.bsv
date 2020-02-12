@@ -14,6 +14,8 @@ import BuildVector::*;
 import DelayPipe::*;
 import Connectable::*;
 
+import KeyValue::*;
+
 interface Prefetcher#(numeric type fDepth, type dtype, type tagT);
    method Action start(tagT tag, Bit#(32) totalBlks);
    interface PipeOut#(Tuple2#(tagT, Bit#(32))) fetchReq;
@@ -489,19 +491,18 @@ endmodule
 
 
 
-//4KB burst of 4MB-block
-(*synthesize*)
-module mkVectorPrefetcher_64_16_uint_32_synth(VectorPrefetcher#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1)));
-   let m_ <- mkVectorPrefetcherImpl;
-   return m_;
-endmodule
-instance VectorPrefetcherInstance#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1));
-   module mkVectorPrefetcher(VectorPrefetcher#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1)));
-      let m_ <- mkVectorPrefetcher_64_16_uint_32_synth;
-      return m_;
-   endmodule
-endinstance
-
+// //4KB burst of 4MB-block
+// (*synthesize*)
+// module mkVectorPrefetcher_64_16_uint_32_synth(VectorPrefetcher#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1)));
+//    let m_ <- mkVectorPrefetcherImpl;
+//    return m_;
+// endmodule
+// instance VectorPrefetcherInstance#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1));
+//    module mkVectorPrefetcher(VectorPrefetcher#(256, 64, 1024, SortedPacket#(16, UInt#(32)), Bit#(1)));
+//       let m_ <- mkVectorPrefetcher_64_16_uint_32_synth;
+//       return m_;
+//    endmodule
+// endinstance
 
 //2KB burst of 4MB-block
 (*synthesize*)
@@ -516,15 +517,58 @@ instance VectorPrefetcherInstance#(256, 32, 2048, SortedPacket#(16, UInt#(32)), 
    endmodule
 endinstance
 
-//1KB burst of 4MB-block
+// //1KB burst of 4MB-block
+// (*synthesize*)
+// module mkVectorPrefetcher_16_16_uint_32_synth(VectorPrefetcher#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+//    let m_ <- mkVectorPrefetcherImpl;
+//    return m_;
+// endmodule
+// instance VectorPrefetcherInstance#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
+//    module mkVectorPrefetcher(VectorPrefetcher#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+//       let m_ <- mkVectorPrefetcher_16_16_uint_32_synth;
+//       return m_;
+//    endmodule
+// endinstance
+
+
+
+//2KB burst of 4MB-block for uint64
 (*synthesize*)
-module mkVectorPrefetcher_16_16_uint_32_synth(VectorPrefetcher#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
+module mkVectorPrefetcher_32_8_uint_64_synth(VectorPrefetcher#(256, 32, 2048, SortedPacket#(8, UInt#(64)), Bit#(1)));
    let m_ <- mkVectorPrefetcherImpl;
    return m_;
 endmodule
-instance VectorPrefetcherInstance#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1));
-   module mkVectorPrefetcher(VectorPrefetcher#(256, 16, 4096, SortedPacket#(16, UInt#(32)), Bit#(1)));
-      let m_ <- mkVectorPrefetcher_16_16_uint_32_synth;
+instance VectorPrefetcherInstance#(256, 32, 2048, SortedPacket#(8, UInt#(64)), Bit#(1));
+   module mkVectorPrefetcher(VectorPrefetcher#(256, 32, 2048, SortedPacket#(8, UInt#(64)), Bit#(1)));
+      let m_ <- mkVectorPrefetcher_32_8_uint_64_synth;
       return m_;
    endmodule
 endinstance
+
+
+//2KB burst of 4MB-block for kv32
+(*synthesize*)
+module mkVectorPrefetcher_32_8_kv32_synth(VectorPrefetcher#(256, 32, 2048, SortedPacket#(8, KVPair#(UInt#(32), UInt#(32))), Bit#(1)));
+   let m_ <- mkVectorPrefetcherImpl;
+   return m_;
+endmodule
+instance VectorPrefetcherInstance#(256, 32, 2048, SortedPacket#(8, KVPair#(UInt#(32), UInt#(32))), Bit#(1));
+   module mkVectorPrefetcher(VectorPrefetcher#(256, 32, 2048, SortedPacket#(8, KVPair#(UInt#(32), UInt#(32))), Bit#(1)));
+      let m_ <- mkVectorPrefetcher_32_8_kv32_synth;
+      return m_;
+   endmodule
+endinstance
+
+
+(*synthesize*)
+module mkVectorPrefetcher_32_4_kv64_synth(VectorPrefetcher#(256, 32, 2048, SortedPacket#(4, KVPair#(UInt#(64), UInt#(64))), Bit#(1)));
+   let m_ <- mkVectorPrefetcherImpl;
+   return m_;
+endmodule
+instance VectorPrefetcherInstance#(256, 32, 2048, SortedPacket#(4, KVPair#(UInt#(64), UInt#(64))), Bit#(1));
+   module mkVectorPrefetcher(VectorPrefetcher#(256, 32, 2048, SortedPacket#(4, KVPair#(UInt#(64), UInt#(64))), Bit#(1)));
+      let m_ <- mkVectorPrefetcher_32_4_kv64_synth;
+      return m_;
+   endmodule
+endinstance
+

@@ -10,6 +10,7 @@ import Connectable::*;
 import SorterTypes::*;
 import Assert::*;
 import SorterTypes::*;
+import KeyValue::*;
 
 import MergerSchedulerTypes::*;
 import OneToNRouter::*;
@@ -640,5 +641,8 @@ endmodule
 
 
 
-// `include "SynthMergerScheduler_UInt_32_8.bsv"
+
 `include "SynthMergerScheduler_UInt_32_16.bsv"
+`include "SynthMergerScheduler_UInt_64_8.bsv"
+`include "SynthMergerScheduler_KVPair_UInt_32_UInt_32_8.bsv"
+`include "SynthMergerScheduler_KVPair_UInt_64_UInt_64_4.bsv"
