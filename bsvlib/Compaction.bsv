@@ -28,6 +28,8 @@ interface Compaction#(type dataT, numeric type vSize);
    interface PipeOut#(CompactResp#(dataT, vSize)) respPipe;
 endinterface
 
+Bool debug = True;
+
 
 module connectStage#(PipeOut#(PipeT#(dSz, vSz)) outPort, PipeIn#(PipeT#(dSz,vSz)) inPort, Integer i)(Empty);
    
@@ -98,7 +100,7 @@ module mkCompaction(Compaction#(dataT, vSz)) provisos(
    
    rule doBatch (!flush);
       PipeT#(dSz,vSz) v <- toGet(stageQs[valueOf(vSz)-1]).get;
-      $display("%m, condensed beat = ", fshow(v));
+      if (debug) $display("%m, condensed beat = ", fshow(v));
       let newCnt = countElem(True, map(tpl_1, v.data));
       Vector#(TAdd#(vSz,vSz), Tuple2#(Bool, Bit#(dSz))) concataV = append(outBuf, v.data);
       
@@ -107,9 +109,11 @@ module mkCompaction(Compaction#(dataT, vSz)) provisos(
       let rotatedV = shiftOutFrom0(?, concataV, shiftSz);
       
       if ( newCnt > 0 ) begin
-         $display("newCnt=%d, oldCnt=%d", newCnt, oldCnt);
-         $display("concatedV = ", fshow(concataV));
-         $display("rotatedV = ", fshow(rotatedV));
+         if (debug) begin
+            $display("newCnt=%d, oldCnt=%d", newCnt, oldCnt);
+            $display("concatedV = ", fshow(concataV));
+            $display("rotatedV = ", fshow(rotatedV));
+         end
       end
       
       outBuf <= take(rotatedV);
@@ -125,7 +129,7 @@ module mkCompaction(Compaction#(dataT, vSz)) provisos(
       UInt#(TLog#(TAdd#(1, TAdd#(vSz, vSz)))) shiftSz2 = extend(fromInteger(vSz_int) - oldCnt);
       let outdata = shiftOutFrom0(?, concataV, shiftSz2);
 
-      $display("v.last = %d, islast = %d", v.last, last);
+      if (debug) $display("v.last = %d, islast = %d", v.last, last);
       
       
       if ( oldCnt + newCnt >= fromInteger(vSz_int) || v.last ) begin
@@ -135,7 +139,7 @@ module mkCompaction(Compaction#(dataT, vSz)) provisos(
    endrule
    
    rule doFlush (flush);
-      $display("do flush oldCnt = %d", oldCnt);
+      if (debug) $display("do flush oldCnt = %d", oldCnt);
       flush <= False;
       // let outdata = reverse(rotateBy(reverse(outBuf), truncate(8-oldCnt)));
       let outdata = shiftOutFrom0(?,outBuf, fromInteger(vSz_int)-oldCnt);
