@@ -53,7 +53,7 @@ ps_comment VARCHAR(199) NOT NULL
 );
 
 CREATE TABLE orders (
-o_orderkey INT NOT NULL,
+o_orderkey BIGINT NOT NULL,
 o_custkey INT NOT NULL,
 o_orderstatus VARCHAR(1) NOT NULL,
 o_totalprice DECIMAL(15,2) NOT NULL,
@@ -65,7 +65,7 @@ o_comment VARCHAR(79) NOT NULL
 );
 
 CREATE TABLE lineitem (
-l_orderkey INT NOT NULL,
+l_orderkey BIGINT NOT NULL,
 l_partkey INT NOT NULL,
 l_suppkey INT NOT NULL,
 l_linenumber INT NOT NULL,
